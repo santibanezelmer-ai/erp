@@ -7,46 +7,58 @@ export async function updateSession(request: NextRequest) {
     request,
   });
 
-  const supabase = createServerClient<Database>(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() {
-          return request.cookies.getAll();
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  if (!supabaseUrl || !supabaseAnonKey) {
+    console.warn("Supabase environment variables are missing in middleware.");
+    return supabaseResponse;
+  }
+
+  try {
+    const supabase = createServerClient<Database>(
+      supabaseUrl,
+      supabaseAnonKey,
+      {
+        cookies: {
+          getAll() {
+            return request.cookies.getAll();
+          },
+          setAll(cookiesToSet) {
+            cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
+            supabaseResponse = NextResponse.next({
+              request,
+            });
+            cookiesToSet.forEach(({ name, value, options }) =>
+              supabaseResponse.cookies.set(name, value, options)
+            );
+          },
         },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
-          supabaseResponse = NextResponse.next({
-            request,
-          });
-          cookiesToSet.forEach(({ name, value, options }) =>
-            supabaseResponse.cookies.set(name, value, options)
-          );
-        },
-      },
+      }
+    );
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    const isPublicRoute =
+      request.nextUrl.pathname.startsWith("/login") ||
+      request.nextUrl.pathname.startsWith("/auth") ||
+      request.nextUrl.pathname.startsWith("/registro") ||
+      request.nextUrl.pathname.startsWith("/c/") || // Catálogo público
+      request.nextUrl.pathname.startsWith("/kds/") || // Pantalla cocina por token
+      request.nextUrl.pathname.startsWith("/api/public") ||
+      request.nextUrl.pathname === "/" ||
+      request.nextUrl.pathname.startsWith("/_next") ||
+      request.nextUrl.pathname.includes(".");
+
+    if (!user && !isPublicRoute) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/login";
+      return NextResponse.redirect(url);
     }
-  );
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  const isPublicRoute =
-    request.nextUrl.pathname.startsWith("/login") ||
-    request.nextUrl.pathname.startsWith("/auth") ||
-    request.nextUrl.pathname.startsWith("/registro") ||
-    request.nextUrl.pathname.startsWith("/c/") || // Catálogo público
-    request.nextUrl.pathname.startsWith("/kds/") || // Pantalla cocina por token
-    request.nextUrl.pathname.startsWith("/api/public") ||
-    request.nextUrl.pathname === "/" ||
-    request.nextUrl.pathname.startsWith("/_next") ||
-    request.nextUrl.pathname.includes(".");
-
-  if (!user && !isPublicRoute) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/login";
-    return NextResponse.redirect(url);
+  } catch (err) {
+    console.error("Middleware updateSession error:", err);
   }
 
   return supabaseResponse;

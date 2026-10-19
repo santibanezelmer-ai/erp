@@ -38,9 +38,12 @@ type Producto = Database["public"]["Tables"]["productos"]["Row"];
 type Cliente = Database["public"]["Tables"]["clientes"]["Row"];
 
 interface CartItem {
-  producto: Producto;
+  id: string;
+  producto?: Producto;
+  nombre: string;
   qty: number;
   precioUnitario: number;
+  esLibre?: boolean;
 }
 
 export default function POSPage() {
@@ -59,6 +62,11 @@ export default function POSPage() {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [descuentoGlobal, setDescuentoGlobal] = useState<number>(0);
   const [clienteSeleccionado, setClienteSeleccionado] = useState<string>("");
+
+  // Modal Item Libre / Rápido
+  const [modalItemLibreOpen, setModalItemLibreOpen] = useState(false);
+  const [nombreItemLibre, setNombreItemLibre] = useState("");
+  const [precioItemLibre, setPrecioItemLibre] = useState("");
 
   // Payment Modal
   const [pagoModalOpen, setPagoModalOpen] = useState(false);
@@ -119,7 +127,7 @@ export default function POSPage() {
   // Add to cart
   const addToCart = (prod: Producto) => {
     const stockActual = Number(prod.stock || 0);
-    const existing = cart.find((i) => i.producto.id === prod.id);
+    const existing = cart.find((i) => i.producto?.id === prod.id);
 
     if (!prod.sin_control_stock && existing && existing.qty >= stockActual) {
       toast.error(`Stock máximo alcanzado (${stockActual} u.)`);
@@ -131,14 +139,47 @@ export default function POSPage() {
     }
 
     setCart((prev) => {
-      const item = prev.find((i) => i.producto.id === prod.id);
+      const item = prev.find((i) => i.producto?.id === prod.id);
       if (item) {
         return prev.map((i) =>
-          i.producto.id === prod.id ? { ...i, qty: i.qty + 1 } : i
+          i.producto?.id === prod.id ? { ...i, qty: i.qty + 1 } : i
         );
       }
-      return [...prev, { producto: prod, qty: 1, precioUnitario: Number(prod.precio_venta || 0) }];
+      return [
+        ...prev,
+        {
+          id: prod.id,
+          producto: prod,
+          nombre: prod.nombre,
+          qty: 1,
+          precioUnitario: Number(prod.precio_venta || 0),
+        },
+      ];
     });
+  };
+
+  // Agregar Ítem Libre / Personalizado
+  const agregarItemLibre = (e: React.FormEvent) => {
+    e.preventDefault();
+    const p = Math.max(0, Number(precioItemLibre) || 0);
+    if (!nombreItemLibre.trim() || p <= 0) {
+      toast.error("Ingresa una descripción y precio válidos");
+      return;
+    }
+    setCart((prev) => [
+      ...prev,
+      {
+        id: `libre-${Date.now()}`,
+        nombre: nombreItemLibre.trim(),
+        qty: 1,
+        precioUnitario: p,
+        esLibre: true,
+      },
+    ]);
+    toast.success(`Añadido: ${nombreItemLibre.trim()}`);
+    setModalItemLibreOpen(false);
+    setNombreItemLibre("");
+    setPrecioItemLibre("");
   };
 
   // Barcode search or Enter key
@@ -171,10 +212,10 @@ export default function POSPage() {
     setCart((prev) =>
       prev
         .map((i) => {
-          if (i.producto.id === id) {
+          if (i.id === id) {
             const nextQty = i.qty + delta;
             if (nextQty <= 0) return null;
-            if (!i.producto.sin_control_stock && nextQty > Number(i.producto.stock || 0)) {
+            if (i.producto && !i.producto.sin_control_stock && nextQty > Number(i.producto.stock || 0)) {
               toast.error("No hay más stock disponible");
               return i;
             }
@@ -187,7 +228,7 @@ export default function POSPage() {
   };
 
   const removeFromCart = (id: string) => {
-    setCart((prev) => prev.filter((i) => i.producto.id !== id));
+    setCart((prev) => prev.filter((i) => i.id !== id));
   };
 
   const clearCart = () => {
@@ -250,10 +291,10 @@ export default function POSPage() {
 
     try {
       const lineas = cart.map((i) => ({
-        tipo: "producto",
-        producto_id: i.producto.id,
+        tipo: i.esLibre ? "libre" : "producto",
+        producto_id: i.producto?.id || null,
         variante_id: null,
-        nombre: i.producto.nombre,
+        nombre: i.nombre,
         qty: i.qty,
         precio: i.precioUnitario,
         subtotal: i.qty * i.precioUnitario,
@@ -299,8 +340,8 @@ export default function POSPage() {
         const detalles = cart.map((i) => ({
           venta_id: ventaId,
           negocio_id: negocio.id,
-          producto_id: i.producto.id,
-          nombre: i.producto.nombre,
+          producto_id: i.producto?.id || null,
+          nombre: i.nombre,
           qty: i.qty,
           precio: i.precioUnitario,
           subtotal: i.qty * i.precioUnitario,
@@ -309,7 +350,7 @@ export default function POSPage() {
 
         // Descontar stock
         for (const item of cart) {
-          if (!item.producto.sin_control_stock) {
+          if (item.producto && !item.producto.sin_control_stock) {
             const nuevoStock = Math.max(0, Number(item.producto.stock || 0) - item.qty);
             await supabase.from("productos").update({ stock: nuevoStock }).eq("id", item.producto.id);
           }
@@ -357,7 +398,7 @@ export default function POSPage() {
         folio: ultimaVenta.id.slice(0, 8).toUpperCase(),
         cajero: profile?.nombre || "Caja Principal",
         items: ultimaVenta.items.map((i) => ({
-          nombre: i.producto.nombre,
+          nombre: i.nombre,
           qty: i.qty,
           precio: i.precioUnitario,
           subtotal: i.qty * i.precioUnitario,
@@ -384,7 +425,7 @@ export default function POSPage() {
       folio: ultimaVenta.id.slice(0, 8).toUpperCase(),
       cajero: profile?.nombre || "Caja Principal",
       items: ultimaVenta.items.map((i) => ({
-        nombre: i.producto.nombre,
+        nombre: i.nombre,
         qty: i.qty,
         precio: i.precioUnitario,
         subtotal: i.qty * i.precioUnitario,
@@ -528,20 +569,33 @@ export default function POSPage() {
             <ShoppingCart className="h-5 w-5 text-primary" />
             <span className="font-bold text-base">Orden Actual</span>
             <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full font-semibold">
-              {cart.reduce((a, b) => a + b.qty, 0)} items
+              {cart.reduce((a, b) => a + b.qty, 0)}
             </span>
           </div>
 
-          {cart.length > 0 && (
-            <button
-              onClick={clearCart}
-              title="Vaciar carrito"
-              className="text-xs text-muted-foreground hover:text-destructive flex items-center gap-1"
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setModalItemLibreOpen(true)}
+              className="h-7 text-xs gap-1 text-primary border-primary/40 hover:bg-primary/10"
+              title="Vender producto o servicio no inventariado"
             >
-              <Trash2 className="h-3.5 w-3.5" />
-              Vaciar
-            </button>
-          )}
+              <Plus className="h-3 w-3" />
+              Ítem Libre
+            </Button>
+
+            {cart.length > 0 && (
+              <button
+                onClick={clearCart}
+                title="Vaciar carrito"
+                className="text-xs text-muted-foreground hover:text-destructive flex items-center gap-1"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Selector de Cliente */}
@@ -570,9 +624,16 @@ export default function POSPage() {
             </div>
           ) : (
             cart.map((item) => (
-              <div key={item.producto.id} className="py-2 flex items-center justify-between text-xs gap-2">
+              <div key={item.id} className="py-2 flex items-center justify-between text-xs gap-2">
                 <div className="flex-1 min-w-0">
-                  <div className="font-medium text-foreground truncate">{item.producto.nombre}</div>
+                  <div className="font-medium text-foreground truncate flex items-center gap-1.5">
+                    <span>{item.nombre}</span>
+                    {item.esLibre && (
+                      <span className="text-[9px] px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-700 dark:text-amber-400 font-bold">
+                        Libre
+                      </span>
+                    )}
+                  </div>
                   <div className="text-[11px] text-muted-foreground">
                     {formatMoney(item.precioUnitario)} c/u
                   </div>
@@ -581,14 +642,14 @@ export default function POSPage() {
                 {/* Controles de Cantidad */}
                 <div className="flex items-center gap-1 bg-muted/60 p-1 rounded-lg">
                   <button
-                    onClick={() => updateQty(item.producto.id, -1)}
+                    onClick={() => updateQty(item.id, -1)}
                     className="p-1 rounded hover:bg-background text-muted-foreground hover:text-foreground"
                   >
                     <Minus className="h-3 w-3" />
                   </button>
                   <span className="w-6 text-center font-bold text-foreground">{item.qty}</span>
                   <button
-                    onClick={() => updateQty(item.producto.id, 1)}
+                    onClick={() => updateQty(item.id, 1)}
                     className="p-1 rounded hover:bg-background text-muted-foreground hover:text-foreground"
                   >
                     <Plus className="h-3 w-3" />
@@ -602,7 +663,7 @@ export default function POSPage() {
                 </div>
 
                 <button
-                  onClick={() => removeFromCart(item.producto.id)}
+                  onClick={() => removeFromCart(item.id)}
                   className="p-1 text-muted-foreground hover:text-destructive"
                 >
                   <X className="h-3.5 w-3.5" />
@@ -738,6 +799,27 @@ export default function POSPage() {
                   />
                 </div>
 
+                {/* Billetes Rápidos */}
+                <div className="flex flex-wrap gap-1.5 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setEfectivoRecibido(String(total))}
+                    className="px-2.5 py-1 text-xs rounded-md bg-emerald-600 text-white font-bold hover:bg-emerald-700 transition-colors shadow-xs"
+                  >
+                    Exacto ({formatMoney(total)})
+                  </button>
+                  {[1000, 2000, 5000, 10000, 20000].map((billete) => (
+                    <button
+                      key={billete}
+                      type="button"
+                      onClick={() => setEfectivoRecibido(String(billete))}
+                      className="px-2 py-1 text-xs rounded-md border bg-background hover:bg-muted font-semibold transition-colors"
+                    >
+                      {formatMoney(billete)}
+                    </button>
+                  ))}
+                </div>
+
                 <div className="flex justify-between items-center text-sm pt-2 border-t border-border/60">
                   <span className="font-semibold text-muted-foreground">Vuelto (Cambio):</span>
                   <span className="text-lg font-black text-emerald-600 dark:text-emerald-500">
@@ -849,6 +931,59 @@ export default function POSPage() {
               </Button>
             </div>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal Item Libre / Rápido */}
+      <Dialog open={modalItemLibreOpen} onOpenChange={setModalItemLibreOpen}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Plus className="h-4 w-4 text-primary" />
+              Agregar Ítem Libre
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              Vende un concepto o servicio sin necesidad de crearlo en inventario.
+            </DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={agregarItemLibre} className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label htmlFor="libre-nom" className="text-xs">Descripción o Concepto *</Label>
+              <Input
+                id="libre-nom"
+                placeholder="Ej: Fotocopias, Reparación o Flete"
+                value={nombreItemLibre}
+                onChange={(e) => setNombreItemLibre(e.target.value)}
+                required
+                autoFocus
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="libre-precio" className="text-xs">Precio de Venta *</Label>
+              <Input
+                id="libre-precio"
+                type="number"
+                min="1"
+                step="any"
+                placeholder="0"
+                value={precioItemLibre}
+                onChange={(e) => setPrecioItemLibre(e.target.value)}
+                required
+                className="text-lg font-bold"
+              />
+            </div>
+
+            <DialogFooter>
+              <Button type="button" variant="outline" size="sm" onClick={() => setModalItemLibreOpen(false)}>
+                Cancelar
+              </Button>
+              <Button type="submit" size="sm" className="font-bold">
+                Agregar al Carrito
+              </Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
 

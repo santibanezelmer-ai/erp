@@ -24,6 +24,7 @@ import {
   UserCheck,
   CheckCircle2,
   AlertCircle,
+  MessageCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -207,6 +208,28 @@ export default function ClientesPage() {
     }
   };
 
+  const enviarRecordatorioWhatsApp = (c: Cliente) => {
+    const deuda = Number(c.deuda_total || 0);
+    if (!c.telefono || !c.telefono.trim()) {
+      toast.error(`"${c.nombre}" no tiene un número de teléfono guardado. Edita sus datos para agregarlo.`);
+      return;
+    }
+
+    // Limpiar caracteres no numéricos
+    const telefonoLimpio = c.telefono.replace(/[^0-9]/g, "");
+    if (!telefonoLimpio) {
+      toast.error("El número de teléfono registrado no contiene dígitos válidos.");
+      return;
+    }
+
+    const nombreNegocio = negocio?.nombre || "nuestro local";
+    const textoMensaje = `Estimado(a) ${c.nombre}, le recordamos cordialmente que mantiene un saldo pendiente de ${formatMoney(deuda)} en ${nombreNegocio}. Por cualquier consulta o para coordinar su pago, quedamos atentos. ¡Muchas gracias!`;
+    const url = `https://wa.me/${telefonoLimpio}?text=${encodeURIComponent(textoMensaje)}`;
+
+    window.open(url, "_blank");
+    toast.success("Abriendo WhatsApp Web / App...");
+  };
+
   const clientesFiltrados = clientes.filter((c) => {
     const q = busqueda.toLowerCase().trim();
     const matchQ =
@@ -353,15 +376,27 @@ export default function ClientesPage() {
                         <td className="py-3 px-4 text-right">
                           <div className="flex items-center justify-end gap-1.5">
                             {deuda > 0 && (
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => abrirAbono(c)}
-                                className="h-7 text-xs px-2 gap-1 border-amber-500/50 text-amber-600 hover:bg-amber-500/10"
-                              >
-                                <DollarSign className="h-3.5 w-3.5" />
-                                Abonar
-                              </Button>
+                              <>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => enviarRecordatorioWhatsApp(c)}
+                                  title="Enviar recordatorio de cobro por WhatsApp"
+                                  className="h-7 text-xs px-2 gap-1 border-emerald-500/50 text-emerald-600 hover:bg-emerald-500/10 dark:text-emerald-400 dark:hover:bg-emerald-950/30"
+                                >
+                                  <MessageCircle className="h-3.5 w-3.5" />
+                                  <span className="hidden sm:inline">WhatsApp</span>
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => abrirAbono(c)}
+                                  className="h-7 text-xs px-2 gap-1 border-amber-500/50 text-amber-600 hover:bg-amber-500/10"
+                                >
+                                  <DollarSign className="h-3.5 w-3.5" />
+                                  Abonar
+                                </Button>
+                              </>
                             )}
                             <button
                               onClick={() => abrirEditar(c)}
@@ -486,6 +521,19 @@ export default function ClientesPage() {
                 className="text-lg font-bold"
               />
             </div>
+
+            {clienteAbono && Number(clienteAbono.deuda_total || 0) > 0 && (
+              <div className="pt-1">
+                <button
+                  type="button"
+                  onClick={() => enviarRecordatorioWhatsApp(clienteAbono)}
+                  className="text-xs text-emerald-600 hover:text-emerald-700 flex items-center gap-1.5 font-medium underline-offset-4 hover:underline"
+                >
+                  <MessageCircle className="h-3.5 w-3.5" />
+                  Enviar recordatorio por WhatsApp
+                </button>
+              </div>
+            )}
 
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setAbonoModalOpen(false)} disabled={savingAbono}>

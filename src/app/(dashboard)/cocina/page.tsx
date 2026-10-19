@@ -15,6 +15,8 @@ import {
   Loader2,
   RefreshCw,
   Flame,
+  Bell,
+  Volume2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -83,6 +85,42 @@ export default function CocinaPage() {
     }
   };
 
+  // Reproduce un timbre de campana de cocina auténtico mediante síntesis Web Audio
+  const reproducirCampanaCocina = () => {
+    try {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioCtx) return;
+      const ctx = new AudioCtx();
+      const now = ctx.currentTime;
+
+      // Primer armónico de campana (1046 Hz - C6)
+      const osc1 = ctx.createOscillator();
+      const gain1 = ctx.createGain();
+      osc1.type = "sine";
+      osc1.frequency.setValueAtTime(1046.5, now);
+      gain1.gain.setValueAtTime(0.4, now);
+      gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.8);
+      osc1.connect(gain1);
+      gain1.connect(ctx.destination);
+      osc1.start(now);
+      osc1.stop(now + 0.8);
+
+      // Segundo armónico brillante (1318 Hz - E6)
+      const osc2 = ctx.createOscillator();
+      const gain2 = ctx.createGain();
+      osc2.type = "sine";
+      osc2.frequency.setValueAtTime(1318.5, now + 0.12);
+      gain2.gain.setValueAtTime(0.35, now + 0.12);
+      gain2.gain.exponentialRampToValueAtTime(0.001, now + 1.0);
+      osc2.connect(gain2);
+      gain2.connect(ctx.destination);
+      osc2.start(now + 0.12);
+      osc2.stop(now + 1.0);
+    } catch (e) {
+      console.warn("Audio Context bloqueado o no disponible:", e);
+    }
+  };
+
   useEffect(() => {
     fetchCocina();
 
@@ -93,7 +131,11 @@ export default function CocinaPage() {
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "comanda_items" },
-        () => {
+        (payload) => {
+          if (payload.eventType === "INSERT") {
+            reproducirCampanaCocina();
+            toast.info("🛎️ ¡Nuevo pedido marchado a cocina!");
+          }
           fetchCocina();
         }
       )
@@ -137,10 +179,24 @@ export default function CocinaPage() {
           </p>
         </div>
 
-        <Button variant="outline" size="sm" onClick={fetchCocina} className="gap-1.5 text-xs">
-          <RefreshCw className="h-3.5 w-3.5" />
-          Actualizar
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              reproducirCampanaCocina();
+              toast.success("🔔 Campana de cocina activada");
+            }}
+            className="gap-1.5 text-xs text-amber-600 border-amber-200 hover:bg-amber-50 dark:border-amber-900/50 dark:hover:bg-amber-950/30"
+          >
+            <Bell className="h-3.5 w-3.5" />
+            Probar Campana
+          </Button>
+          <Button variant="outline" size="sm" onClick={fetchCocina} className="gap-1.5 text-xs">
+            <RefreshCw className="h-3.5 w-3.5" />
+            Actualizar
+          </Button>
+        </div>
       </div>
 
       {loading ? (

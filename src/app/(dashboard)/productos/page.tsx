@@ -28,6 +28,8 @@ import {
   FileSpreadsheet,
   Upload,
   Download,
+  Printer,
+  Tag,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { BarcodeScanner } from "@/components/BarcodeScanner";
@@ -37,6 +39,7 @@ import {
   parsearProductosDesdeArchivo,
   type ProductoImportRow,
 } from "@/lib/excel";
+import { imprimirHojaEtiquetas } from "@/lib/barcode-labels";
 
 type Producto = Database["public"]["Tables"]["productos"]["Row"];
 
@@ -49,6 +52,11 @@ export default function ProductosPage() {
 
   // Barcode Scanner Modal
   const [scannerOpen, setScannerOpen] = useState(false);
+
+  // Modal Etiquetas Código de Barras
+  const [modalEtiquetasOpen, setModalEtiquetasOpen] = useState(false);
+  const [productoParaEtiqueta, setProductoParaEtiqueta] = useState<Producto | null>(null);
+  const [cantidadEtiquetas, setCantidadEtiquetas] = useState<number>(12);
 
   // Modal Importar Excel
   const [modalImportOpen, setModalImportOpen] = useState(false);
@@ -327,6 +335,36 @@ export default function ProductosPage() {
     }
   };
 
+  // Impresión de Etiquetas
+  const abrirModalEtiqueta = (prod: Producto) => {
+    const cod = prod.codigo || prod.codigo_interno;
+    if (!cod) {
+      toast.error("Este producto no tiene código de barras registrado");
+      return;
+    }
+    setProductoParaEtiqueta(prod);
+    setCantidadEtiquetas(12);
+    setModalEtiquetasOpen(true);
+  };
+
+  const ejecutarImpresionEtiquetas = () => {
+    if (!productoParaEtiqueta) return;
+    const cod = productoParaEtiqueta.codigo || productoParaEtiqueta.codigo_interno || "";
+    imprimirHojaEtiquetas(
+      [
+        {
+          nombre: productoParaEtiqueta.nombre,
+          codigo: cod,
+          precio: Number(productoParaEtiqueta.precio_venta || 0),
+          cantidad: cantidadEtiquetas,
+        },
+      ],
+      negocio?.nombre || "Operix"
+    );
+    setModalEtiquetasOpen(false);
+    toast.success(`Generando hoja con ${cantidadEtiquetas} etiquetas...`);
+  };
+
   return (
     <div className="space-y-6">
       {/* Top Header */}
@@ -526,6 +564,13 @@ export default function ProductosPage() {
                         </td>
                         <td className="py-3 px-4 text-right">
                           <div className="flex items-center justify-end gap-1">
+                            <button
+                              onClick={() => abrirModalEtiqueta(prod)}
+                              className="p-1.5 rounded-md hover:bg-primary/10 text-muted-foreground hover:text-primary transition-colors"
+                              title="Imprimir etiquetas con código de barras"
+                            >
+                              <Tag className="h-3.5 w-3.5" />
+                            </button>
                             <button
                               onClick={() => abrirEditar(prod)}
                               className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
@@ -883,6 +928,68 @@ export default function ProductosPage() {
                   Importar {productosImportados.length > 0 ? `(${productosImportados.length})` : ""}
                 </>
               )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal Imprimir Etiquetas Código de Barras */}
+      <Dialog open={modalEtiquetasOpen} onOpenChange={setModalEtiquetasOpen}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Tag className="h-5 w-5 text-primary" />
+              Imprimir Etiquetas
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              {productoParaEtiqueta?.nombre} • Código: {productoParaEtiqueta?.codigo || productoParaEtiqueta?.codigo_interno}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            <div className="p-3 rounded-lg border border-border bg-muted/20 text-center space-y-1">
+              <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">
+                Precio a mostrar en etiqueta
+              </span>
+              <p className="text-xl font-black text-primary">
+                {formatMoney(productoParaEtiqueta?.precio_venta)}
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="cant-etiquetas" className="text-xs font-semibold">
+                Cantidad de etiquetas a generar
+              </Label>
+              <Input
+                id="cant-etiquetas"
+                type="number"
+                min={1}
+                max={200}
+                value={cantidadEtiquetas}
+                onChange={(e) => setCantidadEtiquetas(Math.max(1, parseInt(e.target.value) || 1))}
+              />
+              <div className="flex gap-1.5 pt-1">
+                {[6, 12, 24, 48].map((n) => (
+                  <button
+                    key={n}
+                    type="button"
+                    onClick={() => setCantidadEtiquetas(n)}
+                    className="flex-1 py-1 text-xs border rounded-md hover:bg-muted font-medium"
+                  >
+                    {n} u.
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" size="sm" onClick={() => setModalEtiquetasOpen(false)}>
+              Cancelar
+            </Button>
+            <Button size="sm" onClick={ejecutarImpresionEtiquetas} className="gap-1.5 font-bold">
+              <Printer className="h-4 w-4" />
+              Imprimir {cantidadEtiquetas} Etiquetas
             </Button>
           </DialogFooter>
         </DialogContent>

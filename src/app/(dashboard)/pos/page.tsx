@@ -15,6 +15,7 @@ import {
   ShoppingCart,
   Search,
   Barcode,
+  Camera,
   Plus,
   Minus,
   Trash2,
@@ -24,11 +25,14 @@ import {
   UserCheck,
   CheckCircle2,
   Printer,
+  Download,
   Loader2,
   X,
   Sparkles,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { BarcodeScanner } from "@/components/BarcodeScanner";
+import { imprimirTicketTermico, descargarTicketPDF } from "@/lib/ticket";
 
 type Producto = Database["public"]["Tables"]["productos"]["Row"];
 type Cliente = Database["public"]["Tables"]["clientes"]["Row"];
@@ -48,6 +52,7 @@ export default function POSPage() {
   // Search & Categories
   const [busqueda, setBusqueda] = useState("");
   const [categoriaSeleccionada, setCategoriaSeleccionada] = useState<string>("todas");
+  const [scannerOpen, setScannerOpen] = useState(false);
   const barcodeInputRef = useRef<HTMLInputElement>(null);
 
   // Cart state
@@ -66,7 +71,10 @@ export default function POSPage() {
   const [ultimaVenta, setUltimaVenta] = useState<{
     id: string;
     total: number;
+    subtotal: number;
+    descuento: number;
     pago: string;
+    efectivoRecibido: number | null;
     vuelto: number;
     items: CartItem[];
   } | null>(null);
@@ -137,8 +145,11 @@ export default function POSPage() {
   const handleBarcodeSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!busqueda.trim()) return;
+    buscarYAgregarPorCodigo(busqueda.trim());
+  };
 
-    const code = busqueda.trim().toLowerCase();
+  const buscarYAgregarPorCodigo = (codeStr: string) => {
+    const code = codeStr.toLowerCase();
     const match = productos.find(
       (p) =>
         (p.codigo && p.codigo.toLowerCase() === code) ||
@@ -149,9 +160,9 @@ export default function POSPage() {
     if (match) {
       addToCart(match);
       setBusqueda("");
-      toast.success(`Agregado: ${match.nombre}`);
+      toast.success(`Agregado al carrito: ${match.nombre}`);
     } else {
-      toast.error("Producto no encontrado por código");
+      toast.error(`Producto "${codeStr}" no encontrado`);
     }
   };
 
@@ -308,7 +319,10 @@ export default function POSPage() {
       setUltimaVenta({
         id: ventaId || `V-${Date.now().toString().slice(-6)}`,
         total,
+        subtotal,
+        descuento: descuentoGlobal,
         pago: metodoPago,
+        efectivoRecibido: metodoPago === "efectivo" ? Number(efectivoRecibido) : null,
         vuelto,
         items: [...cart],
       });
@@ -330,8 +344,57 @@ export default function POSPage() {
     }
   };
 
-  const imprimirTicket = () => {
-    window.print();
+  const handleImprimirTicket = (ancho: 58 | 80 = 80) => {
+    if (!ultimaVenta || !negocio) return;
+    imprimirTicketTermico(
+      {
+        negocioNombre: negocio.nombre,
+        negocioRut: (negocio as any).rut || null,
+        negocioTelefono: (negocio as any).telefono || null,
+        negocioDireccion: (negocio as any).direccion || null,
+        sucursalNombre: sucursalActiva?.nombre || null,
+        folio: ultimaVenta.id.slice(0, 8).toUpperCase(),
+        cajero: profile?.nombre || "Caja Principal",
+        items: ultimaVenta.items.map((i) => ({
+          nombre: i.producto.nombre,
+          qty: i.qty,
+          precio: i.precioUnitario,
+          subtotal: i.qty * i.precioUnitario,
+        })),
+        subtotal: ultimaVenta.subtotal,
+        descuento: ultimaVenta.descuento,
+        total: ultimaVenta.total,
+        metodoPago: ultimaVenta.pago,
+        efectivoRecibido: ultimaVenta.efectivoRecibido,
+        vuelto: ultimaVenta.vuelto,
+      },
+      ancho
+    );
+  };
+
+  const handleDescargarPDF = () => {
+    if (!ultimaVenta || !negocio) return;
+    descargarTicketPDF({
+      negocioNombre: negocio.nombre,
+      negocioRut: (negocio as any).rut || null,
+      negocioTelefono: (negocio as any).telefono || null,
+      negocioDireccion: (negocio as any).direccion || null,
+      sucursalNombre: sucursalActiva?.nombre || null,
+      folio: ultimaVenta.id.slice(0, 8).toUpperCase(),
+      cajero: profile?.nombre || "Caja Principal",
+      items: ultimaVenta.items.map((i) => ({
+        nombre: i.producto.nombre,
+        qty: i.qty,
+        precio: i.precioUnitario,
+        subtotal: i.qty * i.precioUnitario,
+      })),
+      subtotal: ultimaVenta.subtotal,
+      descuento: ultimaVenta.descuento,
+      total: ultimaVenta.total,
+      metodoPago: ultimaVenta.pago,
+      efectivoRecibido: ultimaVenta.efectivoRecibido,
+      vuelto: ultimaVenta.vuelto,
+    });
   };
 
   return (
@@ -359,6 +422,16 @@ export default function POSPage() {
               </button>
             )}
           </form>
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            onClick={() => setScannerOpen(true)}
+            className="shrink-0 h-9 w-9 text-primary hover:bg-primary/10"
+            title="Escanear código con cámara de dispositivo"
+          >
+            <Camera className="h-4 w-4" />
+          </Button>
         </div>
 
         {/* Categorías Pills */}
@@ -735,18 +808,55 @@ export default function POSPage() {
               )}
             </div>
 
-            <div className="flex gap-2">
-              <Button variant="outline" onClick={imprimirTicket} className="flex-1 gap-1.5 text-xs">
-                <Printer className="h-4 w-4" />
-                Imprimir
+            <div className="grid grid-cols-2 gap-2 pt-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleImprimirTicket(80)}
+                className="gap-1.5 text-xs font-semibold"
+              >
+                <Printer className="h-3.5 w-3.5 text-primary" />
+                Imprimir 80mm
               </Button>
-              <Button onClick={() => setTicketModalOpen(false)} className="flex-1 text-xs">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleImprimirTicket(58)}
+                className="gap-1.5 text-xs font-semibold"
+              >
+                <Printer className="h-3.5 w-3.5 text-primary" />
+                Imprimir 58mm
+              </Button>
+            </div>
+
+            <div className="flex gap-2 pt-1">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleDescargarPDF}
+                className="flex-1 gap-1.5 text-xs text-muted-foreground"
+              >
+                <Download className="h-3.5 w-3.5" />
+                Descargar PDF
+              </Button>
+              <Button
+                size="sm"
+                onClick={() => setTicketModalOpen(false)}
+                className="flex-1 text-xs font-bold"
+              >
                 Nueva Venta
               </Button>
             </div>
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Lector de Código de Barras con Cámara */}
+      <BarcodeScanner
+        open={scannerOpen}
+        onClose={() => setScannerOpen(false)}
+        onDetected={(code) => buscarYAgregarPorCodigo(code)}
+      />
     </div>
   );
 }

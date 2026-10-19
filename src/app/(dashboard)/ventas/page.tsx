@@ -21,8 +21,13 @@ import {
   ShoppingCart,
   CheckCircle2,
   XCircle,
+  Printer,
+  Download,
+  FileSpreadsheet,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { imprimirTicketTermico, descargarTicketPDF } from "@/lib/ticket";
+import { exportarVentasAExcel } from "@/lib/excel";
 
 type Venta = Database["public"]["Tables"]["ventas"]["Row"];
 type DetalleVenta = Database["public"]["Tables"]["detalle_ventas"]["Row"];
@@ -146,6 +151,66 @@ export default function VentasPage() {
     }
   };
 
+  const handleExportarExcel = () => {
+    if (ventasFiltradas.length === 0) {
+      toast.info("No hay ventas para exportar");
+      return;
+    }
+    exportarVentasAExcel(ventasFiltradas, negocio?.nombre || "Operix");
+    toast.success("Archivo Excel de ventas generado");
+  };
+
+  const handleImprimirTicketModal = (ancho: 58 | 80 = 80) => {
+    if (!ventaSeleccionada || !negocio) return;
+    imprimirTicketTermico(
+      {
+        negocioNombre: negocio.nombre,
+        negocioRut: (negocio as any).rut || null,
+        negocioTelefono: (negocio as any).telefono || null,
+        negocioDireccion: (negocio as any).direccion || null,
+        sucursalNombre: sucursalActiva?.nombre || null,
+        folio: ventaSeleccionada.id.slice(0, 8).toUpperCase(),
+        fecha: ventaSeleccionada.created_at,
+        items: detalles.map((d) => ({
+          nombre: d.nombre || "Ítem",
+          qty: Number(d.qty || 1),
+          precio: Number(d.precio),
+          subtotal: Number(d.subtotal),
+        })),
+        subtotal: Number(ventaSeleccionada.subtotal || 0),
+        descuento: Number(ventaSeleccionada.descuento || 0),
+        total: Number(ventaSeleccionada.total || 0),
+        metodoPago: ventaSeleccionada.pago || "efectivo",
+        efectivoRecibido: (ventaSeleccionada as any).efectivo_rec || null,
+      },
+      ancho
+    );
+  };
+
+  const handleDescargarPDFModal = () => {
+    if (!ventaSeleccionada || !negocio) return;
+    descargarTicketPDF({
+      negocioNombre: negocio.nombre,
+      negocioRut: (negocio as any).rut || null,
+      negocioTelefono: (negocio as any).telefono || null,
+      negocioDireccion: (negocio as any).direccion || null,
+      sucursalNombre: sucursalActiva?.nombre || null,
+      folio: ventaSeleccionada.id.slice(0, 8).toUpperCase(),
+      fecha: ventaSeleccionada.created_at,
+      items: detalles.map((d) => ({
+        nombre: d.nombre || "Ítem",
+        qty: Number(d.qty || 1),
+        precio: Number(d.precio),
+        subtotal: Number(d.subtotal),
+      })),
+      subtotal: Number(ventaSeleccionada.subtotal || 0),
+      descuento: Number(ventaSeleccionada.descuento || 0),
+      total: Number(ventaSeleccionada.total || 0),
+      metodoPago: ventaSeleccionada.pago || "efectivo",
+      efectivoRecibido: (ventaSeleccionada as any).efectivo_rec || null,
+    });
+  };
+
   const ventasFiltradas = ventas.filter((v) => {
     const q = busqueda.toLowerCase().trim();
     const matchQ =
@@ -171,9 +236,21 @@ export default function VentasPage() {
           </p>
         </div>
 
-        <div className="flex items-center gap-3 bg-card border border-border px-4 py-2 rounded-xl text-xs font-semibold shadow-xs">
-          <span className="text-muted-foreground">Total Filtrado:</span>
-          <span className="text-primary text-base font-bold">{formatMoney(totalVentasMonto)}</span>
+        <div className="flex flex-wrap items-center gap-3">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleExportarExcel}
+            className="gap-2 text-xs font-semibold"
+          >
+            <FileSpreadsheet className="h-4 w-4 text-emerald-600" />
+            Exportar Excel
+          </Button>
+
+          <div className="flex items-center gap-3 bg-card border border-border px-4 py-2 rounded-xl text-xs font-semibold shadow-xs">
+            <span className="text-muted-foreground">Total Filtrado:</span>
+            <span className="text-primary text-base font-bold">{formatMoney(totalVentasMonto)}</span>
+          </div>
         </div>
       </div>
 
@@ -361,6 +438,39 @@ export default function VentasPage() {
                     <span>Método de pago:</span>
                     <span>{ventaSeleccionada?.pago}</span>
                   </div>
+                </div>
+
+                <div className="space-y-2 pt-1">
+                  <div className="grid grid-cols-2 gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleImprimirTicketModal(80)}
+                      className="gap-1.5 text-xs font-semibold"
+                    >
+                      <Printer className="h-3.5 w-3.5 text-primary" />
+                      Imprimir 80mm
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleImprimirTicketModal(58)}
+                      className="gap-1.5 text-xs font-semibold"
+                    >
+                      <Printer className="h-3.5 w-3.5 text-primary" />
+                      Imprimir 58mm
+                    </Button>
+                  </div>
+
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleDescargarPDFModal}
+                    className="w-full gap-1.5 text-xs text-muted-foreground"
+                  >
+                    <Download className="h-3.5 w-3.5" />
+                    Descargar Ticket PDF
+                  </Button>
                 </div>
               </div>
             )}

@@ -20,12 +20,23 @@ import {
   AlertTriangle,
   Loader2,
   Barcode,
+  Camera,
   Layers,
   CheckCircle2,
   XCircle,
   ArrowUpDown,
+  FileSpreadsheet,
+  Upload,
+  Download,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { BarcodeScanner } from "@/components/BarcodeScanner";
+import {
+  exportarProductosAExcel,
+  descargarPlantillaProductos,
+  parsearProductosDesdeArchivo,
+  type ProductoImportRow,
+} from "@/lib/excel";
 
 type Producto = Database["public"]["Tables"]["productos"]["Row"];
 
@@ -35,6 +46,14 @@ export default function ProductosPage() {
   const [loading, setLoading] = useState(true);
   const [busqueda, setBusqueda] = useState("");
   const [filtroStock, setFiltroStock] = useState<"todos" | "bajo" | "agotado">("todos");
+
+  // Barcode Scanner Modal
+  const [scannerOpen, setScannerOpen] = useState(false);
+
+  // Modal Importar Excel
+  const [modalImportOpen, setModalImportOpen] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [productosImportados, setProductosImportados] = useState<ProductoImportRow[]>([]);
 
   // Modal Crear / Editar
   const [modalOpen, setModalOpen] = useState(false);
@@ -239,6 +258,75 @@ export default function ProductosPage() {
     return true;
   });
 
+  // Exportación a Excel
+  const handleExportarExcel = () => {
+    if (productosFiltrados.length === 0) {
+      toast.info("No hay productos para exportar");
+      return;
+    }
+    exportarProductosAExcel(productosFiltrados, negocio?.nombre || "Operix");
+    toast.success("Catálogo exportado a Excel exitosamente");
+  };
+
+  // Procesar archivo seleccionado para importar
+  const handleArchivoExcelSeleccionado = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      const rows = await parsearProductosDesdeArchivo(file);
+      if (rows.length === 0) {
+        toast.error("No se detectaron productos válidos en el archivo.");
+        return;
+      }
+      setProductosImportados(rows);
+      toast.info(`Se detectaron ${rows.length} productos listos para importar.`);
+    } catch (err: any) {
+      toast.error(err.message || "Error al procesar el archivo Excel");
+    } finally {
+      e.target.value = "";
+    }
+  };
+
+  // Guardar masivamente en Supabase
+  const handleConfirmarImportacion = async () => {
+    if (!negocio?.id || productosImportados.length === 0) return;
+    setImporting(true);
+    const supabase = createClient();
+
+    try {
+      const payload = productosImportados.map((p) => ({
+        negocio_id: negocio.id,
+        nombre: p.nombre,
+        codigo: p.codigo || null,
+        categoria: p.categoria || null,
+        precio_venta: p.precio_venta,
+        precio_costo: p.precio_costo || 0,
+        stock: p.stock || 0,
+        stock_min: p.stock_minimo || 5,
+        descripcion: p.descripcion || null,
+        activo: true,
+      }));
+
+      // Inserción en bloques de 50
+      const batchSize = 50;
+      for (let i = 0; i < payload.length; i += batchSize) {
+        const batch = payload.slice(i, i + batchSize);
+        const { error } = await supabase.from("productos").insert(batch);
+        if (error) throw error;
+      }
+
+      toast.success(`¡${productosImportados.length} productos importados correctamente!`);
+      setModalImportOpen(false);
+      setProductosImportados([]);
+      fetchProductos();
+    } catch (err: any) {
+      toast.error(err.message || "Error al importar productos en la base de datos");
+    } finally {
+      setImporting(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Top Header */}
@@ -250,10 +338,32 @@ export default function ProductosPage() {
           </p>
         </div>
 
-        <Button onClick={abrirCrear} className="gap-2 shadow-sm">
-          <Plus className="h-4 w-4" />
-          Nuevo Producto
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleExportarExcel}
+            className="gap-1.5 text-xs font-semibold"
+          >
+            <FileSpreadsheet className="h-4 w-4 text-emerald-600" />
+            Exportar Excel
+          </Button>
+
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setModalImportOpen(true)}
+            className="gap-1.5 text-xs font-semibold"
+          >
+            <Upload className="h-4 w-4 text-blue-600" />
+            Importar Excel
+          </Button>
+
+          <Button onClick={abrirCrear} size="sm" className="gap-2 shadow-sm font-semibold">
+            <Plus className="h-4 w-4" />
+            Nuevo Producto
+          </Button>
+        </div>
       </div>
 
       {/* Filters and search */}
@@ -469,7 +579,17 @@ export default function ProductosPage() {
 
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
-                <Label htmlFor="prod-codigo">Código de Barras</Label>
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="prod-codigo">Código de Barras</Label>
+                  <button
+                    type="button"
+                    onClick={() => setScannerOpen(true)}
+                    className="flex items-center gap-1 text-[11px] text-primary hover:underline font-semibold"
+                  >
+                    <Camera className="h-3 w-3" />
+                    Escanear
+                  </button>
+                </div>
                 <Input
                   id="prod-codigo"
                   placeholder="Escanea o escribe..."
@@ -656,6 +776,127 @@ export default function ProductosPage() {
           </form>
         </DialogContent>
       </Dialog>
+
+      {/* Modal Importar Productos desde Excel */}
+      <Dialog open={modalImportOpen} onOpenChange={setModalImportOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FileSpreadsheet className="h-5 w-5 text-emerald-600" />
+              Importación Masiva de Productos
+            </DialogTitle>
+            <DialogDescription>
+              Carga tu catálogo completo desde un archivo Excel (.xlsx, .xls) o CSV.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            {/* Paso 1: Descargar plantilla */}
+            <div className="flex items-center justify-between p-3 rounded-xl border border-dashed border-border bg-muted/20">
+              <div className="text-xs space-y-0.5">
+                <span className="font-bold text-foreground">¿No tienes el formato?</span>
+                <p className="text-muted-foreground">Descarga nuestra plantilla oficial con columnas listas.</p>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={descargarPlantillaProductos}
+                className="gap-1.5 text-xs font-semibold"
+              >
+                <Download className="h-3.5 w-3.5 text-emerald-600" />
+                Plantilla Excel
+              </Button>
+            </div>
+
+            {/* Paso 2: Subir archivo */}
+            <div className="space-y-2">
+              <Label className="text-xs font-semibold">Seleccionar archivo Excel o CSV</Label>
+              <Input
+                type="file"
+                accept=".xlsx, .xls, .csv"
+                onChange={handleArchivoExcelSeleccionado}
+                className="cursor-pointer file:cursor-pointer text-xs"
+              />
+            </div>
+
+            {/* Vista previa de productos detectados */}
+            {productosImportados.length > 0 && (
+              <div className="space-y-2">
+                <div className="flex justify-between items-center text-xs font-semibold">
+                  <span className="text-emerald-600 dark:text-emerald-400">
+                    ✓ {productosImportados.length} productos detectados listos para importar
+                  </span>
+                </div>
+
+                <div className="max-h-48 overflow-y-auto border rounded-xl divide-y divide-border text-xs">
+                  {productosImportados.slice(0, 5).map((p, idx) => (
+                    <div key={idx} className="p-2.5 flex justify-between items-center">
+                      <div>
+                        <div className="font-semibold text-foreground">{p.nombre}</div>
+                        <div className="text-[11px] text-muted-foreground">
+                          {p.categoria || "Sin categoría"} {p.codigo ? `• Cod: ${p.codigo}` : ""}
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="font-bold text-foreground">{formatMoney(p.precio_venta)}</div>
+                        <div className="text-[10px] text-muted-foreground">Stock: {p.stock} u.</div>
+                      </div>
+                    </div>
+                  ))}
+                  {productosImportados.length > 5 && (
+                    <div className="p-2 text-center text-[11px] text-muted-foreground bg-muted/20">
+                      y {productosImportados.length - 5} productos más...
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setModalImportOpen(false);
+                setProductosImportados([]);
+              }}
+              disabled={importing}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              onClick={handleConfirmarImportacion}
+              disabled={productosImportados.length === 0 || importing}
+              className="gap-2 font-bold"
+            >
+              {importing ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Importando a Base de Datos...
+                </>
+              ) : (
+                <>
+                  <Upload className="h-4 w-4" />
+                  Importar {productosImportados.length > 0 ? `(${productosImportados.length})` : ""}
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Escáner de Código de Barras con Cámara */}
+      <BarcodeScanner
+        open={scannerOpen}
+        onClose={() => setScannerOpen(false)}
+        onDetected={(code) => {
+          setCodigo(code);
+          toast.success(`Código escaneado: ${code}`);
+        }}
+      />
     </div>
   );
 }

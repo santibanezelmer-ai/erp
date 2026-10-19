@@ -43,7 +43,10 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
     );
   }
 
-  const isRestaurant = negocio?.tipo_negocio === "restaurant";
+  const isRestaurant =
+    !negocio?.tipo_negocio ||
+    negocio?.tipo_negocio === "restaurant" ||
+    negocio?.tipo_negocio === "gastronomia";
 
   const navigation = [
     { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },

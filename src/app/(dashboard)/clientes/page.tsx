@@ -25,8 +25,13 @@ import {
   CheckCircle2,
   AlertCircle,
   MessageCircle,
+  Package,
+  Printer,
+  FileText,
+  CheckCheck,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { imprimirTicketTermico } from "@/lib/ticket";
 
 type Cliente = Database["public"]["Tables"]["clientes"]["Row"];
 
@@ -55,6 +60,25 @@ export default function ClientesPage() {
   const [montoAbono, setMontoAbono] = useState<string>("");
   const [savingAbono, setSavingAbono] = useState(false);
 
+  // Modal Ver Productos Fiados (Solo saldo activo, consolidado se borra)
+  const [productosModalOpen, setProductosModalOpen] = useState(false);
+  const [clienteProductos, setClienteProductos] = useState<Cliente | null>(null);
+  const [loadingProductos, setLoadingProductos] = useState(false);
+  const [saldandoTotal, setSaldandoTotal] = useState(false);
+  const [itemsFiadosPendientes, setItemsFiadosPendientes] = useState<{
+    id: string;
+    ventaId?: string;
+    folio?: string;
+    fecha: string;
+    nombre: string;
+    qty: number;
+    precio: number;
+    subtotal: number;
+    esParcial?: boolean;
+    montoPendiente?: number;
+  }[]>([]);
+  const [totalCalculadoPendiente, setTotalCalculadoPendiente] = useState(0);
+
   const fetchClientes = async () => {
     if (!negocio?.id) return;
     setLoading(true);
@@ -78,6 +102,12 @@ export default function ClientesPage() {
 
   useEffect(() => {
     fetchClientes();
+    if (typeof window !== "undefined") {
+      const p = new URLSearchParams(window.location.search);
+      if (p.get("filtro") === "con_deuda") {
+        setFiltroDeuda("con_deuda");
+      }
+    }
   }, [negocio?.id]);
 
   const abrirCrear = () => {
@@ -230,6 +260,308 @@ export default function ClientesPage() {
     toast.success("Abriendo WhatsApp Web / App...");
   };
 
+  const abrirDetalleProductosFiados = async (c: Cliente) => {
+    setClienteProductos(c);
+    setProductosModalOpen(true);
+    setLoadingProductos(true);
+    setItemsFiadosPendientes([]);
+
+    const deudaActual = Number(c.deuda_total || 0);
+    if (deudaActual <= 0) {
+      setTotalCalculadoPendiente(0);
+      setLoadingProductos(false);
+      return;
+    }
+
+    try {
+      const supabase = createClient();
+
+      // 1. Obtener todas las filas de la tabla deudas del cliente en orden cronológico
+      const { data: deudasData, error: errDeudas } = await supabase
+        .from("deudas")
+        .select("*")
+        .eq("cliente_id", c.id)
+        .order("created_at", { ascending: true });
+
+      if (errDeudas) throw errDeudas;
+
+      // 2. Obtener todas las ventas fiadas del cliente en orden cronológico
+      const { data: ventasData, error: errVentas } = await supabase
+        .from("ventas")
+        .select("id, total, created_at, estado, pago")
+        .eq("cliente_id", c.id)
+        .eq("pago", "fiado")
+        .neq("estado", "cancelada")
+        .order("created_at", { ascending: true });
+
+      if (errVentas) throw errVentas;
+
+      // Unificar todos los cargos (ventas y cargos manuales de deudas)
+      type Cargo = {
+        id: string;
+        venta_id: string | null;
+        monto: number;
+        fecha: string;
+        notas: string | null;
+      };
+
+      const cargosMap = new Map<string, Cargo>();
+
+      // Primero las ventas directas con pago fiado
+      (ventasData || []).forEach((v) => {
+        cargosMap.set(`v-${v.id}`, {
+          id: `v-${v.id}`,
+          venta_id: v.id,
+          monto: Number(v.total || 0),
+          fecha: v.created_at,
+          notas: `Venta Fiada #${v.id.slice(0, 8)}`,
+        });
+      });
+
+      // Luego las filas de deudas
+      let totalAbonos = 0;
+      (deudasData || []).forEach((d) => {
+        const m = Number(d.monto || 0);
+        if (d.tipo === "pago") {
+          totalAbonos += m;
+        } else {
+          // Tipo cargo / deuda
+          const key = d.venta_id ? `v-${d.venta_id}` : `d-${d.id}`;
+          if (!cargosMap.has(key)) {
+            cargosMap.set(key, {
+              id: d.id,
+              venta_id: d.venta_id,
+              monto: m,
+              fecha: d.created_at,
+              notas: d.notas,
+            });
+          }
+        }
+      });
+
+      // Ordenar todos los cargos por fecha ascendente (FIFO)
+      const listaCargos = Array.from(cargosMap.values()).sort(
+        (a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime()
+      );
+
+      // Calcular el monto histórico que ya fue saldado/consolidado
+      const totalCargosHistoricos = listaCargos.reduce((acc, crg) => acc + crg.monto, 0);
+      let saldoPagado = Math.max(0, totalCargosHistoricos - deudaActual);
+      if (totalAbonos > saldoPagado) {
+        saldoPagado = totalAbonos;
+      }
+
+      // Aplicar filtro FIFO:
+      // Cualquier compra/cargo anterior que ya haya sido cubierta por pagos SE OMITE ("lo consolidado se borra")
+      const cargosPendientes: {
+        cargo: Cargo;
+        montoPendiente: number;
+        esParcial: boolean;
+      }[] = [];
+
+      for (const crg of listaCargos) {
+        if (saldoPagado >= crg.monto) {
+          // Totalmente saldado -> CONSOLIDADO (se omite del detalle)
+          saldoPagado -= crg.monto;
+        } else if (saldoPagado > 0) {
+          // Parcialmente saldado
+          const rem = crg.monto - saldoPagado;
+          saldoPagado = 0;
+          cargosPendientes.push({
+            cargo: crg,
+            montoPendiente: rem,
+            esParcial: true,
+          });
+        } else {
+          // Totalmente pendiente de pago
+          cargosPendientes.push({
+            cargo: crg,
+            montoPendiente: crg.monto,
+            esParcial: false,
+          });
+        }
+      }
+
+      // Si no hay cargos estructurados pero hay deuda_total > 0 (ej. carga directa de saldo)
+      if (cargosPendientes.length === 0 && deudaActual > 0) {
+        setItemsFiadosPendientes([
+          {
+            id: `saldo-${c.id}`,
+            fecha: new Date().toISOString(),
+            nombre: "Saldo adeudado registrado en cuenta",
+            qty: 1,
+            precio: deudaActual,
+            subtotal: deudaActual,
+            esParcial: false,
+            montoPendiente: deudaActual,
+          },
+        ]);
+        setTotalCalculadoPendiente(deudaActual);
+        return;
+      }
+
+      // Buscar detalles de ventas para los cargos pendientes
+      const ventaIds = cargosPendientes
+        .map((cp) => cp.cargo.venta_id)
+        .filter(Boolean) as string[];
+
+      let detallesPorVenta = new Map<string, any[]>();
+      if (ventaIds.length > 0) {
+        const { data: dets } = await supabase
+          .from("detalle_ventas")
+          .select("id, venta_id, nombre, qty, precio, subtotal, created_at")
+          .in("venta_id", ventaIds);
+
+        if (dets) {
+          dets.forEach((d) => {
+            const arr = detallesPorVenta.get(d.venta_id) || [];
+            arr.push(d);
+            detallesPorVenta.set(d.venta_id, arr);
+          });
+        }
+      }
+
+      // Ensamblar productos pendientes
+      const itemsFinales: typeof itemsFiadosPendientes = [];
+
+      for (const cp of cargosPendientes) {
+        const crg = cp.cargo;
+        if (crg.venta_id && detallesPorVenta.has(crg.venta_id)) {
+          const prods = detallesPorVenta.get(crg.venta_id)!;
+          prods.forEach((p, idx) => {
+            itemsFinales.push({
+              id: `${p.id || idx}-${crg.id}`,
+              ventaId: crg.venta_id || undefined,
+              folio: crg.venta_id?.slice(0, 8).toUpperCase(),
+              fecha: crg.fecha,
+              nombre: p.nombre || "Artículo sin nombre",
+              qty: Number(p.qty || 1),
+              precio: Number(p.precio || 0),
+              subtotal: Number(p.subtotal || (Number(p.qty || 1) * Number(p.precio || 0))),
+              esParcial: cp.esParcial,
+              montoPendiente: cp.esParcial ? cp.montoPendiente : undefined,
+            });
+          });
+        } else {
+          // Cargo manual sin detalle desglosado
+          itemsFinales.push({
+            id: crg.id,
+            fecha: crg.fecha,
+            nombre: crg.notas || "Cargo manual fiado en cuenta",
+            qty: 1,
+            precio: cp.montoPendiente,
+            subtotal: cp.montoPendiente,
+            esParcial: cp.esParcial,
+            montoPendiente: cp.montoPendiente,
+          });
+        }
+      }
+
+      setItemsFiadosPendientes(itemsFinales);
+      setTotalCalculadoPendiente(deudaActual);
+    } catch (err: any) {
+      console.error("Error al obtener detalle de fiados:", err);
+      toast.error(err.message || "Error al cargar productos de fiados");
+    } finally {
+      setLoadingProductos(false);
+    }
+  };
+
+  const enviarProductosWhatsApp = () => {
+    if (!clienteProductos) return;
+    if (!clienteProductos.telefono || !clienteProductos.telefono.trim()) {
+      toast.error("El cliente no tiene un teléfono o WhatsApp registrado");
+      return;
+    }
+    const telLimpio = clienteProductos.telefono.replace(/[^0-9]/g, "");
+    if (!telLimpio) {
+      toast.error("El teléfono registrado no contiene dígitos válidos");
+      return;
+    }
+
+    if (itemsFiadosPendientes.length === 0) {
+      toast.info("No hay productos pendientes para enviar");
+      return;
+    }
+
+    const nombreNegocio = negocio?.nombre || "nuestro local";
+    const lineas = itemsFiadosPendientes
+      .map((it) => `• ${it.qty}× ${it.nombre} — ${formatMoney(it.precio)}${it.qty > 1 ? ` (${formatMoney(it.subtotal)})` : ""}`)
+      .join("\n");
+
+    const mensaje = `Hola ${clienteProductos.nombre}, te saludamos de ${nombreNegocio}. Te compartimos el detalle de los productos pendientes de pago que componen tu saldo actual:\n\n${lineas}\n\nTotal saldo adeudado: ${formatMoney(clienteProductos.deuda_total)}\n\nQuedamos a tu disposición para coordinar tu pago. ¡Muchas gracias!`;
+
+    window.open(`https://wa.me/${telLimpio}?text=${encodeURIComponent(mensaje)}`, "_blank");
+    toast.success("Abriendo WhatsApp con el detalle...");
+  };
+
+  const imprimirComprobanteFiado = () => {
+    if (!clienteProductos || !negocio) return;
+    imprimirTicketTermico({
+      negocioNombre: negocio.nombre,
+      negocioRut: (negocio as any).rut || null,
+      negocioTelefono: (negocio as any).telefono || null,
+      negocioDireccion: (negocio as any).direccion || null,
+      logoUrl: negocio.perfil || null,
+      folio: `FIA-${clienteProductos.id.slice(0, 6).toUpperCase()}`,
+      cajero: "Caja Principal",
+      clienteNombre: clienteProductos.nombre,
+      clienteRut: (clienteProductos as any).rut || null,
+      items: itemsFiadosPendientes.map((it) => ({
+        nombre: it.nombre,
+        qty: it.qty,
+        precio: it.precio,
+        subtotal: it.subtotal,
+      })),
+      subtotal: Number(clienteProductos.deuda_total || 0),
+      total: Number(clienteProductos.deuda_total || 0),
+      metodoPago: "fiado",
+      mensajePie: "ESTADO DE CUENTA FIADO - PENDIENTE DE PAGO",
+    });
+  };
+
+  const saldarDeudaCompleta = async (c: Cliente) => {
+    const deuda = Number(c.deuda_total || 0);
+    if (deuda <= 0) {
+      toast.info("Este cliente ya está al día sin saldo pendiente");
+      return;
+    }
+
+    if (!confirm(`¿Confirmas saldar la totalidad de la deuda de ${c.nombre} por ${formatMoney(deuda)}? Los productos anteriores quedarán consolidados inmediatamente.`)) {
+      return;
+    }
+
+    setSaldandoTotal(true);
+    const supabase = createClient();
+
+    try {
+      // 1. Actualizar deuda del cliente a 0
+      const { error: errCli } = await supabase
+        .from("clientes")
+        .update({ deuda_total: 0 })
+        .eq("id", c.id);
+
+      if (errCli) throw errCli;
+
+      // 2. Registrar abono total en deudas
+      await supabase.from("deudas").insert({
+        negocio_id: negocio!.id,
+        cliente_id: c.id,
+        monto: deuda,
+        tipo: "pago",
+        notas: `Liquidación total de deuda y consolidación: ${formatMoney(deuda)}`,
+      });
+
+      toast.success(`¡Deuda de ${c.nombre} saldada completamente! Compras anteriores consolidadas.`);
+      setProductosModalOpen(false);
+      fetchClientes();
+    } catch (err: any) {
+      toast.error(err.message || "Error al liquidar la deuda");
+    } finally {
+      setSaldandoTotal(false);
+    }
+  };
+
   const clientesFiltrados = clientes.filter((c) => {
     const q = busqueda.toLowerCase().trim();
     const matchQ =
@@ -377,6 +709,16 @@ export default function ClientesPage() {
                           <div className="flex items-center justify-end gap-1.5">
                             {deuda > 0 && (
                               <>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => abrirDetalleProductosFiados(c)}
+                                  title="Ver productos pendientes que componen esta deuda"
+                                  className="h-7 text-xs px-2 gap-1 border-primary/40 text-primary hover:bg-primary/10"
+                                >
+                                  <Package className="h-3.5 w-3.5" />
+                                  <span className="hidden sm:inline">Ver Productos</span>
+                                </Button>
                                 <Button
                                   size="sm"
                                   variant="outline"
@@ -544,6 +886,163 @@ export default function ClientesPage() {
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal Detalle de Productos Fiados Pendientes (Consolidado) */}
+      <Dialog open={productosModalOpen} onOpenChange={setProductosModalOpen}>
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Package className="h-5 w-5 text-primary" />
+              Detalle de Productos Fiados
+            </DialogTitle>
+            <DialogDescription>
+              Cliente: <strong className="text-foreground">{clienteProductos?.nombre}</strong> • Saldo activo por cobrar:{" "}
+              <strong className="text-amber-600">{formatMoney(clienteProductos?.deuda_total)}</strong>
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2 flex-1 overflow-y-auto">
+            {/* Banner de aclaración de deuda activa */}
+            <div className="bg-primary/5 border border-primary/20 rounded-xl p-3 text-xs flex items-start gap-2.5 text-muted-foreground">
+              <CheckCheck className="h-4 w-4 text-primary shrink-0 mt-0.5" />
+              <div>
+                <span className="font-semibold text-foreground block">
+                  Cálculo de Deuda Activa (Compras anteriores consolidadas)
+                </span>
+                Se visualizan únicamente los productos que componen el saldo pendiente actual ({formatMoney(clienteProductos?.deuda_total)}). Las compras previas que ya fueron pagadas han sido consolidadas y no se acumulan en este detalle.
+              </div>
+            </div>
+
+            {loadingProductos ? (
+              <div className="py-16 flex flex-col items-center justify-center gap-2 text-muted-foreground">
+                <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                <span className="text-xs">Conciliando abonos y cargando ítems activos...</span>
+              </div>
+            ) : itemsFiadosPendientes.length === 0 ? (
+              <div className="py-12 text-center space-y-2 border border-dashed rounded-xl">
+                <CheckCircle2 className="h-8 w-8 text-emerald-500 mx-auto" />
+                <h4 className="font-semibold text-sm">Sin productos pendientes</h4>
+                <p className="text-xs text-muted-foreground">
+                  La cuenta de este cliente se encuentra al día o los consumos anteriores ya están 100% liquidados y consolidados.
+                </p>
+              </div>
+            ) : (
+              <div className="border border-border rounded-xl overflow-hidden shadow-2xs">
+                <div className="max-h-[320px] overflow-y-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-muted/70 border-b border-border text-muted-foreground font-semibold sticky top-0 bg-background/95 backdrop-blur-xs">
+                      <tr>
+                        <th className="py-2.5 px-3">Fecha / Venta</th>
+                        <th className="py-2.5 px-3">Producto / Detalle</th>
+                        <th className="py-2.5 px-3 text-right">Cant.</th>
+                        <th className="py-2.5 px-3 text-right">Precio</th>
+                        <th className="py-2.5 px-3 text-right">Subtotal</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border">
+                      {itemsFiadosPendientes.map((item) => (
+                        <tr key={item.id} className="hover:bg-muted/30 transition-colors">
+                          <td className="py-2.5 px-3 text-muted-foreground whitespace-nowrap">
+                            <span>
+                              {new Date(item.fecha).toLocaleDateString("es-CL", {
+                                day: "2-digit",
+                                month: "short",
+                              })}
+                            </span>
+                            {item.folio && (
+                              <span className="ml-1.5 font-mono text-[10px] text-primary/80">
+                                #{item.folio}
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-2.5 px-3 font-medium text-foreground">
+                            {item.nombre}
+                            {item.esParcial && (
+                              <span className="ml-1.5 inline-block text-[10px] text-amber-700 dark:text-amber-400 bg-amber-500/15 px-1.5 py-0.5 rounded font-normal">
+                                Saldo remanente
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-2.5 px-3 text-right text-muted-foreground">{item.qty}</td>
+                          <td className="py-2.5 px-3 text-right text-muted-foreground">
+                            {formatMoney(item.precio)}
+                          </td>
+                          <td className="py-2.5 px-3 text-right font-bold text-foreground">
+                            {formatMoney(item.subtotal)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot className="bg-muted/40 border-t border-border font-semibold">
+                      <tr>
+                        <td colSpan={4} className="py-2.5 px-3 text-right text-muted-foreground">
+                          Total Saldo Pendiente:
+                        </td>
+                        <td className="py-2.5 px-3 text-right text-amber-600 font-bold text-sm">
+                          {formatMoney(totalCalculadoPendiente)}
+                        </td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter className="flex-col sm:flex-row gap-2 pt-2 border-t border-border">
+            <div className="flex items-center gap-2 mr-auto">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={imprimirComprobanteFiado}
+                disabled={itemsFiadosPendientes.length === 0}
+                className="gap-1.5 text-xs"
+              >
+                <Printer className="h-3.5 w-3.5" />
+                Imprimir Ticket
+              </Button>
+
+              {clienteProductos && Number(clienteProductos.deuda_total || 0) > 0 && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => saldarDeudaCompleta(clienteProductos)}
+                  disabled={saldandoTotal}
+                  className="gap-1.5 text-xs text-amber-600 border-amber-200 hover:bg-amber-50 dark:border-amber-900/40 dark:hover:bg-amber-950/30"
+                >
+                  <CheckCheck className="h-3.5 w-3.5" />
+                  {saldandoTotal ? "Saldando..." : "Saldar Total"}
+                </Button>
+              )}
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="default"
+                size="sm"
+                onClick={enviarProductosWhatsApp}
+                disabled={!clienteProductos?.telefono || itemsFiadosPendientes.length === 0}
+                className="gap-1.5 text-xs bg-emerald-600 hover:bg-emerald-700 text-white"
+              >
+                <MessageCircle className="h-3.5 w-3.5" />
+                Enviar Detalle por WhatsApp
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setProductosModalOpen(false)}
+                className="text-xs"
+              >
+                Cerrar
+              </Button>
+            </div>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

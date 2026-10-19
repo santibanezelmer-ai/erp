@@ -355,6 +355,28 @@ export default function POSPage() {
             await supabase.from("productos").update({ stock: nuevoStock }).eq("id", item.producto.id);
           }
         }
+
+        // Si la venta es a crédito/fiado en fallback, registrar en deudas y aumentar saldo deudor
+        if (metodoPago === "fiado" && clienteSeleccionado && total > 0) {
+          await supabase.from("deudas").insert({
+            negocio_id: negocio.id,
+            cliente_id: clienteSeleccionado,
+            venta_id: ventaId,
+            monto: total,
+            tipo: "deuda",
+            notas: `Venta fiada #${(ventaId || "").slice(0, 8)}`,
+          });
+          const { data: cRow } = await supabase
+            .from("clientes")
+            .select("deuda_total")
+            .eq("id", clienteSeleccionado)
+            .single();
+          const dAct = Number(cRow?.deuda_total || 0);
+          await supabase
+            .from("clientes")
+            .update({ deuda_total: dAct + total })
+            .eq("id", clienteSeleccionado);
+        }
       }
 
       setUltimaVenta({

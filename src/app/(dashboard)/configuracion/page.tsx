@@ -80,6 +80,9 @@ export default function ConfiguracionPage() {
   const [enviandoInvitacion, setEnviandoInvitacion] = useState(false);
   const [invitacionCreada, setInvitacionCreada] = useState<Invitacion | null>(null);
 
+  // Logo del Negocio
+  const [logoUrl, setLogoUrl] = useState<string>("");
+
   useEffect(() => {
     if (negocio) {
       setNombreNegocio(negocio.nombre || "");
@@ -87,9 +90,28 @@ export default function ConfiguracionPage() {
       setTelefono((negocio as any).telefono || "");
       setDireccion((negocio as any).direccion || "");
       setTipoNegocio(negocio.tipo_negocio === "restaurant" ? "restaurant" : "tienda");
+      setLogoUrl(negocio.perfil || "");
       cargarEquipo();
     }
   }, [negocio?.id]);
+
+  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error("La imagen debe pesar menos de 2MB");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const result = event.target?.result as string;
+      setLogoUrl(result);
+      toast.success("Logo cargado (presiona 'Guardar Información' para confirmar)");
+    };
+    reader.readAsDataURL(file);
+  };
 
   const cargarEquipo = async () => {
     if (!negocio?.id) return;
@@ -155,6 +177,7 @@ export default function ConfiguracionPage() {
           rut: rut.trim() || null,
           direccion: direccion.trim() || null,
           tipo_negocio: tipoNegocio,
+          perfil: logoUrl || null,
         })
         .eq("id", negocio.id);
 
@@ -279,6 +302,45 @@ export default function ConfiguracionPage() {
         </CardHeader>
         <CardContent>
           <form onSubmit={guardarDatosNegocio} className="space-y-4">
+            {/* Logo de la empresa */}
+            <div className="flex items-center gap-4 p-3 rounded-xl border border-dashed border-border bg-muted/20">
+              <div className="h-16 w-16 rounded-xl border bg-background flex items-center justify-center overflow-hidden shrink-0 shadow-xs">
+                {logoUrl ? (
+                  <img src={logoUrl} alt="Logo" className="h-full w-full object-contain p-1" />
+                ) : (
+                  <Store className="h-7 w-7 text-muted-foreground/40" />
+                )}
+              </div>
+              <div className="flex-1 space-y-1">
+                <span className="text-xs font-bold text-foreground">Logotipo de la Empresa</span>
+                <p className="text-[11px] text-muted-foreground">
+                  Aparecerá en el encabezado de tus tickets térmicos y en tu catálogo digital público.
+                </p>
+                <div className="flex items-center gap-2 pt-1">
+                  <label className="cursor-pointer inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold bg-primary text-primary-foreground hover:bg-primary/90 transition-colors">
+                    <span>{logoUrl ? "Cambiar Logo" : "Subir Logo"}</span>
+                    <input
+                      type="file"
+                      accept="image/png, image/jpeg, image/svg+xml"
+                      onChange={handleLogoUpload}
+                      className="hidden"
+                    />
+                  </label>
+                  {logoUrl && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setLogoUrl("")}
+                      className="h-7 text-xs text-destructive hover:bg-destructive/10"
+                    >
+                      Quitar Logo
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </div>
+
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="cfg-nombre">Nombre Comercial *</Label>

@@ -169,6 +169,7 @@ export default function VentasPage() {
         negocioTelefono: (negocio as any).telefono || null,
         negocioDireccion: (negocio as any).direccion || null,
         sucursalNombre: sucursalActiva?.nombre || null,
+        logoUrl: negocio.perfil || null,
         folio: ventaSeleccionada.id.slice(0, 8).toUpperCase(),
         fecha: ventaSeleccionada.created_at,
         items: detalles.map((d) => ({

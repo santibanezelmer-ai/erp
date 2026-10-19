@@ -14,6 +14,7 @@ export interface TicketData {
   negocioTelefono?: string | null;
   negocioDireccion?: string | null;
   sucursalNombre?: string | null;
+  logoUrl?: string | null;
   folio: string;
   fecha?: Date | string;
   cajero?: string | null;
@@ -127,6 +128,11 @@ export function imprimirTicketTermico(data: TicketData, anchoMm: 58 | 80 = 80) {
       </head>
       <body>
         <div class="text-center">
+          ${
+            data.logoUrl
+              ? `<img src="${data.logoUrl}" alt="Logo" style="max-height: 48px; max-width: 140px; margin: 0 auto 6px auto; display: block; object-fit: contain;" />`
+              : ""
+          }
           <div class="title">${data.negocioNombre}</div>
           ${data.negocioRut ? `<div>RUT / NIF: ${data.negocioRut}</div>` : ""}
           ${data.sucursalNombre ? `<div>Sucursal: ${data.sucursalNombre}</div>` : ""}

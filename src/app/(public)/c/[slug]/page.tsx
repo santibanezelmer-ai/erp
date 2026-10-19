@@ -230,9 +230,17 @@ export default function CatalogoPublicoPage({ params }: { params: Promise<{ slug
       <header className="bg-card border-b border-border sticky top-0 z-30 shadow-xs">
         <div className="max-w-4xl mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <div className="h-9 w-9 rounded-xl bg-primary flex items-center justify-center text-primary-foreground font-bold shadow-sm">
-              <Store className="h-5 w-5" />
-            </div>
+            {negocio.perfil ? (
+              <img
+                src={negocio.perfil}
+                alt={negocio.nombre}
+                className="h-10 w-10 rounded-xl object-contain bg-background border p-1 shadow-xs"
+              />
+            ) : (
+              <div className="h-10 w-10 rounded-xl bg-primary flex items-center justify-center text-primary-foreground font-bold shadow-sm">
+                <Store className="h-5 w-5" />
+              </div>
+            )}
             <div>
               <h1 className="font-extrabold text-base leading-tight text-foreground">
                 {negocio.nombre}

@@ -502,7 +502,7 @@ export default function ClientesPage() {
       negocioRut: (negocio as any).rut || null,
       negocioTelefono: (negocio as any).telefono || null,
       negocioDireccion: (negocio as any).direccion || null,
-      logoUrl: negocio.perfil || null,
+      logoUrl: (negocio as any)?.logo_url || (negocio?.perfil?.startsWith("http") ? negocio.perfil : null),
       folio: `FIA-${clienteProductos.id.slice(0, 6).toUpperCase()}`,
       cajero: "Caja Principal",
       clienteNombre: clienteProductos.nombre,

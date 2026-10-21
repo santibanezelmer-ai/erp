@@ -129,7 +129,7 @@ export function imprimirTicketTermico(data: TicketData, anchoMm: 58 | 80 = 80) {
       <body>
         <div class="text-center">
           ${
-            data.logoUrl
+            data.logoUrl && (data.logoUrl.startsWith("http") || data.logoUrl.startsWith("data:"))
               ? `<img src="${data.logoUrl}" alt="Logo" style="max-height: 48px; max-width: 140px; margin: 0 auto 6px auto; display: block; object-fit: contain;" />`
               : ""
           }

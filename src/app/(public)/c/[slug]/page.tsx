@@ -521,15 +521,17 @@ export default function CatalogoPublicoPage({
     );
   }
 
+  const logoTienda = (negocio as any)?.logo_url || (negocio?.perfil?.startsWith("http") || negocio?.perfil?.startsWith("data:") ? negocio.perfil : null);
+
   return (
     <div className="min-h-screen flex flex-col bg-muted/20 pb-28">
       {/* Header del Catálogo */}
       <header className="bg-card border-b border-border sticky top-0 z-30 shadow-xs">
         <div className="max-w-5xl mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            {negocio.perfil ? (
+            {logoTienda ? (
               <img
-                src={negocio.perfil}
+                src={logoTienda}
                 alt={negocio.nombre}
                 className="h-10 w-10 rounded-xl object-contain bg-background border p-1 shadow-xs"
               />

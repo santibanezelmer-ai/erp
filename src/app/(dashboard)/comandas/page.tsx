@@ -414,7 +414,7 @@ export default function ComandasPage() {
     imprimirTicketTermico(
       {
         negocioNombre: negocio?.nombre || "Restaurante",
-        logoUrl: negocio?.perfil || null,
+        logoUrl: (negocio as any)?.logo_url || (negocio?.perfil?.startsWith("http") ? negocio.perfil : null),
         folio: `PRE-${(comandaActiva?.id || "NUEVA").slice(0, 6).toUpperCase()}`,
         cajero: profile?.nombre || "Mesero",
         mesa: mesaSeleccionada ? `Mesa #${mesaSeleccionada.numero}` : "Para Llevar",

@@ -1646,6 +1646,7 @@ export type Database = {
           created_at: string
           direccion: string | null
           id: string
+          logo_url: string | null
           nombre: string
           perfil: string | null
           plan: string | null
@@ -1657,6 +1658,7 @@ export type Database = {
           created_at?: string
           direccion?: string | null
           id?: string
+          logo_url?: string | null
           nombre: string
           perfil?: string | null
           plan?: string | null
@@ -1668,6 +1670,7 @@ export type Database = {
           created_at?: string
           direccion?: string | null
           id?: string
+          logo_url?: string | null
           nombre?: string
           perfil?: string | null
           plan?: string | null

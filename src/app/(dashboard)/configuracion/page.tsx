@@ -85,6 +85,7 @@ export default function ConfiguracionPage() {
 
   // Logo del Negocio
   const [logoUrl, setLogoUrl] = useState<string>("");
+  const [uploadingLogo, setUploadingLogo] = useState(false);
 
   // Tienda Online y Subdominio
   const [slug, setSlug] = useState("");
@@ -100,7 +101,12 @@ export default function ConfiguracionPage() {
       setTelefono((negocio as any).telefono || "");
       setDireccion((negocio as any).direccion || "");
       setTipoNegocio(negocio.tipo_negocio === "restaurant" ? "restaurant" : "tienda");
-      setLogoUrl(negocio.perfil || "");
+      setLogoUrl(
+        (negocio as any).logo_url ||
+          (negocio.perfil?.startsWith("http") || negocio.perfil?.startsWith("data:")
+            ? negocio.perfil
+            : "")
+      );
       setSlug(negocio.slug || "");
       cargarEquipo();
       cargarConteoProductos();
@@ -190,22 +196,49 @@ export default function ConfiguracionPage() {
     window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, "_blank");
   };
 
-  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
-    if (file.size > 2 * 1024 * 1024) {
-      toast.error("La imagen debe pesar menos de 2MB");
+    if (!negocio?.id) {
+      toast.error("No se encontró el identificador del negocio");
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const result = event.target?.result as string;
-      setLogoUrl(result);
-      toast.success("Logo cargado (presiona 'Guardar Información' para confirmar)");
-    };
-    reader.readAsDataURL(file);
+    if (file.size > 3 * 1024 * 1024) {
+      toast.error("La imagen debe pesar menos de 3MB");
+      return;
+    }
+
+    setUploadingLogo(true);
+    const supabase = createClient();
+
+    try {
+      const ext = file.name.split(".").pop()?.toLowerCase() || "png";
+      const filePath = `${negocio.id}/logos/logo-${Date.now()}.${ext}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from("producto-imgs")
+        .upload(filePath, file, {
+          upsert: true,
+          cacheControl: "3600",
+          contentType: file.type,
+        });
+
+      if (uploadError) throw uploadError;
+
+      const { data: pubData } = supabase.storage
+        .from("producto-imgs")
+        .getPublicUrl(filePath);
+
+      const publicUrl = pubData.publicUrl;
+      setLogoUrl(publicUrl);
+      toast.success("Logo cargado con éxito. Haz clic en 'Guardar Información' para confirmar.");
+    } catch (err: any) {
+      console.error("Error al subir logo:", err);
+      toast.error(err.message || "Error al subir la imagen");
+    } finally {
+      setUploadingLogo(false);
+    }
   };
 
   const cargarEquipo = async () => {
@@ -265,6 +298,8 @@ export default function ConfiguracionPage() {
     const supabase = createClient();
 
     try {
+      const cleanLogo = logoUrl ? logoUrl.trim() : null;
+
       const { error } = await supabase
         .from("negocios")
         .update({
@@ -272,12 +307,32 @@ export default function ConfiguracionPage() {
           rut: rut.trim() || null,
           direccion: direccion.trim() || null,
           tipo_negocio: tipoNegocio,
-          perfil: logoUrl || null,
+          logo_url: cleanLogo,
+          perfil: cleanLogo || (negocio.perfil?.startsWith("http") ? null : negocio.perfil) || "tienda",
         })
         .eq("id", negocio.id);
 
       if (error) throw error;
-      toast.success("Información del negocio actualizada");
+
+      // Mantener en sincronía con tabla configuracion
+      try {
+        await supabase
+          .from("configuracion")
+          .upsert(
+            {
+              negocio_id: negocio.id,
+              business_name: nombreNegocio.trim(),
+              logo_url: cleanLogo,
+              rut: rut.trim() || null,
+              direccion: direccion.trim() || null,
+            },
+            { onConflict: "negocio_id" }
+          );
+      } catch (errCfg) {
+        console.warn("Sync configuracion warn:", errCfg);
+      }
+
+      toast.success("Información del negocio actualizada exitosamente");
       reloadTenant();
     } catch (err: any) {
       toast.error(err.message || "Error al guardar");
@@ -399,8 +454,10 @@ export default function ConfiguracionPage() {
           <form onSubmit={guardarDatosNegocio} className="space-y-4">
             {/* Logo de la empresa */}
             <div className="flex items-center gap-4 p-3 rounded-xl border border-dashed border-border bg-muted/20">
-              <div className="h-16 w-16 rounded-xl border bg-background flex items-center justify-center overflow-hidden shrink-0 shadow-xs">
-                {logoUrl ? (
+              <div className="h-16 w-16 rounded-xl border bg-background flex items-center justify-center overflow-hidden shrink-0 shadow-xs relative">
+                {uploadingLogo ? (
+                  <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                ) : logoUrl ? (
                   <img src={logoUrl} alt="Logo" className="h-full w-full object-contain p-1" />
                 ) : (
                   <Store className="h-7 w-7 text-muted-foreground/40" />
@@ -412,16 +469,29 @@ export default function ConfiguracionPage() {
                   Aparecerá en el encabezado de tus tickets térmicos y en tu catálogo digital público.
                 </p>
                 <div className="flex items-center gap-2 pt-1">
-                  <label className="cursor-pointer inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold bg-primary text-primary-foreground hover:bg-primary/90 transition-colors">
-                    <span>{logoUrl ? "Cambiar Logo" : "Subir Logo"}</span>
+                  <label
+                    className={cn(
+                      "cursor-pointer inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold bg-primary text-primary-foreground hover:bg-primary/90 transition-colors shadow-xs",
+                      uploadingLogo && "opacity-60 pointer-events-none"
+                    )}
+                  >
+                    {uploadingLogo ? (
+                      <>
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        <span>Subiendo logo...</span>
+                      </>
+                    ) : (
+                      <span>{logoUrl ? "Cambiar Logo" : "Subir Logo"}</span>
+                    )}
                     <input
                       type="file"
-                      accept="image/png, image/jpeg, image/svg+xml"
+                      accept="image/png, image/jpeg, image/svg+xml, image/webp"
                       onChange={handleLogoUpload}
+                      disabled={uploadingLogo}
                       className="hidden"
                     />
                   </label>
-                  {logoUrl && (
+                  {logoUrl && !uploadingLogo && (
                     <Button
                       type="button"
                       variant="ghost"

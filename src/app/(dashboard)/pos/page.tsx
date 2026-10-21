@@ -549,7 +549,7 @@ export default function POSPage() {
         negocioTelefono: (negocio as any).telefono || null,
         negocioDireccion: (negocio as any).direccion || null,
         sucursalNombre: sucursalActiva?.nombre || null,
-        logoUrl: negocio.perfil || null,
+        logoUrl: (negocio as any)?.logo_url || (negocio?.perfil?.startsWith("http") ? negocio.perfil : null),
         folio: ultimaVenta.id.slice(0, 8).toUpperCase(),
         cajero: profile?.nombre || "Caja Principal",
         items: ultimaVenta.items.map((i) => ({

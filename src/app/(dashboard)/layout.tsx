@@ -27,6 +27,7 @@ import {
   Loader2,
   ExternalLink,
   CreditCard,
+  BadgeDollarSign,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Logo } from "@/components/Logo";
@@ -57,7 +58,8 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
     { name: "Ventas", href: "/ventas", icon: Receipt },
     { name: "Productos & Stock", href: "/productos", icon: Package },
     { name: "Compras", href: "/compras", icon: Truck },
-    { name: "Clientes & Fiados", href: "/clientes", icon: Users },
+    { name: "Clientes", href: "/clientes", icon: Users },
+    { name: "Fiados y Créditos", href: "/fiados", icon: BadgeDollarSign },
     ...(isRestaurant
       ? [
           { name: "Mesas", href: "/mesas", icon: UtensilsCrossed },

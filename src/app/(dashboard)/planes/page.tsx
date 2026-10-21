@@ -14,9 +14,10 @@ import {
   CreditCard,
   ShieldCheck,
   Calendar,
-  AlertCircle,
   Clock,
   ArrowRight,
+  Zap,
+  Tag,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -39,9 +40,9 @@ interface PagoInfo {
 }
 
 export default function PlanesPage() {
-  const { negocio, reloadTenant } = useTenant();
-  const [ciclo, setCiclo] = useState<Ciclo>("monthly");
-  const [loadingPlan, setLoadingPlan] = useState<PlanId | null>(null);
+  const { negocio } = useTenant();
+  const [cicloGlobal, setCicloGlobal] = useState<Ciclo>("monthly");
+  const [loadingAction, setLoadingAction] = useState<string | null>(null);
   const [suscripcion, setSuscripcion] = useState<SuscripcionInfo | null>(null);
   const [pagos, setPagos] = useState<PagoInfo[]>([]);
   const [loadingData, setLoadingData] = useState(true);
@@ -65,6 +66,9 @@ export default function PlanesPage() {
         .maybeSingle();
 
       setSuscripcion(susData as any);
+      if (susData?.ciclo === "yearly") {
+        setCicloGlobal("yearly");
+      }
 
       const { data: pagosData } = await supabase
         .from("mp_pagos")
@@ -81,13 +85,14 @@ export default function PlanesPage() {
     }
   };
 
-  const handleSuscribir = async (planId: PlanId) => {
-    setLoadingPlan(planId);
+  const handleSuscribir = async (planId: PlanId, cicloElegido: Ciclo) => {
+    const actionKey = `${planId}-${cicloElegido}`;
+    setLoadingAction(actionKey);
     try {
       const res = await fetch("/api/mercadopago/suscribir", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ plan: planId, ciclo }),
+        body: JSON.stringify({ plan: planId, ciclo: cicloElegido }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Error al procesar el pago");
@@ -96,7 +101,7 @@ export default function PlanesPage() {
       window.location.href = data.url;
     } catch (err: any) {
       toast.error(err.message || "Error al conectar con Mercado Pago");
-      setLoadingPlan(null);
+      setLoadingAction(null);
     }
   };
 
@@ -105,22 +110,22 @@ export default function PlanesPage() {
       {/* Encabezado */}
       <div className="text-center space-y-3">
         <Badge variant="outline" className="px-3 py-1 text-xs gap-1 border-primary/30 text-primary">
-          <Sparkles className="h-3 w-3" /> Membresías y Facturación
+          <Sparkles className="h-3.5 w-3.5" /> Membresías Oficiales Operix ERP
         </Badge>
         <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-foreground">
-          Planes Diseñados para tu Negocio
+          Planes Básico y Pro · Mensual y Anual
         </h1>
         <p className="text-muted-foreground text-sm max-w-lg mx-auto">
-          Elige el plan ideal y obtén acceso total a tu Punto de Venta, Catálogo Online y gestión multi-sucursal.
+          Elige la modalidad que prefieras. En los <strong>planes anuales obtienes 2 meses gratis</strong> y aseguras la tarifa de tu negocio por todo el año.
         </p>
 
-        {/* Toggle Mensual / Anual */}
+        {/* Toggle Selector de Modalidad */}
         <div className="inline-flex items-center p-1 bg-muted rounded-xl border border-border shadow-xs mt-2">
           <button
             type="button"
-            onClick={() => setCiclo("monthly")}
+            onClick={() => setCicloGlobal("monthly")}
             className={`px-4 py-2 text-xs font-bold rounded-lg transition-all ${
-              ciclo === "monthly"
+              cicloGlobal === "monthly"
                 ? "bg-background text-foreground shadow-xs"
                 : "text-muted-foreground hover:text-foreground"
             }`}
@@ -129,13 +134,14 @@ export default function PlanesPage() {
           </button>
           <button
             type="button"
-            onClick={() => setCiclo("yearly")}
+            onClick={() => setCicloGlobal("yearly")}
             className={`px-4 py-2 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 ${
-              ciclo === "yearly"
+              cicloGlobal === "yearly"
                 ? "bg-background text-foreground shadow-xs"
                 : "text-muted-foreground hover:text-foreground"
             }`}
           >
+            <Zap className="h-3.5 w-3.5 text-amber-500 fill-amber-500" />
             Facturación Anual
             <span className="bg-emerald-500/10 text-emerald-600 text-[10px] font-black px-1.5 py-0.5 rounded-full border border-emerald-500/20">
               2 Meses Gratis
@@ -144,7 +150,7 @@ export default function PlanesPage() {
         </div>
       </div>
 
-      {/* Estado Actual */}
+      {/* Estado Actual de la Suscripción */}
       {suscripcion && suscripcion.estado === "activa" && (
         <Card className="border-emerald-500/30 bg-emerald-500/5 shadow-xs">
           <CardContent className="p-4 sm:p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
@@ -167,7 +173,7 @@ export default function PlanesPage() {
               </p>
             </div>
             <div className="text-xs text-muted-foreground">
-              Procesado por <span className="font-bold text-foreground">Mercado Pago</span>
+              Procesado de forma segura por <span className="font-bold text-foreground">Mercado Pago</span>
             </div>
           </CardContent>
         </Card>
@@ -176,9 +182,17 @@ export default function PlanesPage() {
       {/* Grid de Planes */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-stretch">
         {PLANES.map((plan) => {
-          const precio = plan.precios[ciclo];
+          const precioMensual = plan.precios.monthly.amount;
+          const precioAnual = plan.precios.yearly.amount;
+          const precioActual = plan.precios[cicloGlobal].amount;
+
+          // Ahorro anual: 12 meses mensuales - 1 año anual
+          const ahorroAnual = precioMensual * 12 - precioAnual;
+          const equivalenteMensual = Math.round(precioAnual / 12);
+
           const esPlanActual = planActual === plan.id;
-          const loading = loadingPlan === plan.id;
+          const loadingMensual = loadingAction === `${plan.id}-monthly`;
+          const loadingAnual = loadingAction === `${plan.id}-yearly`;
 
           return (
             <Card
@@ -190,26 +204,52 @@ export default function PlanesPage() {
               }`}
             >
               {plan.highlighted && (
-                <div className="bg-primary text-primary-foreground text-[11px] font-black py-1 text-center tracking-wider uppercase flex items-center justify-center gap-1 shadow-xs">
-                  <Sparkles className="h-3 w-3" /> Recomendado para Negocios
+                <div className="bg-primary text-primary-foreground text-[11px] font-black py-1.5 text-center tracking-wider uppercase flex items-center justify-center gap-1 shadow-xs">
+                  <Sparkles className="h-3 w-3" /> Recomendado para Escalar Ventas
                 </div>
               )}
 
               <CardHeader className="space-y-1.5">
-                <CardTitle className="text-2xl font-bold flex items-center justify-between">
-                  <span>{plan.name}</span>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-2xl font-bold flex items-center gap-2">
+                    <span>{plan.name}</span>
+                  </CardTitle>
                   {esPlanActual && (
                     <Badge variant="secondary" className="text-[10px] font-bold">
                       Plan Actual
                     </Badge>
                   )}
-                </CardTitle>
+                </div>
                 <CardDescription className="text-xs">{plan.tagline}</CardDescription>
-                <div className="pt-3">
-                  <span className="text-4xl font-black text-foreground">{formatPrecio(precio.amount)}</span>
-                  <span className="text-muted-foreground text-xs font-semibold">
-                    {ciclo === "yearly" ? " / año (CLP)" : " / mes (CLP)"}
-                  </span>
+
+                {/* Precios y Ahorro */}
+                <div className="pt-3 space-y-1">
+                  <div className="flex items-baseline gap-1.5">
+                    <span className="text-4xl font-black text-foreground">
+                      {formatPrecio(precioActual)}
+                    </span>
+                    <span className="text-muted-foreground text-xs font-semibold">
+                      {cicloGlobal === "yearly" ? " / año (CLP)" : " / mes (CLP)"}
+                    </span>
+                  </div>
+
+                  {cicloGlobal === "yearly" ? (
+                    <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                      <Badge className="bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/15 border-emerald-500/20 text-[10px] font-bold">
+                        Ahorras {formatPrecio(ahorroAnual)} / año
+                      </Badge>
+                      <span className="text-[11px] text-muted-foreground">
+                        (Equivale a {formatPrecio(equivalenteMensual)}/mes)
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="text-[11px] text-muted-foreground pt-1 flex items-center gap-1">
+                      <Tag className="h-3 w-3 text-emerald-600" />
+                      <span>
+                        O ahorra pagando anual: <strong>{formatPrecio(precioAnual)}/año</strong> (2 meses gratis)
+                      </span>
+                    </div>
+                  )}
                 </div>
               </CardHeader>
 
@@ -225,26 +265,48 @@ export default function PlanesPage() {
                 </ul>
               </CardContent>
 
-              <CardFooter className="pt-4 border-t border-border mt-auto">
+              <CardFooter className="pt-4 border-t border-border mt-auto flex flex-col gap-2">
+                {/* Botón Principal según el ciclo seleccionado */}
                 <Button
-                  onClick={() => handleSuscribir(plan.id)}
-                  disabled={loading || esPlanActual}
+                  onClick={() => handleSuscribir(plan.id, cicloGlobal)}
+                  disabled={loadingMensual || loadingAnual || esPlanActual}
                   className="w-full gap-2 font-bold h-11 text-sm shadow-xs"
                   variant={plan.highlighted ? "default" : "outline"}
                 >
-                  {loading ? (
+                  {loadingMensual || loadingAnual ? (
                     <>
                       <Loader2 className="h-4 w-4 animate-spin" /> Conectando con Mercado Pago...
                     </>
                   ) : esPlanActual ? (
                     "Plan Actual de tu Negocio"
+                  ) : cicloGlobal === "yearly" ? (
+                    <>
+                      <Zap className="h-4 w-4 text-amber-300" />
+                      Suscribirme Plan {plan.name} Anual ({formatPrecio(precioAnual)})
+                      <ArrowRight className="h-4 w-4 ml-auto" />
+                    </>
                   ) : (
                     <>
-                      <CreditCard className="h-4 w-4" /> Suscribirme a Plan {plan.name}
+                      <CreditCard className="h-4 w-4" />
+                      Suscribirme Plan {plan.name} Mensual ({formatPrecio(precioMensual)})
                       <ArrowRight className="h-4 w-4 ml-auto" />
                     </>
                   )}
                 </Button>
+
+                {/* Botón Alternativo directo para el otro ciclo */}
+                {!esPlanActual && (
+                  <button
+                    type="button"
+                    onClick={() => handleSuscribir(plan.id, cicloGlobal === "yearly" ? "monthly" : "yearly")}
+                    disabled={loadingMensual || loadingAnual}
+                    className="text-[11px] text-muted-foreground hover:text-foreground text-center py-1 transition-colors underline-offset-4 hover:underline"
+                  >
+                    {cicloGlobal === "yearly"
+                      ? `O contrata la opción mensual por ${formatPrecio(precioMensual)}/mes`
+                      : `O aprovecha 2 meses gratis con el plan anual por ${formatPrecio(precioAnual)}/año`}
+                  </button>
+                )}
               </CardFooter>
             </Card>
           );
@@ -299,7 +361,7 @@ export default function PlanesPage() {
       <div className="flex flex-col sm:flex-row items-center justify-center gap-2 text-xs text-muted-foreground text-center pt-2">
         <ShieldCheck className="h-5 w-5 text-emerald-600 shrink-0" />
         <span>
-          Tus datos bancarios y pagos están protegidos con encriptación TLS de nivel bancario por{" "}
+          Tus pagos y renovaciones se procesan de forma 100% segura mediante cobro recurrente certificado por{" "}
           <strong className="text-foreground">Mercado Pago Chile</strong>.
         </span>
       </div>

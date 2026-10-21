@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useTenant } from "@/contexts/tenant-context";
 import { createClient } from "@/lib/supabase/client";
 import { formatMoney } from "@/lib/format";
@@ -29,6 +30,7 @@ import {
   Printer,
   FileText,
   CheckCheck,
+  BadgeDollarSign,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { imprimirTicketTermico } from "@/lib/ticket";
@@ -588,13 +590,23 @@ export default function ClientesPage() {
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
-          <div className="bg-card border border-border px-4 py-2 rounded-xl text-xs font-semibold shadow-xs">
+        <div className="flex items-center gap-2.5 flex-wrap">
+          <div className="bg-card border border-border px-3.5 py-1.5 rounded-xl text-xs font-semibold shadow-xs">
             <span className="text-muted-foreground mr-1.5">Deuda Total por Cobrar:</span>
             <span className="text-amber-600 font-bold text-base">{formatMoney(deudaTotalGlobal)}</span>
           </div>
 
-          <Button onClick={abrirCrear} className="gap-2 shadow-sm">
+          <Link href="/fiados">
+            <Button
+              variant="outline"
+              className="gap-2 shadow-xs border-amber-500/40 text-amber-600 hover:bg-amber-500/10 font-bold"
+            >
+              <BadgeDollarSign className="h-4 w-4" />
+              Módulo de Fiados
+            </Button>
+          </Link>
+
+          <Button onClick={abrirCrear} className="gap-2 shadow-sm font-bold">
             <Plus className="h-4 w-4" />
             Nuevo Cliente
           </Button>

@@ -6,6 +6,10 @@ export const metadata: Metadata = {
   title: "Operix ERP — Sistema POS e Inventario en la Nube",
   description:
     "Sistema POS e inventario moderno en la nube para tiendas y restaurantes: ventas, stock, clientes, caja y catálogo online.",
+  icons: {
+    icon: "/favicon.ico",
+    apple: "/apple-touch-icon.png",
+  },
 };
 
 export default function RootLayout({

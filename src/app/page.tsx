@@ -2,7 +2,8 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { Button } from "@/components/ui/button";
-import { Store, ShoppingCart, ShieldCheck, Zap, ArrowRight } from "lucide-react";
+import { ShoppingCart, ShieldCheck, Zap, ArrowRight } from "lucide-react";
+import { Logo } from "@/components/Logo";
 
 export const dynamic = "force-dynamic";
 
@@ -21,9 +22,7 @@ export default async function HomePage() {
       {/* Header */}
       <header className="h-16 border-b border-border/60 px-6 flex items-center justify-between max-w-7xl mx-auto w-full">
         <div className="flex items-center gap-2.5">
-          <div className="h-9 w-9 rounded-xl bg-primary flex items-center justify-center text-primary-foreground font-bold shadow-sm">
-            <Store className="h-5 w-5" />
-          </div>
+          <Logo className="h-9 w-9" />
           <span className="font-bold text-xl tracking-tight">Operix ERP</span>
         </div>
 

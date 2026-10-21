@@ -28,6 +28,7 @@ import {
   ExternalLink,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Logo } from "@/components/Logo";
 
 function DashboardContent({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -88,9 +89,7 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
         {/* Brand header */}
         <div className="h-16 px-5 border-b border-sidebar-border flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <div className="h-9 w-9 rounded-xl bg-primary flex items-center justify-center text-primary-foreground font-bold shadow-sm">
-              <Store className="h-5 w-5" />
-            </div>
+            <Logo className="h-9 w-9" />
             <div>
               <span className="font-bold text-lg leading-tight block">Operix ERP</span>
               <span className="text-[11px] text-muted-foreground block truncate max-w-[130px]">

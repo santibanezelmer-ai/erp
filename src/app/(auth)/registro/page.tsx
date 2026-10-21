@@ -12,6 +12,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { toast } from "sonner";
 import { Store, UtensilsCrossed, Loader2, CheckCircle2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Logo } from "@/components/Logo";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -88,9 +89,7 @@ export default function RegisterPage() {
     <div className="min-h-screen flex items-center justify-center bg-muted/40 p-4">
       <div className="w-full max-w-lg">
         <div className="flex items-center justify-center gap-2 mb-6">
-          <div className="h-10 w-10 rounded-xl bg-primary flex items-center justify-center text-primary-foreground font-bold shadow-md">
-            <Store className="h-5 w-5" />
-          </div>
+          <Logo className="h-10 w-10 shadow-md" />
           <span className="font-bold text-2xl tracking-tight">Operix ERP</span>
         </div>
 

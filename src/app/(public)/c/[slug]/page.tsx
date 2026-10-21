@@ -56,17 +56,16 @@ export default function CatalogoPublicoPage({
           .maybeSingle();
 
         if (negErr || !neg) {
+          console.warn(`[Catalogo] Negocio no encontrado para slug '${slug}':`, negErr);
           setNotFound(true);
           return;
         }
-
-        setNegocio(neg);
 
         // 2. Obtener configuración de plantilla y datos en paralelo
         const [configRes, prodsRes, varsRes, marcasRes] = await Promise.all([
           supabase
             .from("configuracion")
-            .select("plantilla_id, plantilla_config, plantilla_draft")
+            .select("plantilla_id, plantilla_config, plantilla_draft, telefono, logo_url")
             .eq("negocio_id", neg.id)
             .maybeSingle(),
           supabase
@@ -88,9 +87,30 @@ export default function CatalogoPublicoPage({
             .order("nombre", { ascending: true }),
         ]);
 
-        // Determinar plantilla
         const cfgData = configRes.data;
-        let activeTheme: ThemeId = (cfgData?.plantilla_id as ThemeId) || "beauty";
+
+        // Combinar datos del negocio con configuración (teléfono, logo)
+        const fullNegocio: Negocio = {
+          ...neg,
+          logo_url:
+            cfgData?.logo_url ||
+            neg.logo_url ||
+            (neg.perfil?.startsWith("http") || neg.perfil?.startsWith("data:") ? neg.perfil : null),
+          // Inyectamos teléfono de configuracion si existe
+          ...((cfgData?.telefono ? { telefono: cfgData.telefono } : {}) as any),
+        };
+        setNegocio(fullNegocio);
+
+        // Determinar plantilla por defecto según rubro si no tiene una guardada
+        let defaultThemeByRubro: ThemeId = "beauty";
+        const tipoNorm = (neg.tipo_negocio || "").toLowerCase();
+        if (tipoNorm.includes("auto") || tipoNorm.includes("repuesto") || tipoNorm.includes("mecanic")) {
+          defaultThemeByRubro = "autoparts";
+        } else if (tipoNorm.includes("ferreter") || tipoNorm.includes("construc") || tipoNorm.includes("herramient")) {
+          defaultThemeByRubro = "ferremax";
+        }
+
+        let activeTheme: ThemeId = (cfgData?.plantilla_id as ThemeId) || defaultThemeByRubro;
         let activeConfig: ThemeCustomConfig =
           (cfgData?.plantilla_config as ThemeCustomConfig) || {};
 

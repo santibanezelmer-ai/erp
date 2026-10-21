@@ -42,16 +42,21 @@ import {
 import { imprimirHojaEtiquetas } from "@/lib/barcode-labels";
 
 type Producto = Database["public"]["Tables"]["productos"]["Row"];
+type Variante = Database["public"]["Tables"]["producto_variantes"]["Row"];
 
 export default function ProductosPage() {
   const { negocio, sucursalActiva } = useTenant();
   const [productos, setProductos] = useState<Producto[]>([]);
+  const [variantes, setVariantes] = useState<Variante[]>([]);
   const [loading, setLoading] = useState(true);
   const [busqueda, setBusqueda] = useState("");
   const [filtroStock, setFiltroStock] = useState<"todos" | "bajo" | "agotado">("todos");
 
   // Barcode Scanner Modal
   const [scannerOpen, setScannerOpen] = useState(false);
+
+  // Modal Ver Variantes de Producto
+  const [variantesModalProd, setVariantesModalProd] = useState<Producto | null>(null);
 
   // Modal Etiquetas Código de Barras
   const [modalEtiquetasOpen, setModalEtiquetasOpen] = useState(false);
@@ -72,6 +77,7 @@ export default function ProductosPage() {
   const [nombre, setNombre] = useState("");
   const [codigo, setCodigo] = useState("");
   const [categoria, setCategoria] = useState("");
+  const [imagenUrl, setImagenUrl] = useState("");
   const [precioVenta, setPrecioVenta] = useState<string>("0");
   const [precioCosto, setPrecioCosto] = useState<string>("0");
   const [stock, setStock] = useState<string>("0");
@@ -92,15 +98,22 @@ export default function ProductosPage() {
     const supabase = createClient();
 
     try {
-      let query = supabase
-        .from("productos")
-        .select("*")
-        .eq("negocio_id", negocio.id)
-        .order("nombre", { ascending: true });
+      const [prodsRes, varsRes] = await Promise.all([
+        supabase
+          .from("productos")
+          .select("*")
+          .eq("negocio_id", negocio.id)
+          .order("nombre", { ascending: true }),
+        supabase
+          .from("producto_variantes")
+          .select("*")
+          .eq("negocio_id", negocio.id)
+          .order("nombre", { ascending: true }),
+      ]);
 
-      const { data, error } = await query;
-      if (error) throw error;
-      setProductos(data || []);
+      if (prodsRes.error) throw prodsRes.error;
+      setProductos(prodsRes.data || []);
+      setVariantes(varsRes.data || []);
     } catch (err: any) {
       toast.error(err.message || "Error al cargar productos");
     } finally {
@@ -112,11 +125,16 @@ export default function ProductosPage() {
     fetchProductos();
   }, [negocio?.id]);
 
+  const variantsOf = (prodId: string): Variante[] => {
+    return variantes.filter((v) => v.producto_id === prodId);
+  };
+
   const abrirCrear = () => {
     setProductoEdit(null);
     setNombre("");
     setCodigo("");
     setCategoria("");
+    setImagenUrl("");
     setPrecioVenta("0");
     setPrecioCosto("0");
     setStock("0");
@@ -131,6 +149,7 @@ export default function ProductosPage() {
     setNombre(prod.nombre || "");
     setCodigo(prod.codigo || "");
     setCategoria(prod.categoria || "");
+    setImagenUrl(prod.imagen_url || "");
     setPrecioVenta(String(prod.precio_venta || 0));
     setPrecioCosto(String(prod.precio_costo || 0));
     setStock(String(prod.stock || 0));
@@ -159,6 +178,7 @@ export default function ProductosPage() {
         nombre: nombre.trim(),
         codigo: codigo.trim() || null,
         categoria: categoria.trim() || null,
+        imagen_url: imagenUrl.trim() || null,
         precio_venta: Number(precioVenta) || 0,
         precio_costo: Number(precioCosto) || 0,
         stock: sinControlStock ? 0 : Number(stock) || 0,
@@ -487,7 +507,10 @@ export default function ProductosPage() {
                 </thead>
                 <tbody className="divide-y divide-border">
                   {productosFiltrados.map((prod) => {
-                    const st = Number(prod.stock || 0);
+                    const vs = variantsOf(prod.id);
+                    const st = vs.length > 0
+                      ? vs.reduce((s, v) => s + Number(v.stock || 0), 0)
+                      : Number(prod.stock || 0);
                     const stMin = Number(prod.stock_min || 5);
                     const isBajo = !prod.sin_control_stock && st <= stMin && st > 0;
                     const isAgotado = !prod.sin_control_stock && st <= 0;
@@ -495,7 +518,38 @@ export default function ProductosPage() {
                     return (
                       <tr key={prod.id} className="hover:bg-muted/30 transition-colors">
                         <td className="py-3 px-4">
-                          <div className="font-semibold text-foreground">{prod.nombre}</div>
+                          <div className="flex items-center gap-3">
+                            <div className="h-10 w-10 rounded-lg bg-muted border overflow-hidden shrink-0 flex items-center justify-center">
+                              {prod.imagen_url ? (
+                                <img
+                                  src={prod.imagen_url}
+                                  alt={prod.nombre}
+                                  loading="lazy"
+                                  className="h-full w-full object-cover"
+                                />
+                              ) : (
+                                <Package className="h-5 w-5 text-muted-foreground/40" />
+                              )}
+                            </div>
+                            <div className="min-w-0">
+                              <div
+                                className="font-semibold text-foreground truncate max-w-xs"
+                                title={prod.nombre}
+                              >
+                                {prod.nombre}
+                              </div>
+                              {vs.length > 0 && (
+                                <button
+                                  type="button"
+                                  onClick={() => setVariantesModalProd(prod)}
+                                  className="inline-flex items-center gap-1 text-[10px] font-semibold text-primary bg-primary/10 hover:bg-primary/20 px-1.5 py-0.5 rounded mt-0.5 transition-colors cursor-pointer"
+                                >
+                                  <Layers className="h-3 w-3" />
+                                  <span>{vs.length} variantes</span>
+                                </button>
+                              )}
+                            </div>
+                          </div>
                         </td>
                         <td className="py-3 px-4">
                           {prod.codigo ? (
@@ -653,6 +707,32 @@ export default function ProductosPage() {
                   onChange={(e) => setCategoria(e.target.value)}
                   disabled={saving}
                 />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="prod-img">URL de Imagen</Label>
+              <div className="flex gap-2 items-center">
+                <Input
+                  id="prod-img"
+                  placeholder="https://... imagen.webp o jpg"
+                  value={imagenUrl}
+                  onChange={(e) => setImagenUrl(e.target.value)}
+                  disabled={saving}
+                  className="flex-1 text-xs"
+                />
+                {imagenUrl && (
+                  <div className="h-9 w-9 rounded-md border overflow-hidden shrink-0 bg-muted flex items-center justify-center">
+                    <img
+                      src={imagenUrl}
+                      alt="Preview"
+                      className="h-full w-full object-cover"
+                      onError={(e) => {
+                        (e.currentTarget as HTMLElement).style.display = "none";
+                      }}
+                    />
+                  </div>
+                )}
               </div>
             </div>
 
@@ -990,6 +1070,86 @@ export default function ProductosPage() {
             <Button size="sm" onClick={ejecutarImpresionEtiquetas} className="gap-1.5 font-bold">
               <Printer className="h-4 w-4" />
               Imprimir {cantidadEtiquetas} Etiquetas
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal Ver Variantes */}
+      <Dialog
+        open={!!variantesModalProd}
+        onOpenChange={(open) => !open && setVariantesModalProd(null)}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Layers className="h-5 w-5 text-primary" />
+              <span>Variantes de {variantesModalProd?.nombre}</span>
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              Variantes registradas en el catálogo con sus respectivos precios y stocks.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-2 py-2 max-h-80 overflow-y-auto">
+            {variantesModalProd &&
+              variantsOf(variantesModalProd.id).map((v) => {
+                const vStock = Number(v.stock || 0);
+                const vPrecio = Number(
+                  v.precio_promocional ?? v.precio_venta ?? variantesModalProd.precio_promocional ?? variantesModalProd.precio_venta ?? 0
+                );
+                const vImg = v.imagen_url || variantesModalProd.imagen_url;
+
+                return (
+                  <div
+                    key={v.id}
+                    className="flex items-center justify-between p-3 rounded-xl border border-border bg-card"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="h-10 w-10 rounded-lg bg-muted overflow-hidden shrink-0 flex items-center justify-center border">
+                        {vImg ? (
+                          <img
+                            src={vImg}
+                            alt={v.nombre}
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          <Package className="h-5 w-5 text-muted-foreground/40" />
+                        )}
+                      </div>
+
+                      <div className="min-w-0">
+                        <div className="font-bold text-xs text-foreground truncate">
+                          {v.nombre}
+                        </div>
+                        <div className="text-[11px] text-muted-foreground flex items-center gap-2">
+                          <span>{vStock} u. stock</span>
+                          {v.codigo && (
+                            <span className="font-mono text-[10px] text-muted-foreground/70">
+                              #{v.codigo}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="text-right">
+                      <span className="font-bold text-xs text-primary">
+                        {formatMoney(vPrecio)}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+          </div>
+
+          <DialogFooter>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setVariantesModalProd(null)}
+            >
+              Cerrar
             </Button>
           </DialogFooter>
         </DialogContent>

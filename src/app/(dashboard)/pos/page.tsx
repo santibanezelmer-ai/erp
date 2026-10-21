@@ -29,6 +29,9 @@ import {
   Loader2,
   X,
   Sparkles,
+  Package,
+  Layers,
+  ChevronRight,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { BarcodeScanner } from "@/components/BarcodeScanner";
@@ -36,10 +39,12 @@ import { imprimirTicketTermico, descargarTicketPDF } from "@/lib/ticket";
 
 type Producto = Database["public"]["Tables"]["productos"]["Row"];
 type Cliente = Database["public"]["Tables"]["clientes"]["Row"];
+type Variante = Database["public"]["Tables"]["producto_variantes"]["Row"];
 
 interface CartItem {
   id: string;
   producto?: Producto;
+  variante?: Variante | null;
   nombre: string;
   qty: number;
   precioUnitario: number;
@@ -49,8 +54,12 @@ interface CartItem {
 export default function POSPage() {
   const { negocio, sucursalActiva, profile } = useTenant();
   const [productos, setProductos] = useState<Producto[]>([]);
+  const [variantes, setVariantes] = useState<Variante[]>([]);
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Variant selector modal
+  const [pickVariant, setPickVariant] = useState<Producto | null>(null);
 
   // Search & Categories
   const [busqueda, setBusqueda] = useState("");
@@ -87,14 +96,14 @@ export default function POSPage() {
     items: CartItem[];
   } | null>(null);
 
-  // Fetch products and clients
+  // Fetch products, variants and clients
   const fetchData = async () => {
     if (!negocio?.id) return;
     setLoading(true);
     const supabase = createClient();
 
     try {
-      const [prodsRes, clientesRes] = await Promise.all([
+      const [prodsRes, clientesRes, varsRes] = await Promise.all([
         supabase
           .from("productos")
           .select("*")
@@ -106,10 +115,17 @@ export default function POSPage() {
           .select("*")
           .eq("negocio_id", negocio.id)
           .order("nombre", { ascending: true }),
+        supabase
+          .from("producto_variantes")
+          .select("*")
+          .eq("negocio_id", negocio.id)
+          .eq("activo", true)
+          .order("nombre", { ascending: true }),
       ]);
 
       setProductos(prodsRes.data || []);
       setClientes(clientesRes.data || []);
+      setVariantes(varsRes.data || []);
     } catch (err: any) {
       toast.error(err.message || "Error al cargar datos del POS");
     } finally {
@@ -124,10 +140,22 @@ export default function POSPage() {
   // Extract unique categories
   const categorias = ["todas", ...Array.from(new Set(productos.map((p) => p.categoria).filter(Boolean) as string[]))];
 
-  // Add to cart
-  const addToCart = (prod: Producto) => {
-    const stockActual = Number(prod.stock || 0);
-    const existing = cart.find((i) => i.producto?.id === prod.id);
+  // Helper variants
+  const variantsOf = (prodId: string): Variante[] => {
+    return variantes.filter((v) => v.producto_id === prodId);
+  };
+
+  // Add to cart with variant support
+  const addToCart = (prod: Producto, variante?: Variante | null) => {
+    const itemId = variante ? `${prod.id}:${variante.id}` : prod.id;
+    const precioUnitario = variante
+      ? Number(variante.precio_promocional ?? variante.precio_venta ?? prod.precio_promocional ?? prod.precio_venta ?? 0)
+      : Number(prod.precio_promocional ?? prod.precio_venta ?? 0);
+    const stockActual = variante
+      ? Number(variante.stock || 0)
+      : Number(prod.stock || 0);
+
+    const existing = cart.find((i) => i.id === itemId);
 
     if (!prod.sin_control_stock && existing && existing.qty >= stockActual) {
       toast.error(`Stock máximo alcanzado (${stockActual} u.)`);
@@ -138,24 +166,40 @@ export default function POSPage() {
       return;
     }
 
+    const nombreFinal = variante
+      ? `${prod.nombre} (${variante.nombre})`
+      : prod.nombre;
+
     setCart((prev) => {
-      const item = prev.find((i) => i.producto?.id === prod.id);
+      const item = prev.find((i) => i.id === itemId);
       if (item) {
         return prev.map((i) =>
-          i.producto?.id === prod.id ? { ...i, qty: i.qty + 1 } : i
+          i.id === itemId ? { ...i, qty: i.qty + 1 } : i
         );
       }
       return [
         ...prev,
         {
-          id: prod.id,
+          id: itemId,
           producto: prod,
-          nombre: prod.nombre,
+          variante: variante || null,
+          nombre: nombreFinal,
           qty: 1,
-          precioUnitario: Number(prod.precio_venta || 0),
+          precioUnitario,
         },
       ];
     });
+
+    toast.success(`Añadido: ${nombreFinal}`);
+  };
+
+  const handleProductClick = (prod: Producto) => {
+    const vs = variantsOf(prod.id);
+    if (vs.length > 0) {
+      setPickVariant(prod);
+    } else {
+      addToCart(prod);
+    }
   };
 
   // Agregar Ítem Libre / Personalizado
@@ -190,20 +234,39 @@ export default function POSPage() {
   };
 
   const buscarYAgregarPorCodigo = (codeStr: string) => {
-    const code = codeStr.toLowerCase();
+    const code = codeStr.toLowerCase().trim();
+
+    // 1. Buscar coincidencia exacta por código de variante
+    for (const p of productos) {
+      const vs = variantsOf(p.id);
+      const matchVar = vs.find(
+        (v) => v.codigo && v.codigo.toLowerCase().trim() === code
+      );
+      if (matchVar) {
+        addToCart(p, matchVar);
+        setBusqueda("");
+        return;
+      }
+    }
+
+    // 2. Buscar por producto (código, código interno, o nombre)
     const match = productos.find(
       (p) =>
-        (p.codigo && p.codigo.toLowerCase() === code) ||
-        (p.codigo_interno && p.codigo_interno.toLowerCase() === code) ||
-        p.nombre.toLowerCase() === code
+        (p.codigo && p.codigo.toLowerCase().trim() === code) ||
+        (p.codigo_interno && p.codigo_interno.toLowerCase().trim() === code) ||
+        p.nombre.toLowerCase().trim() === code
     );
 
     if (match) {
-      addToCart(match);
+      const vs = variantsOf(match.id);
+      if (vs.length > 0) {
+        setPickVariant(match);
+      } else {
+        addToCart(match);
+      }
       setBusqueda("");
-      toast.success(`Agregado al carrito: ${match.nombre}`);
     } else {
-      toast.error(`Producto "${codeStr}" no encontrado`);
+      toast.error(`Producto o variante "${codeStr}" no encontrado`);
     }
   };
 
@@ -215,7 +278,10 @@ export default function POSPage() {
           if (i.id === id) {
             const nextQty = i.qty + delta;
             if (nextQty <= 0) return null;
-            if (i.producto && !i.producto.sin_control_stock && nextQty > Number(i.producto.stock || 0)) {
+            const maxStock = i.variante
+              ? Number(i.variante.stock || 0)
+              : Number(i.producto?.stock || 0);
+            if (i.producto && !i.producto.sin_control_stock && nextQty > maxStock) {
               toast.error("No hay más stock disponible");
               return i;
             }
@@ -293,7 +359,7 @@ export default function POSPage() {
       const lineas = cart.map((i) => ({
         tipo: i.esLibre ? "libre" : "producto",
         producto_id: i.producto?.id || null,
-        variante_id: null,
+        variante_id: i.variante?.id || null,
         nombre: i.nombre,
         qty: i.qty,
         precio: i.precioUnitario,
@@ -348,11 +414,21 @@ export default function POSPage() {
         }));
         await supabase.from("detalle_ventas").insert(detalles);
 
-        // Descontar stock
+        // Descontar stock (variantes y productos)
         for (const item of cart) {
+          if (item.variante) {
+            const nuevoStockVar = Math.max(0, Number(item.variante.stock || 0) - item.qty);
+            await supabase
+              .from("producto_variantes")
+              .update({ stock: nuevoStockVar })
+              .eq("id", item.variante.id);
+          }
           if (item.producto && !item.producto.sin_control_stock) {
             const nuevoStock = Math.max(0, Number(item.producto.stock || 0) - item.qty);
-            await supabase.from("productos").update({ stock: nuevoStock }).eq("id", item.producto.id);
+            await supabase
+              .from("productos")
+              .update({ stock: nuevoStock })
+              .eq("id", item.producto.id);
           }
         }
 
@@ -532,48 +608,74 @@ export default function POSPage() {
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-2.5">
               {productosFiltrados.map((prod) => {
-                const stockVal = Number(prod.stock || 0);
+                const vs = variantsOf(prod.id);
+                const stockVal = vs.length > 0
+                  ? vs.reduce((s, v) => s + Number(v.stock || 0), 0)
+                  : Number(prod.stock || 0);
                 const agotado = !prod.sin_control_stock && stockVal <= 0;
 
                 return (
                   <button
                     key={prod.id}
                     disabled={agotado}
-                    onClick={() => addToCart(prod)}
+                    onClick={() => handleProductClick(prod)}
                     className={cn(
-                      "p-3 rounded-xl border text-left flex flex-col justify-between transition-all bg-background shadow-xs hover:border-primary hover:shadow-md active:scale-98",
+                      "p-2.5 rounded-xl border text-left flex flex-col justify-between transition-all bg-background shadow-xs hover:border-primary hover:shadow-md active:scale-98 group",
                       agotado && "opacity-50 cursor-not-allowed hover:border-border hover:shadow-none"
                     )}
                   >
-                    <div>
-                      <div className="font-semibold text-xs leading-snug line-clamp-2 text-foreground">
-                        {prod.nombre}
-                      </div>
-                      {prod.categoria && (
-                        <div className="text-[10px] text-muted-foreground mt-0.5 truncate">
-                          {prod.categoria}
+                    {/* Thumbnail del Producto */}
+                    <div className="relative aspect-4/3 w-full bg-muted/40 rounded-lg overflow-hidden mb-2">
+                      {prod.imagen_url ? (
+                        <img
+                          src={prod.imagen_url}
+                          alt={prod.nombre}
+                          loading="lazy"
+                          className="w-full h-full object-cover transition-transform group-hover:scale-105"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-muted-foreground/30">
+                          <Package className="h-6 w-6 stroke-[1.5]" />
                         </div>
+                      )}
+                      {vs.length > 0 && (
+                        <span className="absolute top-1 left-1 bg-background/90 backdrop-blur-xs text-primary font-bold text-[9px] px-1.5 py-0.5 rounded shadow-xs border">
+                          {vs.length} var.
+                        </span>
                       )}
                     </div>
 
-                    <div className="mt-2.5 flex items-center justify-between">
-                      <span className="font-bold text-sm text-primary">
-                        {formatMoney(prod.precio_venta)}
-                      </span>
-                      {!prod.sin_control_stock && (
-                        <span
-                          className={cn(
-                            "text-[10px] px-1.5 py-0.5 rounded-full font-semibold",
-                            agotado
-                              ? "bg-destructive/10 text-destructive"
-                              : stockVal <= (prod.stock_min || 5)
-                              ? "bg-amber-500/10 text-amber-600 dark:text-amber-500"
-                              : "bg-muted text-muted-foreground"
-                          )}
-                        >
-                          {agotado ? "Agotado" : `${stockVal} u.`}
+                    <div className="flex-1 flex flex-col justify-between">
+                      <div>
+                        <div className="font-semibold text-xs leading-snug line-clamp-2 text-foreground">
+                          {prod.nombre}
+                        </div>
+                        {prod.categoria && (
+                          <div className="text-[10px] text-muted-foreground mt-0.5 truncate">
+                            {prod.categoria}
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="mt-2 flex items-center justify-between">
+                        <span className="font-bold text-xs text-primary">
+                          {formatMoney(prod.precio_venta)}
                         </span>
-                      )}
+                        {!prod.sin_control_stock && (
+                          <span
+                            className={cn(
+                              "text-[10px] px-1.5 py-0.5 rounded-full font-semibold",
+                              agotado
+                                ? "bg-destructive/10 text-destructive"
+                                : stockVal <= (prod.stock_min || 5)
+                                ? "bg-amber-500/10 text-amber-600 dark:text-amber-500"
+                                : "bg-muted text-muted-foreground"
+                            )}
+                          >
+                            {agotado ? "Agotado" : `${stockVal} u.`}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </button>
                 );
@@ -1006,6 +1108,89 @@ export default function POSPage() {
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal Selección de Variante en POS */}
+      <Dialog open={!!pickVariant} onOpenChange={(open) => !open && setPickVariant(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Layers className="h-5 w-5 text-primary" />
+              <span>{pickVariant?.nombre}</span>
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              Selecciona la variante que deseas añadir a la orden:
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-2 py-2 max-h-80 overflow-y-auto">
+            {pickVariant &&
+              variantsOf(pickVariant.id).map((v) => {
+                const vStock = Number(v.stock || 0);
+                const vAgotado = !pickVariant.sin_control_stock && vStock <= 0;
+                const vPrecio = Number(
+                  v.precio_promocional ?? v.precio_venta ?? pickVariant.precio_promocional ?? pickVariant.precio_venta ?? 0
+                );
+                const vImg = v.imagen_url || pickVariant.imagen_url;
+
+                return (
+                  <button
+                    key={v.id}
+                    disabled={vAgotado}
+                    onClick={() => {
+                      addToCart(pickVariant, v);
+                      setPickVariant(null);
+                    }}
+                    className={cn(
+                      "w-full flex items-center justify-between p-3 rounded-xl border border-border bg-card text-left transition-all hover:border-primary hover:bg-muted/40",
+                      vAgotado && "opacity-50 cursor-not-allowed hover:border-border hover:bg-card"
+                    )}
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="h-11 w-11 rounded-lg bg-muted overflow-hidden shrink-0 flex items-center justify-center border">
+                        {vImg ? (
+                          <img
+                            src={vImg}
+                            alt={v.nombre}
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          <Package className="h-5 w-5 text-muted-foreground/40" />
+                        )}
+                      </div>
+
+                      <div className="min-w-0">
+                        <div className="font-bold text-xs text-foreground truncate">
+                          {v.nombre}
+                        </div>
+                        <div className="text-[11px] text-muted-foreground flex items-center gap-2">
+                          <span>
+                            {vAgotado
+                              ? "Agotado"
+                              : !pickVariant.sin_control_stock
+                              ? `${vStock} u. stock`
+                              : "Stock ilimitado"}
+                          </span>
+                          {v.codigo && (
+                            <span className="font-mono text-[10px] text-muted-foreground/70">
+                              #{v.codigo}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 pl-2 shrink-0">
+                      <span className="font-bold text-sm text-primary">
+                        {formatMoney(vPrecio)}
+                      </span>
+                      <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                    </div>
+                  </button>
+                );
+              })}
+          </div>
         </DialogContent>
       </Dialog>
 

@@ -25,6 +25,7 @@ import {
   X,
   ChevronDown,
   Loader2,
+  ExternalLink,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -203,6 +204,20 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
           </div>
 
           <div className="flex items-center gap-2">
+            {negocio?.slug && (
+              <a
+                href={`/c/${negocio.slug}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                title="Abrir Tienda Online / Catálogo Digital en nueva pestaña"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border bg-background hover:bg-muted text-xs font-medium text-foreground transition-colors shadow-2xs"
+              >
+                <Store className="h-3.5 w-3.5 text-primary" />
+                <span className="hidden sm:inline">Ver Mi Tienda</span>
+                <ExternalLink className="h-3 w-3 text-muted-foreground" />
+              </a>
+            )}
+
             <Link
               href="/pos"
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-semibold shadow hover:bg-primary/90 transition-colors"

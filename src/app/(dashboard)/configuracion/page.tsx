@@ -27,6 +27,9 @@ import {
   Phone,
   MessageSquare,
   Copy,
+  Globe,
+  ExternalLink,
+  Check,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -83,6 +86,13 @@ export default function ConfiguracionPage() {
   // Logo del Negocio
   const [logoUrl, setLogoUrl] = useState<string>("");
 
+  // Tienda Online y Subdominio
+  const [slug, setSlug] = useState("");
+  const [copiado, setCopiado] = useState(false);
+  const [savingSlug, setSavingSlug] = useState(false);
+  const [productosCount, setProductosCount] = useState<number>(0);
+  const [dominioBase, setDominioBase] = useState("operixerp.cl");
+
   useEffect(() => {
     if (negocio) {
       setNombreNegocio(negocio.nombre || "");
@@ -91,9 +101,94 @@ export default function ConfiguracionPage() {
       setDireccion((negocio as any).direccion || "");
       setTipoNegocio(negocio.tipo_negocio === "restaurant" ? "restaurant" : "tienda");
       setLogoUrl(negocio.perfil || "");
+      setSlug(negocio.slug || "");
       cargarEquipo();
+      cargarConteoProductos();
+    }
+    if (typeof window !== "undefined") {
+      const h = window.location.host.split(":")[0];
+      const parts = h.split(".");
+      if (parts.length >= 2 && !h.includes("localhost")) {
+        setDominioBase(parts.slice(-2).join("."));
+      } else if (h.includes("localhost")) {
+        setDominioBase("localhost:3000");
+      }
     }
   }, [negocio?.id]);
+
+  const cargarConteoProductos = async () => {
+    if (!negocio?.id) return;
+    const supabase = createClient();
+    const { count } = await supabase
+      .from("productos")
+      .select("id", { count: "exact", head: true })
+      .eq("negocio_id", negocio.id)
+      .eq("activo", true);
+    setProductosCount(count || 0);
+  };
+
+  const guardarSlug = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!negocio?.id) return;
+    const cleanSlug = slug
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9-]/g, "-")
+      .replace(/-+/g, "-")
+      .replace(/^-|-$/g, "");
+
+    if (!cleanSlug) {
+      toast.error("El slug no puede estar vacío");
+      return;
+    }
+
+    setSavingSlug(true);
+    const supabase = createClient();
+    try {
+      const { data: existente } = await supabase
+        .from("negocios")
+        .select("id")
+        .eq("slug", cleanSlug)
+        .neq("id", negocio.id)
+        .maybeSingle();
+
+      if (existente) {
+        toast.error("Este subdominio/slug ya está en uso por otro negocio");
+        setSavingSlug(false);
+        return;
+      }
+
+      const { error } = await supabase
+        .from("negocios")
+        .update({ slug: cleanSlug })
+        .eq("id", negocio.id);
+
+      if (error) throw error;
+      toast.success("¡Subdominio y enlace de tienda actualizados!");
+      setSlug(cleanSlug);
+      reloadTenant();
+    } catch (err: any) {
+      toast.error(err.message || "Error al actualizar slug");
+    } finally {
+      setSavingSlug(false);
+    }
+  };
+
+  const copiarEnlaceTienda = () => {
+    const s = negocio?.slug || slug;
+    const url = typeof window !== "undefined" ? `${window.location.origin}/c/${s}` : `https://${s}.${dominioBase}`;
+    navigator.clipboard.writeText(url);
+    setCopiado(true);
+    toast.success("Enlace de tu tienda copiado al portapapeles");
+    setTimeout(() => setCopiado(false), 2500);
+  };
+
+  const compartirWhatsApp = () => {
+    const s = negocio?.slug || slug;
+    const url = typeof window !== "undefined" ? `${window.location.origin}/c/${s}` : `https://${s}.${dominioBase}`;
+    const msg = `¡Hola! Te invitamos a conocer el catálogo online de ${nombreNegocio || "nuestra tienda"}. Puedes revisar nuestros productos y hacer pedidos directamente desde aquí: ${url}`;
+    window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, "_blank");
+  };
 
   const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -415,6 +510,104 @@ export default function ConfiguracionPage() {
               </Button>
             </div>
           </form>
+        </CardContent>
+      </Card>
+
+      {/* Tienda Online, Subdominio y Catálogo Digital */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base font-bold flex items-center gap-2">
+            <Globe className="h-4 w-4 text-primary" />
+            Tienda Online & Subdominio del Negocio
+          </CardTitle>
+          <CardDescription>
+            Configura el subdominio y el enlace público de tu catálogo online para clientes
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <form onSubmit={guardarSlug} className="space-y-3">
+            <Label htmlFor="cfg-slug" className="text-xs font-semibold">
+              Identificador / Subdominio de tu Tienda
+            </Label>
+            <div className="flex flex-col sm:flex-row gap-2">
+              <div className="flex-1 flex items-center rounded-lg border border-border bg-muted/30 px-3 py-1.5 focus-within:ring-2 focus-within:ring-primary">
+                <span className="text-xs text-muted-foreground mr-1">https://</span>
+                <input
+                  id="cfg-slug"
+                  type="text"
+                  value={slug}
+                  onChange={(e) => setSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""))}
+                  placeholder="mi-tienda"
+                  disabled={savingSlug}
+                  className="bg-transparent text-xs font-semibold text-foreground focus:outline-hidden flex-1"
+                />
+                <span className="text-xs text-primary font-medium ml-1">.{dominioBase}</span>
+              </div>
+              <Button type="submit" size="sm" disabled={savingSlug || slug === negocio?.slug} className="text-xs shrink-0">
+                {savingSlug ? "Guardando..." : "Actualizar Subdominio"}
+              </Button>
+            </div>
+            <p className="text-[11px] text-muted-foreground">
+              Solo letras minúsculas, números y guiones. Este identificador define tu subdominio (ej: <code className="text-primary font-mono">{slug || "tienda"}.{dominioBase}</code>) y tu enlace directo (<code className="text-primary font-mono">{dominioBase}/c/{slug || "tienda"}</code>).
+            </p>
+          </form>
+
+          {/* Enlaces y Acciones */}
+          <div className="rounded-xl border border-border bg-card p-4 space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <span className="text-xs font-bold text-foreground block">
+                  Enlace público de tu catálogo:
+                </span>
+                <a
+                  href={`/c/${negocio?.slug || slug}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs text-primary hover:underline font-mono break-all inline-flex items-center gap-1 mt-0.5"
+                >
+                  {typeof window !== "undefined" ? `${window.location.origin}/c/${negocio?.slug || slug}` : `/c/${negocio?.slug || slug}`}
+                  <ExternalLink className="h-3 w-3" />
+                </a>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={copiarEnlaceTienda}
+                  className="gap-1.5 text-xs h-8"
+                >
+                  {copiado ? <Check className="h-3.5 w-3.5 text-emerald-500" /> : <Copy className="h-3.5 w-3.5" />}
+                  <span>{copiado ? "Copiado" : "Copiar Enlace"}</span>
+                </Button>
+                <a
+                  href={`/c/${negocio?.slug || slug}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-semibold shadow-xs hover:bg-primary/90 transition-colors h-8"
+                >
+                  <Store className="h-3.5 w-3.5" />
+                  <span>Abrir Tienda</span>
+                </a>
+              </div>
+            </div>
+
+            <div className="border-t border-border pt-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-muted-foreground">
+              <div className="flex items-center gap-2">
+                <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+                <span>Tienda activa con {productosCount} productos publicados</span>
+              </div>
+              <button
+                type="button"
+                onClick={compartirWhatsApp}
+                className="text-xs text-emerald-600 dark:text-emerald-400 hover:underline flex items-center gap-1 font-medium"
+              >
+                <MessageSquare className="h-3.5 w-3.5" />
+                Compartir catálogo por WhatsApp
+              </button>
+            </div>
+          </div>
         </CardContent>
       </Card>
 

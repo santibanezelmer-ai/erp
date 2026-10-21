@@ -26,6 +26,7 @@ import {
   ChevronDown,
   Loader2,
   ExternalLink,
+  CreditCard,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Logo } from "@/components/Logo";
@@ -66,6 +67,7 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
       : []),
     { name: "Caja / Turno", href: "/caja", icon: Wallet },
     { name: "Reportes", href: "/reportes", icon: BarChart3 },
+    { name: "Planes y Suscripción", href: "/planes", icon: CreditCard },
     { name: "Configuración", href: "/configuracion", icon: Settings },
   ];
 

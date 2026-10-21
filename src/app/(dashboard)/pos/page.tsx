@@ -72,6 +72,17 @@ export default function POSPage() {
   const [descuentoGlobal, setDescuentoGlobal] = useState<number>(0);
   const [clienteSeleccionado, setClienteSeleccionado] = useState<string>("");
 
+  // Modal Nuevo Cliente Rápido
+  const [modalNuevoClienteOpen, setModalNuevoClienteOpen] = useState(false);
+  const [nuevoClienteNombre, setNuevoClienteNombre] = useState("");
+  const [nuevoClienteTelefono, setNuevoClienteTelefono] = useState("");
+  const [nuevoClienteEmail, setNuevoClienteEmail] = useState("");
+  const [nuevoClienteDireccion, setNuevoClienteDireccion] = useState("");
+  const [guardandoCliente, setGuardandoCliente] = useState(false);
+
+  // Cliente actualmente seleccionado
+  const clienteActual = clientes.find((c) => c.id === clienteSeleccionado);
+
   // Modal Item Libre / Rápido
   const [modalItemLibreOpen, setModalItemLibreOpen] = useState(false);
   const [nombreItemLibre, setNombreItemLibre] = useState("");
@@ -267,6 +278,52 @@ export default function POSPage() {
       setBusqueda("");
     } else {
       toast.error(`Producto o variante "${codeStr}" no encontrado`);
+    }
+  };
+
+  // Crear Cliente Rápido desde el POS
+  const crearNuevoCliente = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!negocio?.id || !nuevoClienteNombre.trim()) {
+      toast.error("El nombre del cliente es obligatorio");
+      return;
+    }
+
+    setGuardandoCliente(true);
+    const supabase = createClient();
+
+    try {
+      const { data, error } = await supabase
+        .from("clientes")
+        .insert({
+          negocio_id: negocio.id,
+          nombre: nuevoClienteNombre.trim(),
+          telefono: nuevoClienteTelefono.trim() || null,
+          email: nuevoClienteEmail.trim() || null,
+          direccion: nuevoClienteDireccion.trim() || null,
+          deuda_total: 0,
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      toast.success(`Cliente "${data.nombre}" creado y seleccionado`);
+      setClientes((prev) =>
+        [...prev, data].sort((a, b) => a.nombre.localeCompare(b.nombre))
+      );
+      setClienteSeleccionado(data.id);
+      setModalNuevoClienteOpen(false);
+
+      // Limpiar formulario
+      setNuevoClienteNombre("");
+      setNuevoClienteTelefono("");
+      setNuevoClienteEmail("");
+      setNuevoClienteDireccion("");
+    } catch (err: any) {
+      toast.error(err.message || "Error al crear cliente");
+    } finally {
+      setGuardandoCliente(false);
     }
   };
 
@@ -723,19 +780,63 @@ export default function POSPage() {
         </div>
 
         {/* Selector de Cliente */}
-        <div className="py-2.5 border-b border-border">
-          <select
-            value={clienteSeleccionado}
-            onChange={(e) => setClienteSeleccionado(e.target.value)}
-            className="w-full text-xs rounded-lg border border-border bg-background p-2 text-foreground focus:ring-1 focus:ring-primary"
-          >
-            <option value="">Cliente Ocasional / Anónimo</option>
-            {clientes.map((cli) => (
-              <option key={cli.id} value={cli.id}>
-                {cli.nombre} {cli.telefono ? `(${cli.telefono})` : ""}
-              </option>
-            ))}
-          </select>
+        <div className="py-2.5 border-b border-border space-y-1.5">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold flex items-center gap-1.5 text-foreground">
+              <UserCheck className="h-3.5 w-3.5 text-primary" />
+              <span>Cliente Asignado</span>
+            </span>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setModalNuevoClienteOpen(true)}
+              className="h-6 px-2 text-[11px] gap-1 text-primary border-primary/30 hover:bg-primary/10 shadow-xs"
+            >
+              <Plus className="h-3 w-3" />
+              Nuevo
+            </Button>
+          </div>
+
+          <div className="flex items-center gap-1">
+            <select
+              value={clienteSeleccionado}
+              onChange={(e) => setClienteSeleccionado(e.target.value)}
+              className="w-full text-xs rounded-lg border border-border bg-background p-2 text-foreground focus:ring-1 focus:ring-primary truncate font-medium"
+            >
+              <option value="">👤 Cliente Ocasional / Anónimo</option>
+              {clientes.map((cli) => (
+                <option key={cli.id} value={cli.id}>
+                  {cli.nombre} {cli.telefono ? `(${cli.telefono})` : ""}{Number(cli.deuda_total || 0) > 0 ? ` · Deuda: ${formatMoney(cli.deuda_total)}` : ""}
+                </option>
+              ))}
+            </select>
+            {clienteSeleccionado && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-muted-foreground hover:text-destructive shrink-0"
+                onClick={() => setClienteSeleccionado("")}
+                title="Quitar cliente asignado"
+              >
+                <X className="h-3.5 w-3.5" />
+              </Button>
+            )}
+          </div>
+
+          {clienteActual && (
+            <div className="text-[11px] bg-muted/60 p-1.5 rounded-md flex items-center justify-between">
+              <span className="text-muted-foreground truncate">{clienteActual.telefono || "Sin teléfono"}</span>
+              {Number(clienteActual.deuda_total || 0) > 0 ? (
+                <span className="font-bold text-amber-600 dark:text-amber-400">
+                  Deuda: {formatMoney(clienteActual.deuda_total)}
+                </span>
+              ) : (
+                <span className="text-emerald-600 font-semibold">Al día (Sin deuda)</span>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Lista de Items en Carrito */}
@@ -850,6 +951,96 @@ export default function POSPage() {
               <div className="text-3xl font-black text-primary">{formatMoney(total)}</div>
             </div>
 
+            {/* Selector de Cliente en Modal de Pago */}
+            <div
+              className={cn(
+                "p-3 rounded-xl border space-y-2 transition-all",
+                metodoPago === "fiado" && !clienteSeleccionado
+                  ? "border-destructive bg-destructive/5"
+                  : "border-border bg-muted/20"
+              )}
+            >
+              <div className="flex items-center justify-between">
+                <Label htmlFor="cobro-cliente-sel" className="text-xs font-bold flex items-center gap-1.5">
+                  <UserCheck className="h-4 w-4 text-primary" />
+                  <span>
+                    Cliente Asignado{" "}
+                    {metodoPago === "fiado" ? (
+                      <span className="text-destructive font-black">* (Obligatorio para Fiado)</span>
+                    ) : (
+                      <span className="text-muted-foreground font-normal">(Opcional)</span>
+                    )}
+                  </span>
+                </Label>
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setModalNuevoClienteOpen(true)}
+                  className="h-6 px-2 text-[11px] gap-1 text-primary border-primary/30 hover:bg-primary/10 shadow-xs"
+                >
+                  <Plus className="h-3 w-3" />
+                  Nuevo Cliente
+                </Button>
+              </div>
+
+              <div className="flex items-center gap-1.5">
+                <select
+                  id="cobro-cliente-sel"
+                  value={clienteSeleccionado}
+                  onChange={(e) => setClienteSeleccionado(e.target.value)}
+                  className={cn(
+                    "w-full text-xs rounded-lg border bg-background p-2 text-foreground focus:ring-1 focus:ring-primary truncate font-medium",
+                    metodoPago === "fiado" && !clienteSeleccionado
+                      ? "border-destructive ring-1 ring-destructive/40"
+                      : "border-border"
+                  )}
+                >
+                  <option value="">👤 Cliente Ocasional / Anónimo</option>
+                  {clientes.map((cli) => (
+                    <option key={cli.id} value={cli.id}>
+                      {cli.nombre} {cli.telefono ? `(${cli.telefono})` : ""}{Number(cli.deuda_total || 0) > 0 ? ` · Deuda: ${formatMoney(cli.deuda_total)}` : ""}
+                    </option>
+                  ))}
+                </select>
+
+                {clienteSeleccionado && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 text-muted-foreground hover:text-destructive shrink-0"
+                    onClick={() => setClienteSeleccionado("")}
+                    title="Quitar cliente asignado"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </Button>
+                )}
+              </div>
+
+              {clienteActual ? (
+                <div className="text-[11px] bg-background border p-2 rounded-lg flex items-center justify-between">
+                  <span className="text-muted-foreground truncate">
+                    {clienteActual.telefono || "Sin teléfono registrado"}
+                  </span>
+                  {Number(clienteActual.deuda_total || 0) > 0 ? (
+                    <span className="font-bold text-amber-600 dark:text-amber-400">
+                      Deuda previa: {formatMoney(clienteActual.deuda_total)}
+                    </span>
+                  ) : (
+                    <span className="text-emerald-600 font-semibold">Cliente sin deuda previa</span>
+                  )}
+                </div>
+              ) : (
+                metodoPago === "fiado" && (
+                  <p className="text-[11px] text-destructive font-semibold">
+                    ⚠️ Selecciona un cliente arriba o presiona "+ Nuevo Cliente" para anotar este fiado.
+                  </p>
+                )
+              )}
+            </div>
+
             {/* Métodos de Pago */}
             <div className="grid grid-cols-2 gap-2">
               <button
@@ -950,12 +1141,6 @@ export default function POSPage() {
                     {formatMoney(vuelto)}
                   </span>
                 </div>
-              </div>
-            )}
-
-            {metodoPago === "fiado" && !clienteSeleccionado && (
-              <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 text-xs text-amber-700 dark:text-amber-400">
-                ⚠️ Debes seleccionar un cliente registrado para anotar la deuda por fiado.
               </div>
             )}
           </div>
@@ -1191,6 +1376,110 @@ export default function POSPage() {
                 );
               })}
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal Crear Nuevo Cliente Rápido desde el POS */}
+      <Dialog open={modalNuevoClienteOpen} onOpenChange={setModalNuevoClienteOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <UserCheck className="h-5 w-5 text-primary" />
+              <span>Registrar Nuevo Cliente</span>
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              Crea el cliente y se seleccionará automáticamente para esta venta o fiado.
+            </DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={crearNuevoCliente} className="space-y-3.5 py-2">
+            <div className="space-y-1">
+              <Label htmlFor="pos-nuevo-cli-nom" className="text-xs font-semibold">
+                Nombre Completo *
+              </Label>
+              <Input
+                id="pos-nuevo-cli-nom"
+                placeholder="Ej: Carolina Morales"
+                value={nuevoClienteNombre}
+                onChange={(e) => setNuevoClienteNombre(e.target.value)}
+                required
+                autoFocus
+                disabled={guardandoCliente}
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label htmlFor="pos-nuevo-cli-tel" className="text-xs">
+                  Teléfono / WhatsApp
+                </Label>
+                <Input
+                  id="pos-nuevo-cli-tel"
+                  placeholder="+56 9 1234 5678"
+                  value={nuevoClienteTelefono}
+                  onChange={(e) => setNuevoClienteTelefono(e.target.value)}
+                  disabled={guardandoCliente}
+                />
+              </div>
+
+              <div className="space-y-1">
+                <Label htmlFor="pos-nuevo-cli-email" className="text-xs">
+                  Email (Opcional)
+                </Label>
+                <Input
+                  id="pos-nuevo-cli-email"
+                  type="email"
+                  placeholder="cliente@correo.com"
+                  value={nuevoClienteEmail}
+                  onChange={(e) => setNuevoClienteEmail(e.target.value)}
+                  disabled={guardandoCliente}
+                />
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <Label htmlFor="pos-nuevo-cli-dir" className="text-xs">
+                Dirección (Opcional)
+              </Label>
+              <Input
+                id="pos-nuevo-cli-dir"
+                placeholder="Calle, Número o Depto"
+                value={nuevoClienteDireccion}
+                onChange={(e) => setNuevoClienteDireccion(e.target.value)}
+                disabled={guardandoCliente}
+              />
+            </div>
+
+            <DialogFooter className="pt-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setModalNuevoClienteOpen(false)}
+                disabled={guardandoCliente}
+              >
+                Cancelar
+              </Button>
+              <Button
+                type="submit"
+                size="sm"
+                disabled={guardandoCliente}
+                className="font-bold gap-1.5"
+              >
+                {guardandoCliente ? (
+                  <>
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    Guardando...
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 className="h-4 w-4" />
+                    Crear y Seleccionar
+                  </>
+                )}
+              </Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
 

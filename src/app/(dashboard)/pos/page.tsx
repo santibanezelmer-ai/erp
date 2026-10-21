@@ -491,13 +491,16 @@ export default function POSPage() {
 
         // Si la venta es a crédito/fiado en fallback, registrar en deudas y aumentar saldo deudor
         if (metodoPago === "fiado" && clienteSeleccionado && total > 0) {
+          const itemsTxt = cart
+            .map((i) => `${i.qty}x ${i.nombre}`)
+            .join(", ");
           await supabase.from("deudas").insert({
             negocio_id: negocio.id,
             cliente_id: clienteSeleccionado,
             venta_id: ventaId,
             monto: total,
             tipo: "deuda",
-            notas: `Venta fiada #${(ventaId || "").slice(0, 8)}`,
+            notas: `Venta fiada: ${itemsTxt}`,
           });
           const { data: cRow } = await supabase
             .from("clientes")

@@ -65,6 +65,94 @@ interface ClienteConFiado {
   cargandoDetalle?: boolean;
 }
 
+// Extrae los nombres limpios de los productos desde las notas del fiado
+function parsearItemsDesdeNotas(
+  notas: string | null | undefined,
+  montoTotal: number,
+  fecha: string,
+  ventaId?: string | null,
+  cargoId?: string
+): ProductoFiadoItem[] {
+  const folio = ventaId ? ventaId.slice(0, 8).toUpperCase() : undefined;
+
+  if (!notas) {
+    return [
+      {
+        id: cargoId || `cargo-${Date.now()}`,
+        ventaId: ventaId || undefined,
+        folio,
+        fecha,
+        nombre: "Artículo / Consumo a crédito",
+        qty: 1,
+        precio: montoTotal,
+        subtotal: montoTotal,
+      },
+    ];
+  }
+
+  // Quitar prefijo "Venta fiada: ", "Venta Fiada: ", "Venta fiada #09023186: ", etc.
+  let limpio = notas
+    .replace(/^venta\s+fiada\s*(#[a-f0-9]+)?\s*[:\-–—]?\s*/i, "")
+    .trim();
+
+  // Si quedó vacío o solo era un identificador tipo #09023186
+  if (!limpio || /^#[a-f0-9]+$/i.test(limpio) || /^venta\s+fiada/i.test(limpio)) {
+    return [
+      {
+        id: cargoId || `cargo-${Date.now()}`,
+        ventaId: ventaId || undefined,
+        folio,
+        fecha,
+        nombre: "Artículo / Consumo a crédito",
+        qty: 1,
+        precio: montoTotal,
+        subtotal: montoTotal,
+      },
+    ];
+  }
+
+  // Si contiene múltiples productos separados por coma seguido de número y 'x'
+  // Ej: "1x Labial Superstay Vinyl Ink — Punchy, 1x Iluminador En Barra Baby Got Holo Glow"
+  const partes = limpio.split(/,\s*(?=\d+\s*x\s+)/i);
+
+  if (partes.length > 1) {
+    const subPorItem = montoTotal / partes.length;
+    return partes.map((p, idx) => {
+      const match = p.match(/^(\d+)\s*x\s+(.+)$/i);
+      const qty = match ? Number(match[1]) : 1;
+      const nombreProd = match ? match[2].trim() : p.trim();
+      return {
+        id: `${cargoId || "c"}-${idx}`,
+        ventaId: ventaId || undefined,
+        folio,
+        fecha,
+        nombre: nombreProd,
+        qty: qty,
+        precio: subPorItem / qty,
+        subtotal: subPorItem,
+      };
+    });
+  }
+
+  // Un solo producto
+  const match = limpio.match(/^(\d+)\s*x\s+(.+)$/i);
+  const qty = match ? Number(match[1]) : 1;
+  const nombreProd = match ? match[2].trim() : limpio;
+
+  return [
+    {
+      id: cargoId || `cargo-${Date.now()}`,
+      ventaId: ventaId || undefined,
+      folio,
+      fecha,
+      nombre: nombreProd,
+      qty: qty,
+      precio: montoTotal / qty,
+      subtotal: montoTotal,
+    },
+  ];
+}
+
 export default function FiadosPage() {
   const { negocio, profile } = useTenant();
   const [clientes, setClientes] = useState<ClienteConFiado[]>([]);
@@ -173,13 +261,22 @@ export default function FiadosPage() {
 
         const cargosMap = new Map<string, Cargo>();
 
+        // Mapa de deudas por venta_id para recuperar las notas con los nombres de productos
+        const deudasPorVenta = new Map<string, any>();
+        cliDeudas.forEach((d) => {
+          if (d.venta_id && d.tipo !== "pago") {
+            deudasPorVenta.set(d.venta_id, d);
+          }
+        });
+
         cliVentas.forEach((v) => {
+          const dAsociada = deudasPorVenta.get(v.id);
           cargosMap.set(`v-${v.id}`, {
             id: `v-${v.id}`,
             venta_id: v.id,
             monto: Number(v.total || 0),
             fecha: v.created_at,
-            notas: `Venta Fiada #${v.id.slice(0, 8)}`,
+            notas: dAsociada?.notas || null,
           });
         });
 
@@ -190,7 +287,12 @@ export default function FiadosPage() {
             totalAbonos += m;
           } else {
             const key = d.venta_id ? `v-${d.venta_id}` : `d-${d.id}`;
-            if (!cargosMap.has(key)) {
+            const existing = cargosMap.get(key);
+            if (existing) {
+              if (d.notas) {
+                existing.notas = d.notas;
+              }
+            } else {
               cargosMap.set(key, {
                 id: d.id,
                 venta_id: d.venta_id,
@@ -262,15 +364,20 @@ export default function FiadosPage() {
               });
             });
           } else {
-            itemsFinales.push({
-              id: crg.id,
-              fecha: crg.fecha,
-              nombre: crg.notas || "Cargo registrado en cuenta",
-              qty: 1,
-              precio: cp.montoPendiente,
-              subtotal: cp.montoPendiente,
-              esParcial: cp.esParcial,
-              montoPendiente: cp.montoPendiente,
+            // Extraer nombres reales de los productos desde las notas de la deuda/venta
+            const itemsParseados = parsearItemsDesdeNotas(
+              crg.notas,
+              cp.montoPendiente,
+              crg.fecha,
+              crg.venta_id,
+              crg.id
+            );
+            itemsParseados.forEach((it) => {
+              itemsFinales.push({
+                ...it,
+                esParcial: cp.esParcial,
+                montoPendiente: cp.esParcial ? cp.montoPendiente : undefined,
+              });
             });
           }
         }

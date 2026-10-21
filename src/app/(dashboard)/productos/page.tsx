@@ -30,6 +30,12 @@ import {
   Download,
   Printer,
   Tag,
+  FolderPlus,
+  Folder,
+  CheckSquare,
+  Square,
+  Filter,
+  Sparkles,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { BarcodeScanner } from "@/components/BarcodeScanner";
@@ -51,6 +57,19 @@ export default function ProductosPage() {
   const [loading, setLoading] = useState(true);
   const [busqueda, setBusqueda] = useState("");
   const [filtroStock, setFiltroStock] = useState<"todos" | "bajo" | "agotado">("todos");
+  const [filtroCategoria, setFiltroCategoria] = useState<string>("todas");
+  const [categoriasDisponibles, setCategoriasDisponibles] = useState<string[]>([]);
+
+  // Selección múltiple para acciones masivas
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [modalAsignarMasivoOpen, setModalAsignarMasivoOpen] = useState(false);
+  const [catMasiva, setCatMasiva] = useState("");
+  const [guardandoCatMasiva, setGuardandoCatMasiva] = useState(false);
+
+  // Asignación rápida individual de categoría
+  const [asignarCatProd, setAsignarCatProd] = useState<Producto | null>(null);
+  const [catRapida, setCatRapida] = useState("");
+  const [guardandoCatRapida, setGuardandoCatRapida] = useState(false);
 
   // Barcode Scanner Modal
   const [scannerOpen, setScannerOpen] = useState(false);
@@ -98,7 +117,7 @@ export default function ProductosPage() {
     const supabase = createClient();
 
     try {
-      const [prodsRes, varsRes] = await Promise.all([
+      const [prodsRes, varsRes, catsRes] = await Promise.all([
         supabase
           .from("productos")
           .select("*")
@@ -109,15 +128,133 @@ export default function ProductosPage() {
           .select("*")
           .eq("negocio_id", negocio.id)
           .order("nombre", { ascending: true }),
+        supabase
+          .from("categorias")
+          .select("nombre")
+          .eq("negocio_id", negocio.id)
+          .eq("activa", true)
+          .order("nombre", { ascending: true }),
       ]);
 
       if (prodsRes.error) throw prodsRes.error;
-      setProductos(prodsRes.data || []);
+
+      const prodsList = prodsRes.data || [];
+      setProductos(prodsList);
       setVariantes(varsRes.data || []);
+
+      // Extraer categorías únicas de la tabla categorias y de los productos
+      const dbCats = (catsRes.data || []).map((c) => c.nombre.trim()).filter(Boolean);
+      const prodsCats = prodsList
+        .map((p) => p.categoria?.trim())
+        .filter(Boolean) as string[];
+
+      const allUnique = Array.from(new Set([...dbCats, ...prodsCats])).sort((a, b) =>
+        a.localeCompare(b, "es", { sensitivity: "base" })
+      );
+      setCategoriasDisponibles(allUnique);
     } catch (err: any) {
       toast.error(err.message || "Error al cargar productos");
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Asignar categoría a un solo producto
+  const aplicarCategoriaAProducto = async (productoId: string, nuevaCategoria: string | null) => {
+    if (!negocio?.id) return;
+    const catTrim = nuevaCategoria?.trim() || null;
+    const supabase = createClient();
+    setGuardandoCatRapida(true);
+    try {
+      const { error } = await supabase
+        .from("productos")
+        .update({
+          categoria: catTrim,
+          categorias: catTrim ? [catTrim] : [],
+        })
+        .eq("id", productoId);
+
+      if (error) throw error;
+
+      // Si es nueva categoría no vacía, asegurar que esté en la tabla categorias
+      if (catTrim) {
+        await supabase.from("categorias").upsert(
+          { negocio_id: negocio.id, nombre: catTrim, activa: true },
+          { onConflict: "negocio_id,nombre" }
+        );
+        setCategoriasDisponibles((prev) =>
+          Array.from(new Set([...prev, catTrim])).sort((a, b) =>
+            a.localeCompare(b, "es", { sensitivity: "base" })
+          )
+        );
+      }
+
+      setProductos((prev) =>
+        prev.map((p) =>
+          p.id === productoId
+            ? { ...p, categoria: catTrim, categorias: catTrim ? [catTrim] : [] }
+            : p
+        )
+      );
+
+      toast.success(catTrim ? `Categoría "${catTrim}" asignada` : "Categoría removida");
+      setAsignarCatProd(null);
+    } catch (err: any) {
+      toast.error(err.message || "Error al asignar categoría");
+    } finally {
+      setGuardandoCatRapida(false);
+    }
+  };
+
+  // Asignar categoría masivamente a varios productos
+  const aplicarCategoriaMasiva = async (nuevaCategoria: string | null) => {
+    if (!negocio?.id || selectedIds.size === 0) return;
+    const catTrim = nuevaCategoria?.trim() || null;
+    const idsArray = Array.from(selectedIds);
+    const supabase = createClient();
+    setGuardandoCatMasiva(true);
+    try {
+      const { error } = await supabase
+        .from("productos")
+        .update({
+          categoria: catTrim,
+          categorias: catTrim ? [catTrim] : [],
+        })
+        .in("id", idsArray);
+
+      if (error) throw error;
+
+      if (catTrim) {
+        await supabase.from("categorias").upsert(
+          { negocio_id: negocio.id, nombre: catTrim, activa: true },
+          { onConflict: "negocio_id,nombre" }
+        );
+        setCategoriasDisponibles((prev) =>
+          Array.from(new Set([...prev, catTrim])).sort((a, b) =>
+            a.localeCompare(b, "es", { sensitivity: "base" })
+          )
+        );
+      }
+
+      setProductos((prev) =>
+        prev.map((p) =>
+          selectedIds.has(p.id)
+            ? { ...p, categoria: catTrim, categorias: catTrim ? [catTrim] : [] }
+            : p
+        )
+      );
+
+      toast.success(
+        catTrim
+          ? `Categoría "${catTrim}" asignada a ${idsArray.length} productos`
+          : `Categoría removida de ${idsArray.length} productos`
+      );
+      setSelectedIds(new Set());
+      setModalAsignarMasivoOpen(false);
+    } catch (err: any) {
+      toast.error(err.message || "Error al asignar categoría en lote");
+    } finally {
+      setGuardandoCatMasiva(false);
     }
   };
 
@@ -172,12 +309,14 @@ export default function ProductosPage() {
     const supabase = createClient();
 
     try {
+      const catTrim = categoria.trim() || null;
       const payload = {
         negocio_id: negocio.id,
         sucursal_id: sucursalActiva?.id || null,
         nombre: nombre.trim(),
         codigo: codigo.trim() || null,
-        categoria: categoria.trim() || null,
+        categoria: catTrim,
+        categorias: catTrim ? [catTrim] : [],
         imagen_url: imagenUrl.trim() || null,
         precio_venta: Number(precioVenta) || 0,
         precio_costo: Number(precioCosto) || 0,
@@ -201,6 +340,19 @@ export default function ProductosPage() {
         const { error } = await supabase.from("productos").insert(payload);
         if (error) throw error;
         toast.success("Producto creado con éxito");
+      }
+
+      // Si se definió categoría, asegurar persistencia en tabla categorias
+      if (catTrim) {
+        await supabase.from("categorias").upsert(
+          { negocio_id: negocio.id, nombre: catTrim, activa: true },
+          { onConflict: "negocio_id,nombre" }
+        );
+        setCategoriasDisponibles((prev) =>
+          Array.from(new Set([...prev, catTrim])).sort((a, b) =>
+            a.localeCompare(b, "es", { sensitivity: "base" })
+          )
+        );
       }
 
       setModalOpen(false);
@@ -283,8 +435,19 @@ export default function ProductosPage() {
       return !p.sin_control_stock && (p.stock || 0) <= 0;
     }
 
+    // Filtro por categoría
+    if (filtroCategoria === "sin_categoria") {
+      if (p.categoria && p.categoria.trim().length > 0) return false;
+    } else if (filtroCategoria !== "todas") {
+      if (p.categoria !== filtroCategoria) return false;
+    }
+
     return true;
   });
+
+  const totalSinCategoria = productos.filter(
+    (p) => !p.categoria || !p.categoria.trim()
+  ).length;
 
   // Exportación a Excel
   const handleExportarExcel = () => {
@@ -425,18 +588,51 @@ export default function ProductosPage() {
       </div>
 
       {/* Filters and search */}
-      <div className="flex flex-col sm:flex-row items-center gap-3">
-        <div className="relative w-full sm:w-96">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Buscar por nombre, código o categoría..."
-            value={busqueda}
-            onChange={(e) => setBusqueda(e.target.value)}
-            className="pl-9 bg-background"
-          />
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+        <div className="flex flex-col sm:flex-row items-center gap-3 w-full lg:w-auto flex-1">
+          <div className="relative w-full sm:w-80">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Buscar por nombre, código o categoría..."
+              value={busqueda}
+              onChange={(e) => setBusqueda(e.target.value)}
+              className="pl-9 bg-background"
+            />
+          </div>
+
+          {/* Filtro por Categoría */}
+          <div className="w-full sm:w-auto">
+            <select
+              value={filtroCategoria}
+              onChange={(e) => setFiltroCategoria(e.target.value)}
+              className={cn(
+                "h-9 w-full sm:w-auto rounded-md border px-3 text-xs font-semibold bg-background transition-colors focus:outline-none focus:ring-1 focus:ring-ring cursor-pointer",
+                filtroCategoria === "sin_categoria"
+                  ? "border-amber-500 text-amber-700 bg-amber-50/70 dark:bg-amber-950/30 dark:text-amber-300"
+                  : filtroCategoria !== "todas"
+                  ? "border-primary text-primary bg-primary/5"
+                  : "border-border text-foreground hover:bg-muted"
+              )}
+            >
+              <option value="todas">📂 Todas las categorías ({productos.length})</option>
+              {totalSinCategoria > 0 && (
+                <option value="sin_categoria">
+                  ⚠️ Sin categoría ({totalSinCategoria})
+                </option>
+              )}
+              {categoriasDisponibles.map((cat) => {
+                const count = productos.filter((p) => p.categoria === cat).length;
+                return (
+                  <option key={cat} value={cat}>
+                    📁 {cat} ({count})
+                  </option>
+                );
+              })}
+            </select>
+          </div>
         </div>
 
-        <div className="flex items-center gap-2 w-full sm:w-auto">
+        <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
           <button
             type="button"
             onClick={() => setFiltroStock("todos")}
@@ -476,6 +672,39 @@ export default function ProductosPage() {
         </div>
       </div>
 
+      {/* Barra de Acciones Masivas cuando hay productos seleccionados */}
+      {selectedIds.size > 0 && (
+        <div className="bg-primary/10 border border-primary/30 rounded-xl p-3 flex flex-wrap items-center justify-between gap-3 shadow-xs animate-in fade-in">
+          <div className="flex items-center gap-2">
+            <CheckSquare className="h-4 w-4 text-primary" />
+            <span className="font-semibold text-xs text-foreground">
+              {selectedIds.size} {selectedIds.size === 1 ? "producto seleccionado" : "productos seleccionados"}
+            </span>
+            <button
+              type="button"
+              onClick={() => setSelectedIds(new Set())}
+              className="text-xs text-muted-foreground hover:underline ml-2"
+            >
+              Deseleccionar todos
+            </button>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              onClick={() => {
+                setCatMasiva("");
+                setModalAsignarMasivoOpen(true);
+              }}
+              className="gap-1.5 text-xs font-semibold h-8 bg-primary text-primary-foreground"
+            >
+              <FolderPlus className="h-3.5 w-3.5" />
+              Asignar Categoría a {selectedIds.size}
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* Table view */}
       <Card>
         <CardContent className="p-0">
@@ -486,8 +715,8 @@ export default function ProductosPage() {
             </div>
           ) : productosFiltrados.length === 0 ? (
             <div className="py-16 text-center text-sm text-muted-foreground">
-              {busqueda
-                ? "No se encontraron productos con ese criterio de búsqueda."
+              {busqueda || filtroCategoria !== "todas"
+                ? "No se encontraron productos con los filtros aplicados."
                 : "Aún no tienes productos registrados. Haz clic en 'Nuevo Producto' para comenzar."}
             </div>
           ) : (
@@ -495,6 +724,26 @@ export default function ProductosPage() {
               <table className="w-full text-left text-sm">
                 <thead className="bg-muted/50 border-b border-border text-xs text-muted-foreground uppercase font-semibold">
                   <tr>
+                    <th className="py-3 px-3 w-10 text-center">
+                      <input
+                        type="checkbox"
+                        checked={
+                          productosFiltrados.length > 0 &&
+                          productosFiltrados.every((p) => selectedIds.has(p.id))
+                        }
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedIds(
+                              new Set(productosFiltrados.map((p) => p.id))
+                            );
+                          } else {
+                            setSelectedIds(new Set());
+                          }
+                        }}
+                        className="rounded border-border text-primary focus:ring-primary h-4 w-4 cursor-pointer"
+                        title="Seleccionar todos los visibles"
+                      />
+                    </th>
                     <th className="py-3 px-4">Producto</th>
                     <th className="py-3 px-4">Código</th>
                     <th className="py-3 px-4">Categoría</th>
@@ -514,9 +763,34 @@ export default function ProductosPage() {
                     const stMin = Number(prod.stock_min || 5);
                     const isBajo = !prod.sin_control_stock && st <= stMin && st > 0;
                     const isAgotado = !prod.sin_control_stock && st <= 0;
+                    const isSelected = selectedIds.has(prod.id);
 
                     return (
-                      <tr key={prod.id} className="hover:bg-muted/30 transition-colors">
+                      <tr
+                        key={prod.id}
+                        className={cn(
+                          "transition-colors",
+                          isSelected ? "bg-primary/5" : "hover:bg-muted/30"
+                        )}
+                      >
+                        <td className="py-3 px-3 text-center">
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={(e) => {
+                              setSelectedIds((prev) => {
+                                const next = new Set(prev);
+                                if (e.target.checked) {
+                                  next.add(prod.id);
+                                } else {
+                                  next.delete(prod.id);
+                                }
+                                return next;
+                              });
+                            }}
+                            className="rounded border-border text-primary focus:ring-primary h-4 w-4 cursor-pointer"
+                          />
+                        </td>
                         <td className="py-3 px-4">
                           <div className="flex items-center gap-3">
                             <div className="h-10 w-10 rounded-lg bg-muted border overflow-hidden shrink-0 flex items-center justify-center">
@@ -563,11 +837,32 @@ export default function ProductosPage() {
                         </td>
                         <td className="py-3 px-4">
                           {prod.categoria ? (
-                            <span className="inline-block px-2 py-0.5 rounded text-xs bg-muted font-medium">
-                              {prod.categoria}
-                            </span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setAsignarCatProd(prod);
+                                setCatRapida(prod.categoria || "");
+                              }}
+                              className="group inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs bg-muted/80 hover:bg-muted font-medium text-foreground border border-border/60 hover:border-border transition-all cursor-pointer"
+                              title="Haz clic para cambiar o quitar la categoría"
+                            >
+                              <Folder className="h-3 w-3 text-primary/70" />
+                              <span className="truncate max-w-[130px]">{prod.categoria}</span>
+                              <Pencil className="h-2.5 w-2.5 opacity-0 group-hover:opacity-100 text-muted-foreground transition-opacity" />
+                            </button>
                           ) : (
-                            <span className="text-xs text-muted-foreground/50">—</span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setAsignarCatProd(prod);
+                                setCatRapida("");
+                              }}
+                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-semibold bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-400 border border-amber-500/30 transition-all cursor-pointer shadow-2xs"
+                              title="Asignar categoría a este producto"
+                            >
+                              <FolderPlus className="h-3.5 w-3.5" />
+                              <span>+ Asignar</span>
+                            </button>
                           )}
                         </td>
                         <td className="py-3 px-4 text-right font-bold text-foreground">
@@ -699,14 +994,73 @@ export default function ProductosPage() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="prod-cat">Categoría</Label>
-                <Input
-                  id="prod-cat"
-                  placeholder="Bebidas, Snacks..."
-                  value={categoria}
-                  onChange={(e) => setCategoria(e.target.value)}
-                  disabled={saving}
-                />
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="prod-cat">Categoría</Label>
+                  {categoria && (
+                    <button
+                      type="button"
+                      onClick={() => setCategoria("")}
+                      className="text-[11px] text-muted-foreground hover:text-destructive transition-colors"
+                    >
+                      Quitar
+                    </button>
+                  )}
+                </div>
+                <div className="flex gap-1.5">
+                  <Input
+                    id="prod-cat"
+                    list="datalist-cat-modal"
+                    placeholder="Escribe o selecciona..."
+                    value={categoria}
+                    onChange={(e) => setCategoria(e.target.value)}
+                    disabled={saving}
+                    className="flex-1"
+                  />
+                  {categoriasDisponibles.length > 0 && (
+                    <select
+                      className="h-9 w-28 rounded-md border border-input bg-background px-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring shrink-0 cursor-pointer"
+                      value={categoriasDisponibles.includes(categoria) ? categoria : ""}
+                      onChange={(e) => {
+                        if (e.target.value) setCategoria(e.target.value);
+                      }}
+                      disabled={saving}
+                      title="Seleccionar de la lista de categorías existentes"
+                    >
+                      <option value="">📂 Lista...</option>
+                      {categoriasDisponibles.map((c) => (
+                        <option key={c} value={c}>
+                          {c}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+                <datalist id="datalist-cat-modal">
+                  {categoriasDisponibles.map((c) => (
+                    <option key={c} value={c} />
+                  ))}
+                </datalist>
+
+                {/* Chips de categorías sugeridas */}
+                {categoriasDisponibles.length > 0 && (
+                  <div className="flex flex-wrap gap-1 pt-0.5">
+                    {categoriasDisponibles.slice(0, 4).map((c) => (
+                      <button
+                        key={c}
+                        type="button"
+                        onClick={() => setCategoria(c)}
+                        className={cn(
+                          "text-[10px] px-2 py-0.5 rounded-full border transition-colors",
+                          categoria === c
+                            ? "bg-primary text-primary-foreground border-primary font-bold"
+                            : "bg-muted/60 hover:bg-muted text-foreground border-border/80"
+                        )}
+                      >
+                        {c}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
 
@@ -1151,6 +1505,276 @@ export default function ProductosPage() {
             >
               Cerrar
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal Asignación Rápida Individual de Categoría */}
+      <Dialog
+        open={!!asignarCatProd}
+        onOpenChange={(open) => !open && setAsignarCatProd(null)}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base">
+              <FolderPlus className="h-5 w-5 text-primary" />
+              <span>Asignar Categoría</span>
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              Asigna o cambia la categoría de{" "}
+              <strong className="text-foreground">
+                {asignarCatProd?.nombre}
+              </strong>
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label htmlFor="cat-rapida-input" className="text-xs font-semibold">
+                Categoría
+              </Label>
+              <div className="flex gap-2">
+                <Input
+                  id="cat-rapida-input"
+                  list="datalist-cat-rapida"
+                  placeholder="Escribe o selecciona una categoría..."
+                  value={catRapida}
+                  onChange={(e) => setCatRapida(e.target.value)}
+                  disabled={guardandoCatRapida}
+                  className="flex-1"
+                />
+                {categoriasDisponibles.length > 0 && (
+                  <select
+                    className="h-9 w-32 rounded-md border border-input bg-background px-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring shrink-0 cursor-pointer"
+                    value={
+                      categoriasDisponibles.includes(catRapida) ? catRapida : ""
+                    }
+                    onChange={(e) => {
+                      if (e.target.value) setCatRapida(e.target.value);
+                    }}
+                    disabled={guardandoCatRapida}
+                  >
+                    <option value="">📂 Lista...</option>
+                    {categoriasDisponibles.map((c) => (
+                      <option key={c} value={c}>
+                        {c}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
+              <datalist id="datalist-cat-rapida">
+                {categoriasDisponibles.map((c) => (
+                  <option key={c} value={c} />
+                ))}
+              </datalist>
+            </div>
+
+            {/* Categorías existentes rápidas */}
+            {categoriasDisponibles.length > 0 && (
+              <div className="space-y-1.5">
+                <span className="text-[11px] font-medium text-muted-foreground block">
+                  Categorías disponibles en tu negocio:
+                </span>
+                <div className="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto p-1 border rounded-lg bg-muted/20">
+                  {categoriasDisponibles.map((c) => (
+                    <button
+                      key={c}
+                      type="button"
+                      onClick={() => setCatRapida(c)}
+                      className={cn(
+                        "text-xs px-2.5 py-1 rounded-md border transition-colors cursor-pointer",
+                        catRapida === c
+                          ? "bg-primary text-primary-foreground border-primary font-bold shadow-xs"
+                          : "bg-background hover:bg-muted text-foreground border-border"
+                      )}
+                    >
+                      {c}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter className="flex-col sm:flex-row gap-2">
+            {asignarCatProd?.categoria && (
+              <Button
+                type="button"
+                variant="destructive"
+                size="sm"
+                onClick={() =>
+                  asignarCatProd &&
+                  aplicarCategoriaAProducto(asignarCatProd.id, null)
+                }
+                disabled={guardandoCatRapida}
+                className="w-full sm:w-auto text-xs"
+              >
+                Quitar Categoría
+              </Button>
+            )}
+            <div className="flex gap-2 w-full sm:w-auto sm:ml-auto">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setAsignarCatProd(null)}
+                disabled={guardandoCatRapida}
+                className="text-xs flex-1 sm:flex-initial"
+              >
+                Cancelar
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                onClick={() =>
+                  asignarCatProd &&
+                  aplicarCategoriaAProducto(asignarCatProd.id, catRapida)
+                }
+                disabled={guardandoCatRapida}
+                className="text-xs flex-1 sm:flex-initial bg-primary text-primary-foreground font-semibold"
+              >
+                {guardandoCatRapida ? (
+                  <>
+                    <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
+                    Guardando...
+                  </>
+                ) : (
+                  "Guardar Categoría"
+                )}
+              </Button>
+            </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal Asignación Masiva de Categoría */}
+      <Dialog
+        open={modalAsignarMasivoOpen}
+        onOpenChange={setModalAsignarMasivoOpen}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base">
+              <FolderPlus className="h-5 w-5 text-primary" />
+              <span>Asignar Categoría en Lote</span>
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              Se aplicará la categoría a los{" "}
+              <strong className="text-foreground">
+                {selectedIds.size} productos seleccionados
+              </strong>
+              .
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label htmlFor="cat-masiva-input" className="text-xs font-semibold">
+                Categoría Destino
+              </Label>
+              <div className="flex gap-2">
+                <Input
+                  id="cat-masiva-input"
+                  list="datalist-cat-masiva"
+                  placeholder="Escribe o selecciona una categoría..."
+                  value={catMasiva}
+                  onChange={(e) => setCatMasiva(e.target.value)}
+                  disabled={guardandoCatMasiva}
+                  className="flex-1"
+                />
+                {categoriasDisponibles.length > 0 && (
+                  <select
+                    className="h-9 w-32 rounded-md border border-input bg-background px-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring shrink-0 cursor-pointer"
+                    value={
+                      categoriasDisponibles.includes(catMasiva) ? catMasiva : ""
+                    }
+                    onChange={(e) => {
+                      if (e.target.value) setCatMasiva(e.target.value);
+                    }}
+                    disabled={guardandoCatMasiva}
+                  >
+                    <option value="">📂 Lista...</option>
+                    {categoriasDisponibles.map((c) => (
+                      <option key={c} value={c}>
+                        {c}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
+              <datalist id="datalist-cat-masiva">
+                {categoriasDisponibles.map((c) => (
+                  <option key={c} value={c} />
+                ))}
+              </datalist>
+            </div>
+
+            {categoriasDisponibles.length > 0 && (
+              <div className="space-y-1.5">
+                <span className="text-[11px] font-medium text-muted-foreground block">
+                  Categorías disponibles:
+                </span>
+                <div className="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto p-1 border rounded-lg bg-muted/20">
+                  {categoriasDisponibles.map((c) => (
+                    <button
+                      key={c}
+                      type="button"
+                      onClick={() => setCatMasiva(c)}
+                      className={cn(
+                        "text-xs px-2.5 py-1 rounded-md border transition-colors cursor-pointer",
+                        catMasiva === c
+                          ? "bg-primary text-primary-foreground border-primary font-bold shadow-xs"
+                          : "bg-background hover:bg-muted text-foreground border-border"
+                      )}
+                    >
+                      {c}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter className="flex-col sm:flex-row gap-2">
+            <Button
+              type="button"
+              variant="destructive"
+              size="sm"
+              onClick={() => aplicarCategoriaMasiva(null)}
+              disabled={guardandoCatMasiva}
+              className="w-full sm:w-auto text-xs"
+            >
+              Quitar Categoría a Seleccionados
+            </Button>
+            <div className="flex gap-2 w-full sm:w-auto sm:ml-auto">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setModalAsignarMasivoOpen(false)}
+                disabled={guardandoCatMasiva}
+                className="text-xs flex-1 sm:flex-initial"
+              >
+                Cancelar
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                onClick={() => aplicarCategoriaMasiva(catMasiva)}
+                disabled={guardandoCatMasiva || !catMasiva.trim()}
+                className="text-xs flex-1 sm:flex-initial bg-primary text-primary-foreground font-semibold"
+              >
+                {guardandoCatMasiva ? (
+                  <>
+                    <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
+                    Aplicando...
+                  </>
+                ) : (
+                  `Aplicar a ${selectedIds.size} productos`
+                )}
+              </Button>
+            </div>
           </DialogFooter>
         </DialogContent>
       </Dialog>

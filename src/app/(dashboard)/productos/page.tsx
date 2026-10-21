@@ -36,6 +36,13 @@ import {
   Square,
   Filter,
   Sparkles,
+  UploadCloud,
+  ImageIcon,
+  DollarSign,
+  TrendingUp,
+  Box,
+  RefreshCw,
+  Info,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { BarcodeScanner } from "@/components/BarcodeScanner";
@@ -94,9 +101,11 @@ export default function ProductosPage() {
 
   // Form states
   const [nombre, setNombre] = useState("");
+  const [descripcion, setDescripcion] = useState("");
   const [codigo, setCodigo] = useState("");
   const [categoria, setCategoria] = useState("");
   const [imagenUrl, setImagenUrl] = useState("");
+  const [subiendoImagen, setSubiendoImagen] = useState(false);
   const [precioVenta, setPrecioVenta] = useState<string>("0");
   const [precioCosto, setPrecioCosto] = useState<string>("0");
   const [stock, setStock] = useState<string>("0");
@@ -269,6 +278,7 @@ export default function ProductosPage() {
   const abrirCrear = () => {
     setProductoEdit(null);
     setNombre("");
+    setDescripcion("");
     setCodigo("");
     setCategoria("");
     setImagenUrl("");
@@ -284,6 +294,7 @@ export default function ProductosPage() {
   const abrirEditar = (prod: Producto) => {
     setProductoEdit(prod);
     setNombre(prod.nombre || "");
+    setDescripcion((prod as any).descripcion || "");
     setCodigo(prod.codigo || "");
     setCategoria(prod.categoria || "");
     setImagenUrl(prod.imagen_url || "");
@@ -294,6 +305,56 @@ export default function ProductosPage() {
     setSinControlStock(prod.sin_control_stock || false);
     setActivo(prod.activo);
     setModalOpen(true);
+  };
+
+  const generarCodigoBarras = () => {
+    const randomCode =
+      "780" +
+      Math.floor(1000000000 + Math.random() * 9000000000)
+        .toString()
+        .slice(0, 9);
+    setCodigo(randomCode);
+    toast.info(`Código EAN generado: ${randomCode}`);
+  };
+
+  const handleSubirImagen = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !negocio?.id) return;
+
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("La imagen debe pesar menos de 5 MB");
+      return;
+    }
+
+    setSubiendoImagen(true);
+    const supabase = createClient();
+    try {
+      const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
+      const filePath = `${negocio.id}/productos/prod-${Date.now()}.${ext}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from("producto-imgs")
+        .upload(filePath, file, {
+          upsert: true,
+          cacheControl: "3600",
+          contentType: file.type,
+        });
+
+      if (uploadError) throw uploadError;
+
+      const { data: pubData } = supabase.storage
+        .from("producto-imgs")
+        .getPublicUrl(filePath);
+
+      setImagenUrl(pubData.publicUrl);
+      toast.success("Foto del producto subida exitosamente");
+    } catch (err: any) {
+      console.error("Error al subir foto:", err);
+      toast.error(err.message || "Error al subir la imagen");
+    } finally {
+      setSubiendoImagen(false);
+      e.target.value = "";
+    }
   };
 
   const guardarProducto = async (e: React.FormEvent) => {
@@ -310,10 +371,11 @@ export default function ProductosPage() {
 
     try {
       const catTrim = categoria.trim() || null;
-      const payload = {
+      const payload: any = {
         negocio_id: negocio.id,
         sucursal_id: sucursalActiva?.id || null,
         nombre: nombre.trim(),
+        descripcion: descripcion.trim() || null,
         codigo: codigo.trim() || null,
         categoria: catTrim,
         categorias: catTrim ? [catTrim] : [],
@@ -946,240 +1008,512 @@ export default function ProductosPage() {
         </CardContent>
       </Card>
 
-      {/* Modal Crear / Editar */}
+      {/* Modal Crear / Editar Producto — Ventana Armonizada */}
       <Dialog open={modalOpen} onOpenChange={setModalOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>
-              {productoEdit ? "Editar Producto" : "Nuevo Producto"}
-            </DialogTitle>
-            <DialogDescription>
-              Completa los datos del producto para el punto de venta e inventario.
-            </DialogDescription>
-          </DialogHeader>
+        <DialogContent className="sm:max-w-3xl max-h-[92vh] flex flex-col p-0 overflow-hidden border border-border shadow-2xl">
+          {/* Cabecera Armónica */}
+          <div className="p-5 pb-4 border-b border-border bg-gradient-to-r from-muted/50 via-muted/30 to-background flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-3.5">
+              <div className="h-12 w-12 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shrink-0 overflow-hidden shadow-2xs">
+                {imagenUrl ? (
+                  <img
+                    src={imagenUrl}
+                    alt="Preview"
+                    className="h-full w-full object-cover"
+                    onError={(e) => {
+                      (e.currentTarget as HTMLElement).style.display = "none";
+                    }}
+                  />
+                ) : (
+                  <Package className="h-6 w-6" />
+                )}
+              </div>
+              <div className="min-w-0">
+                <DialogTitle className="text-lg font-bold tracking-tight text-foreground truncate">
+                  {productoEdit ? productoEdit.nombre : "Nuevo Producto"}
+                </DialogTitle>
+                <DialogDescription className="text-xs text-muted-foreground">
+                  {productoEdit
+                    ? "Edita los precios, inventario, imagen y clasificación comercial"
+                    : "Completa los datos para dar de alta este producto en tu inventario y catálogo web"}
+                </DialogDescription>
+              </div>
+            </div>
 
-          <form onSubmit={guardarProducto} className="space-y-4 py-2">
-            <div className="space-y-2">
-              <Label htmlFor="prod-nombre">Nombre del Producto *</Label>
-              <Input
-                id="prod-nombre"
-                placeholder="Ej: Coca Cola 1.5L o Hamburguesa Especial"
-                value={nombre}
-                onChange={(e) => setNombre(e.target.value)}
-                required
+            {/* Switch de Visibilidad / Activo */}
+            <div className="flex items-center gap-2 self-start sm:self-auto bg-card border border-border px-3 py-1.5 rounded-full shadow-2xs">
+              <label
+                htmlFor="prod-activo-switch"
+                className="text-xs font-semibold cursor-pointer flex items-center gap-1.5"
+              >
+                <span
+                  className={cn(
+                    "h-2 w-2 rounded-full",
+                    activo ? "bg-emerald-500 animate-pulse" : "bg-muted-foreground/50"
+                  )}
+                />
+                <span
+                  className={
+                    activo
+                      ? "text-emerald-600 dark:text-emerald-400 font-bold"
+                      : "text-muted-foreground"
+                  }
+                >
+                  {activo ? "Visible en Catálogo y POS" : "Oculto / Desactivado"}
+                </span>
+              </label>
+              <input
+                id="prod-activo-switch"
+                type="checkbox"
+                checked={activo}
+                onChange={(e) => setActivo(e.target.checked)}
+                className="h-4 w-4 rounded border-border text-primary focus:ring-primary cursor-pointer"
                 disabled={saving}
               />
             </div>
+          </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="prod-codigo">Código de Barras</Label>
-                  <button
-                    type="button"
-                    onClick={() => setScannerOpen(true)}
-                    className="flex items-center gap-1 text-[11px] text-primary hover:underline font-semibold"
-                  >
-                    <Camera className="h-3 w-3" />
-                    Escanear
-                  </button>
-                </div>
-                <Input
-                  id="prod-codigo"
-                  placeholder="Escanea o escribe..."
-                  value={codigo}
-                  onChange={(e) => setCodigo(e.target.value)}
-                  disabled={saving}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="prod-cat">Categoría</Label>
-                  {categoria && (
-                    <button
-                      type="button"
-                      onClick={() => setCategoria("")}
-                      className="text-[11px] text-muted-foreground hover:text-destructive transition-colors"
-                    >
-                      Quitar
-                    </button>
-                  )}
-                </div>
-                <div className="flex gap-1.5">
-                  <Input
-                    id="prod-cat"
-                    list="datalist-cat-modal"
-                    placeholder="Escribe o selecciona..."
-                    value={categoria}
-                    onChange={(e) => setCategoria(e.target.value)}
-                    disabled={saving}
-                    className="flex-1"
-                  />
-                  {categoriasDisponibles.length > 0 && (
-                    <select
-                      className="h-9 w-28 rounded-md border border-input bg-background px-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring shrink-0 cursor-pointer"
-                      value={categoriasDisponibles.includes(categoria) ? categoria : ""}
-                      onChange={(e) => {
-                        if (e.target.value) setCategoria(e.target.value);
-                      }}
-                      disabled={saving}
-                      title="Seleccionar de la lista de categorías existentes"
-                    >
-                      <option value="">📂 Lista...</option>
-                      {categoriasDisponibles.map((c) => (
-                        <option key={c} value={c}>
-                          {c}
-                        </option>
-                      ))}
-                    </select>
-                  )}
-                </div>
-                <datalist id="datalist-cat-modal">
-                  {categoriasDisponibles.map((c) => (
-                    <option key={c} value={c} />
-                  ))}
-                </datalist>
-
-                {/* Chips de categorías sugeridas */}
-                {categoriasDisponibles.length > 0 && (
-                  <div className="flex flex-wrap gap-1 pt-0.5">
-                    {categoriasDisponibles.slice(0, 4).map((c) => (
-                      <button
-                        key={c}
-                        type="button"
-                        onClick={() => setCategoria(c)}
-                        className={cn(
-                          "text-[10px] px-2 py-0.5 rounded-full border transition-colors",
-                          categoria === c
-                            ? "bg-primary text-primary-foreground border-primary font-bold"
-                            : "bg-muted/60 hover:bg-muted text-foreground border-border/80"
-                        )}
-                      >
-                        {c}
-                      </button>
-                    ))}
+          {/* Formulario scrolleable en 2 columnas */}
+          <form
+            onSubmit={guardarProducto}
+            className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-6"
+          >
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-5">
+              {/* Columna Izquierda: Información Principal & Precios (7 cols) */}
+              <div className="md:col-span-7 space-y-5">
+                {/* Tarjeta 1: Identificación Básica */}
+                <div className="p-4 rounded-xl border border-border bg-card/60 space-y-3.5 shadow-2xs">
+                  <div className="flex items-center gap-2 text-xs font-bold text-foreground uppercase tracking-wider">
+                    <Box className="h-3.5 w-3.5 text-primary" />
+                    <span>Identificación del Producto</span>
                   </div>
-                )}
-              </div>
-            </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="prod-img">URL de Imagen</Label>
-              <div className="flex gap-2 items-center">
-                <Input
-                  id="prod-img"
-                  placeholder="https://... imagen.webp o jpg"
-                  value={imagenUrl}
-                  onChange={(e) => setImagenUrl(e.target.value)}
-                  disabled={saving}
-                  className="flex-1 text-xs"
-                />
-                {imagenUrl && (
-                  <div className="h-9 w-9 rounded-md border overflow-hidden shrink-0 bg-muted flex items-center justify-center">
-                    <img
-                      src={imagenUrl}
-                      alt="Preview"
-                      className="h-full w-full object-cover"
-                      onError={(e) => {
-                        (e.currentTarget as HTMLElement).style.display = "none";
-                      }}
+                  <div className="space-y-1.5">
+                    <Label htmlFor="prod-nombre" className="text-xs font-semibold">
+                      Nombre Comercial *
+                    </Label>
+                    <Input
+                      id="prod-nombre"
+                      placeholder="Ej: Labial Hidratante Mate, Polera Oversize..."
+                      value={nombre}
+                      onChange={(e) => setNombre(e.target.value)}
+                      required
+                      disabled={saving}
+                      className="font-medium text-sm h-10"
                     />
                   </div>
-                )}
+
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="prod-codigo" className="text-xs font-semibold">
+                        Código de Barras / SKU
+                      </Label>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setScannerOpen(true)}
+                          className="flex items-center gap-1 text-[11px] text-primary hover:underline font-semibold cursor-pointer"
+                        >
+                          <Camera className="h-3 w-3" />
+                          Escanear
+                        </button>
+                        <span className="text-muted-foreground/30">•</span>
+                        <button
+                          type="button"
+                          onClick={generarCodigoBarras}
+                          className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground font-medium cursor-pointer"
+                          title="Genera un código aleatorio EAN-13"
+                        >
+                          <RefreshCw className="h-3 w-3" />
+                          Generar
+                        </button>
+                      </div>
+                    </div>
+                    <div className="relative">
+                      <Barcode className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/60" />
+                      <Input
+                        id="prod-codigo"
+                        placeholder="Escanea o escribe el código..."
+                        value={codigo}
+                        onChange={(e) => setCodigo(e.target.value)}
+                        disabled={saving}
+                        className="pl-9 font-mono text-xs"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label htmlFor="prod-desc" className="text-xs font-semibold">
+                      Descripción breve (para catálogo web)
+                    </Label>
+                    <textarea
+                      id="prod-desc"
+                      rows={2}
+                      placeholder="Ingresa características, modo de uso o detalles comerciales..."
+                      value={descripcion}
+                      onChange={(e) => setDescripcion(e.target.value)}
+                      disabled={saving}
+                      className="w-full rounded-md border border-input bg-transparent px-3 py-2 text-xs shadow-2xs placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50 resize-none"
+                    />
+                  </div>
+                </div>
+
+                {/* Tarjeta 2: Precios, Costo & Rentabilidad en Vivo */}
+                <div className="p-4 rounded-xl border border-primary/20 bg-primary/[0.03] space-y-3.5 shadow-2xs">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-xs font-bold text-foreground uppercase tracking-wider">
+                      <DollarSign className="h-3.5 w-3.5 text-primary" />
+                      <span>Precios y Rentabilidad</span>
+                    </div>
+                    <span className="text-[10px] text-muted-foreground font-medium">
+                      Valores netos
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="prod-precio" className="text-xs font-semibold">
+                        Precio de Venta *
+                      </Label>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-muted-foreground">
+                          $
+                        </span>
+                        <Input
+                          id="prod-precio"
+                          type="number"
+                          step="any"
+                          value={precioVenta}
+                          onChange={(e) => setPrecioVenta(e.target.value)}
+                          required
+                          disabled={saving}
+                          className="pl-7 font-bold text-sm h-10"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <Label htmlFor="prod-costo" className="text-xs font-semibold">
+                        Costo de Compra
+                      </Label>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-muted-foreground">
+                          $
+                        </span>
+                        <Input
+                          id="prod-costo"
+                          type="number"
+                          step="any"
+                          value={precioCosto}
+                          onChange={(e) => setPrecioCosto(e.target.value)}
+                          disabled={saving}
+                          className="pl-7 text-sm h-10 text-muted-foreground"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Indicador Dinámico de Ganancia y Margen */}
+                  {(() => {
+                    const pV = Number(precioVenta) || 0;
+                    const pC = Number(precioCosto) || 0;
+                    const ganancia = pV - pC;
+                    const margen = pV > 0 ? (ganancia / pV) * 100 : 0;
+                    const esRentable = ganancia >= 0;
+
+                    return (
+                      <div className="pt-2 border-t border-border/60">
+                        <div className="p-3 rounded-lg bg-card border border-border flex items-center justify-between">
+                          <div className="flex items-center gap-2.5">
+                            <div
+                              className={cn(
+                                "h-8 w-8 rounded-lg flex items-center justify-center shrink-0",
+                                esRentable
+                                  ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                                  : "bg-destructive/10 text-destructive"
+                              )}
+                            >
+                              <TrendingUp className="h-4 w-4" />
+                            </div>
+                            <div>
+                              <div className="text-[11px] text-muted-foreground font-medium">
+                                Margen Estimado
+                              </div>
+                              <div
+                                className={cn(
+                                  "text-sm font-bold",
+                                  esRentable
+                                    ? "text-emerald-600 dark:text-emerald-400"
+                                    : "text-destructive"
+                                )}
+                              >
+                                {margen.toFixed(1)}% margen
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="text-right">
+                            <div className="text-[11px] text-muted-foreground font-medium">
+                              Ganancia x unidad
+                            </div>
+                            <div
+                              className={cn(
+                                "text-sm font-black",
+                                esRentable
+                                  ? "text-emerald-600 dark:text-emerald-400"
+                                  : "text-destructive"
+                              )}
+                            >
+                              {formatMoney(ganancia)}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+              </div>
+
+              {/* Columna Derecha: Foto, Categoría & Stock (5 cols) */}
+              <div className="md:col-span-5 space-y-5">
+                {/* Tarjeta 3: Imagen del Producto */}
+                <div className="p-4 rounded-xl border border-border bg-card/60 space-y-3 shadow-2xs">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-xs font-bold text-foreground uppercase tracking-wider">
+                      <ImageIcon className="h-3.5 w-3.5 text-primary" />
+                      <span>Fotografía del Producto</span>
+                    </div>
+                    {imagenUrl && (
+                      <button
+                        type="button"
+                        onClick={() => setImagenUrl("")}
+                        className="text-[11px] text-destructive hover:underline cursor-pointer"
+                      >
+                        Quitar
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="flex gap-3 items-center">
+                    <div className="h-20 w-20 rounded-xl bg-muted border border-border overflow-hidden shrink-0 flex items-center justify-center relative group">
+                      {imagenUrl ? (
+                        <img
+                          src={imagenUrl}
+                          alt="Producto"
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <ImageIcon className="h-8 w-8 text-muted-foreground/30" />
+                      )}
+                      {subiendoImagen && (
+                        <div className="absolute inset-0 bg-background/80 flex items-center justify-center">
+                          <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex-1 space-y-2 min-w-0">
+                      <label className="inline-flex items-center justify-center gap-1.5 w-full h-8 px-3 rounded-lg text-xs font-semibold bg-muted hover:bg-muted/80 text-foreground border border-border transition-colors cursor-pointer">
+                        <UploadCloud className="h-3.5 w-3.5 text-primary" />
+                        <span>{subiendoImagen ? "Subiendo..." : "Subir Foto..."}</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={handleSubirImagen}
+                          disabled={subiendoImagen || saving}
+                          className="hidden"
+                        />
+                      </label>
+
+                      <div className="relative">
+                        <Input
+                          placeholder="o pega URL de imagen..."
+                          value={imagenUrl}
+                          onChange={(e) => setImagenUrl(e.target.value)}
+                          disabled={saving || subiendoImagen}
+                          className="h-7 text-[11px]"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Tarjeta 4: Clasificación / Categoría */}
+                <div className="p-4 rounded-xl border border-border bg-card/60 space-y-3 shadow-2xs">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-xs font-bold text-foreground uppercase tracking-wider">
+                      <Folder className="h-3.5 w-3.5 text-primary" />
+                      <span>Categoría</span>
+                    </div>
+                    {categoria && (
+                      <button
+                        type="button"
+                        onClick={() => setCategoria("")}
+                        className="text-[11px] text-muted-foreground hover:text-destructive cursor-pointer"
+                      >
+                        Limpiar
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="flex gap-1.5">
+                    <Input
+                      id="prod-cat"
+                      list="datalist-cat-modal"
+                      placeholder="Escribe o selecciona..."
+                      value={categoria}
+                      onChange={(e) => setCategoria(e.target.value)}
+                      disabled={saving}
+                      className="flex-1 text-xs h-9"
+                    />
+                    {categoriasDisponibles.length > 0 && (
+                      <select
+                        className="h-9 w-28 rounded-md border border-input bg-background px-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring shrink-0 cursor-pointer"
+                        value={
+                          categoriasDisponibles.includes(categoria) ? categoria : ""
+                        }
+                        onChange={(e) => {
+                          if (e.target.value) setCategoria(e.target.value);
+                        }}
+                        disabled={saving}
+                        title="Seleccionar de la lista de categorías existentes"
+                      >
+                        <option value="">📂 Lista...</option>
+                        {categoriasDisponibles.map((c) => (
+                          <option key={c} value={c}>
+                            {c}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
+
+                  <datalist id="datalist-cat-modal">
+                    {categoriasDisponibles.map((c) => (
+                      <option key={c} value={c} />
+                    ))}
+                  </datalist>
+
+                  {/* Chips sugeridos rápidos */}
+                  {categoriasDisponibles.length > 0 && (
+                    <div className="flex flex-wrap gap-1 pt-1">
+                      {categoriasDisponibles.slice(0, 4).map((c) => (
+                        <button
+                          key={c}
+                          type="button"
+                          onClick={() => setCategoria(c)}
+                          className={cn(
+                            "text-[10px] px-2 py-0.5 rounded-full border transition-colors cursor-pointer",
+                            categoria === c
+                              ? "bg-primary text-primary-foreground border-primary font-bold shadow-2xs"
+                              : "bg-muted/60 hover:bg-muted text-foreground border-border/80"
+                          )}
+                        >
+                          {c}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Tarjeta 5: Control de Inventario */}
+                <div className="p-4 rounded-xl border border-border bg-card/60 space-y-3.5 shadow-2xs">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-xs font-bold text-foreground uppercase tracking-wider">
+                      <Layers className="h-3.5 w-3.5 text-primary" />
+                      <span>Inventario & Stock</span>
+                    </div>
+                  </div>
+
+                  {/* Switch Sin control de stock */}
+                  <div className="flex items-center justify-between p-2.5 rounded-lg border border-border bg-muted/20">
+                    <div className="space-y-0.5">
+                      <div className="text-xs font-semibold">
+                        {sinControlStock ? "Stock Ilimitado" : "Control de Stock Activo"}
+                      </div>
+                      <div className="text-[10px] text-muted-foreground">
+                        {sinControlStock
+                          ? "Sin conteo físico (servicios o cocina)"
+                          : "Control estricto con alertas"}
+                      </div>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={sinControlStock}
+                      onChange={(e) => setSinControlStock(e.target.checked)}
+                      className="h-4 w-4 rounded border-border text-primary cursor-pointer"
+                      disabled={saving}
+                    />
+                  </div>
+
+                  {!sinControlStock && (
+                    <div className="grid grid-cols-2 gap-3 pt-1">
+                      <div className="space-y-1">
+                        <Label htmlFor="prod-stock" className="text-xs font-semibold">
+                          Stock Actual
+                        </Label>
+                        <Input
+                          id="prod-stock"
+                          type="number"
+                          value={stock}
+                          onChange={(e) => setStock(e.target.value)}
+                          disabled={saving}
+                          className="h-9 font-semibold text-xs"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <Label htmlFor="prod-stock-min" className="text-xs font-semibold">
+                          Alerta Mínimo
+                        </Label>
+                        <Input
+                          id="prod-stock-min"
+                          type="number"
+                          value={stockMin}
+                          onChange={(e) => setStockMin(e.target.value)}
+                          disabled={saving}
+                          className="h-9 text-xs"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-2">
-                <Label htmlFor="prod-precio">Precio de Venta *</Label>
-                <Input
-                  id="prod-precio"
-                  type="number"
-                  step="any"
-                  value={precioVenta}
-                  onChange={(e) => setPrecioVenta(e.target.value)}
-                  required
-                  disabled={saving}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="prod-costo">Costo (Compra)</Label>
-                <Input
-                  id="prod-costo"
-                  type="number"
-                  step="any"
-                  value={precioCosto}
-                  onChange={(e) => setPrecioCosto(e.target.value)}
-                  disabled={saving}
-                />
-              </div>
-            </div>
-
-            {/* Switch sin control de stock */}
-            <div className="flex items-center justify-between p-3 rounded-lg border border-border bg-muted/20">
-              <div className="space-y-0.5">
-                <div className="text-xs font-semibold">Sin control de stock</div>
-                <div className="text-[11px] text-muted-foreground">
-                  Para servicios o platos de cocina sin inventario rígido
-                </div>
-              </div>
-              <input
-                type="checkbox"
-                checked={sinControlStock}
-                onChange={(e) => setSinControlStock(e.target.checked)}
-                className="h-4 w-4 rounded border-border"
-                disabled={saving}
-              />
-            </div>
-
-            {!sinControlStock && (
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-2">
-                  <Label htmlFor="prod-stock">Stock Actual</Label>
-                  <Input
-                    id="prod-stock"
-                    type="number"
-                    value={stock}
-                    onChange={(e) => setStock(e.target.value)}
-                    disabled={saving}
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="prod-stock-min">Stock Mínimo</Label>
-                  <Input
-                    id="prod-stock-min"
-                    type="number"
-                    value={stockMin}
-                    onChange={(e) => setStockMin(e.target.value)}
-                    disabled={saving}
-                  />
-                </div>
-              </div>
-            )}
-
-            <DialogFooter className="pt-2">
+            {/* Footer Fijo con Botones */}
+            <div className="pt-4 border-t border-border flex items-center justify-end gap-2.5">
               <Button
                 type="button"
                 variant="outline"
+                size="sm"
                 onClick={() => setModalOpen(false)}
-                disabled={saving}
+                disabled={saving || subiendoImagen}
+                className="text-xs h-9 px-4"
               >
                 Cancelar
               </Button>
-              <Button type="submit" disabled={saving}>
+              <Button
+                type="submit"
+                size="sm"
+                disabled={saving || subiendoImagen}
+                className="text-xs font-bold h-9 px-5 bg-primary text-primary-foreground shadow-xs gap-1.5"
+              >
                 {saving ? (
                   <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Guardando...
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    <span>Guardando...</span>
                   </>
                 ) : (
-                  "Guardar Producto"
+                  <>
+                    <CheckCircle2 className="h-4 w-4" />
+                    <span>
+                      {productoEdit ? "Guardar Cambios" : "Crear Producto"}
+                    </span>
+                  </>
                 )}
               </Button>
-            </DialogFooter>
+            </div>
           </form>
         </DialogContent>
       </Dialog>

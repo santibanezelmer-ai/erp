@@ -2,6 +2,8 @@
 
 import { useCatalog } from "@/components/catalog/CatalogContext";
 import { formatMoney } from "@/lib/format";
+import { CatalogPagination } from "@/components/catalog/shared/CatalogPagination";
+import { CatalogViewToggle } from "@/components/catalog/shared/CatalogViewToggle";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -27,6 +29,8 @@ export function AutoPartsProTheme() {
     negocio,
     config,
     productosFiltrados,
+    productosPaginados,
+    vistaModo,
     categorias,
     categoriaSel,
     setCategoriaSel,
@@ -278,6 +282,8 @@ export function AutoPartsProTheme() {
           </div>
 
           <div className="flex items-center gap-2">
+            <CatalogViewToggle />
+
             <select
               value={ordenarPor}
               onChange={(e: any) => setOrdenarPor(e.target.value)}
@@ -302,113 +308,195 @@ export function AutoPartsProTheme() {
           </div>
         </div>
 
-        {/* Grilla de Repuestos */}
-        {productosFiltrados.length === 0 ? (
-          <div className="text-center py-20 bg-neutral-900 rounded-2xl border border-neutral-800 p-8">
-            <Wrench className="h-12 w-12 text-neutral-600 mx-auto mb-3" />
-            <h3 className="font-bold text-lg text-white">No se encontraron repuestos</h3>
-            <p className="text-xs text-neutral-400 mt-1 max-w-sm mx-auto">
-              Verifica el código o término ingresado. Puedes consultar directamente por WhatsApp si buscas una pieza específica.
-            </p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-            {productosFiltrados.map((p) => {
-              const price = getUnitPrice(p);
-              const inStock = isDisponible(p);
-              const stockNum = getStock(p);
-              const brand = marcaNombre(p.marca_id);
-              const hasPromo = productHasPromo(p);
-              const maxDisc = productMaxDiscount(p);
+        {/* Grilla y Lista de Repuestos */}
+        <div id="catalogo-productos-grid" className="scroll-mt-24 space-y-6">
+          {productosFiltrados.length === 0 ? (
+            <div className="text-center py-20 bg-neutral-900 rounded-2xl border border-neutral-800 p-8">
+              <Wrench className="h-12 w-12 text-neutral-600 mx-auto mb-3" />
+              <h3 className="font-bold text-lg text-white">No se encontraron repuestos</h3>
+              <p className="text-xs text-neutral-400 mt-1 max-w-sm mx-auto">
+                Verifica el código o término ingresado. Puedes consultar directamente por WhatsApp si buscas una pieza específica.
+              </p>
+            </div>
+          ) : vistaModo === "cuadros" ? (
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+              {productosPaginados.map((p) => {
+                const price = getUnitPrice(p);
+                const inStock = isDisponible(p);
+                const stockNum = getStock(p);
+                const brand = marcaNombre(p.marca_id);
+                const hasPromo = productHasPromo(p);
+                const maxDisc = productMaxDiscount(p);
 
-              return (
-                <div
-                  key={p.id}
-                  onClick={() => openProductDetail(p)}
-                  className="group bg-neutral-900 rounded-xl border border-neutral-800 hover:border-amber-500/60 transition-all flex flex-col justify-between overflow-hidden shadow-xs cursor-pointer"
-                >
-                  {/* Imagen del Repuesto */}
-                  <div className="relative aspect-square w-full bg-neutral-950 p-3 flex items-center justify-center border-b border-neutral-800 overflow-hidden">
-                    {p.imagen_url ? (
-                      <img
-                        src={p.imagen_url}
-                        alt={p.nombre}
-                        className="max-h-full max-w-full object-contain group-hover:scale-105 transition-transform"
-                        loading="lazy"
-                      />
-                    ) : (
-                      <Wrench className="h-12 w-12 text-neutral-700" />
-                    )}
-
-                    {hasPromo && maxDisc > 0 && (
-                      <Badge className="absolute top-2 left-2 bg-amber-500 text-neutral-950 font-black text-[10px] rounded-md">
-                        -{maxDisc}%
-                      </Badge>
-                    )}
-
-                    {/* Badge de Disponibilidad */}
-                    <div className="absolute bottom-2 right-2">
-                      {inStock ? (
-                        <span className="text-[10px] font-mono bg-emerald-950/80 text-emerald-400 border border-emerald-800/80 px-2 py-0.5 rounded">
-                          EN BODEGA
-                        </span>
+                return (
+                  <div
+                    key={p.id}
+                    onClick={() => openProductDetail(p)}
+                    className="group bg-neutral-900 rounded-xl border border-neutral-800 hover:border-amber-500/60 transition-all flex flex-col justify-between overflow-hidden shadow-xs cursor-pointer"
+                  >
+                    {/* Imagen del Repuesto */}
+                    <div className="relative aspect-square w-full bg-neutral-950 p-3 flex items-center justify-center border-b border-neutral-800 overflow-hidden">
+                      {p.imagen_url ? (
+                        <img
+                          src={p.imagen_url}
+                          alt={p.nombre}
+                          className="max-h-full max-w-full object-contain group-hover:scale-105 transition-transform"
+                          loading="lazy"
+                        />
                       ) : (
-                        <span className="text-[10px] font-mono bg-rose-950/80 text-rose-400 border border-rose-800/80 px-2 py-0.5 rounded">
-                          POR ENCARGO
-                        </span>
+                        <Wrench className="h-12 w-12 text-neutral-700" />
                       )}
-                    </div>
-                  </div>
 
-                  {/* Ficha Técnica */}
-                  <div className="p-3.5 flex flex-col flex-1 justify-between gap-2 text-left">
-                    <div>
-                      <div className="flex items-center justify-between gap-1 text-[11px] mb-1">
-                        {brand ? (
-                          <span className="font-bold text-amber-400 uppercase truncate">
-                            {brand}
+                      {hasPromo && maxDisc > 0 && (
+                        <Badge className="absolute top-2 left-2 bg-amber-500 text-neutral-950 font-black text-[10px] rounded-md">
+                          -{maxDisc}%
+                        </Badge>
+                      )}
+
+                      {/* Badge de Disponibilidad */}
+                      <div className="absolute bottom-2 right-2">
+                        {inStock ? (
+                          <span className="text-[10px] font-mono bg-emerald-950/80 text-emerald-400 border border-emerald-800/80 px-2 py-0.5 rounded">
+                            EN BODEGA
                           </span>
                         ) : (
-                          <span className="text-neutral-500 uppercase truncate">
-                            {p.categoria || "Repuesto"}
-                          </span>
-                        )}
-                        {p.codigo && (
-                          <span className="font-mono text-[10px] text-neutral-400 bg-neutral-950 px-1.5 py-0.5 rounded border border-neutral-800 shrink-0">
-                            #{p.codigo}
+                          <span className="text-[10px] font-mono bg-rose-950/80 text-rose-400 border border-rose-800/80 px-2 py-0.5 rounded">
+                            POR ENCARGO
                           </span>
                         )}
                       </div>
-
-                      <h4 className="font-bold text-xs sm:text-sm text-neutral-100 line-clamp-2 leading-snug group-hover:text-amber-400 transition-colors">
-                        {p.nombre}
-                      </h4>
                     </div>
 
-                    <div className="pt-2 border-t border-neutral-800 flex items-center justify-between gap-2">
+                    {/* Ficha Técnica */}
+                    <div className="p-3.5 flex flex-col flex-1 justify-between gap-2 text-left">
                       <div>
-                        <div className="font-mono font-black text-sm sm:text-base text-white">
-                          {formatMoney(price)}
+                        <div className="flex items-center justify-between gap-1 text-[11px] mb-1">
+                          {brand ? (
+                            <span className="font-bold text-amber-400 uppercase truncate">
+                              {brand}
+                            </span>
+                          ) : (
+                            <span className="text-neutral-500 uppercase truncate">
+                              {p.categoria || "Repuesto"}
+                            </span>
+                          )}
+                          {p.codigo && (
+                            <span className="font-mono text-[10px] text-neutral-400 bg-neutral-950 px-1.5 py-0.5 rounded border border-neutral-800 shrink-0">
+                              #{p.codigo}
+                            </span>
+                          )}
                         </div>
+
+                        <h4 className="font-bold text-xs sm:text-sm text-neutral-100 line-clamp-2 leading-snug group-hover:text-amber-400 transition-colors">
+                          {p.nombre}
+                        </h4>
                       </div>
 
+                      <div className="pt-2 border-t border-neutral-800 flex items-center justify-between gap-2">
+                        <div>
+                          <div className="font-mono font-black text-sm sm:text-base text-white">
+                            {formatMoney(price)}
+                          </div>
+                        </div>
+
+                        {inStock && (
+                          <Button
+                            size="sm"
+                            onClick={(e) => handleQuickAddClick(e, p)}
+                            className="h-8 px-2.5 bg-neutral-800 hover:bg-amber-500 hover:text-neutral-950 text-neutral-200 text-xs font-bold rounded-lg transition-colors shrink-0"
+                            title="Añadir a cotización"
+                          >
+                            <ShoppingCart className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            /* Vista en Lista */
+            <div className="space-y-2.5">
+              {productosPaginados.map((p) => {
+                const price = getUnitPrice(p);
+                const inStock = isDisponible(p);
+                const brand = marcaNombre(p.marca_id);
+                const hasPromo = productHasPromo(p);
+                const maxDisc = productMaxDiscount(p);
+
+                return (
+                  <div
+                    key={p.id}
+                    onClick={() => openProductDetail(p)}
+                    className="p-3 rounded-xl bg-neutral-900 border border-neutral-800 hover:border-amber-500/50 flex items-center justify-between gap-4 transition-all cursor-pointer shadow-2xs"
+                  >
+                    <div className="flex items-center gap-3.5 min-w-0">
+                      <div className="h-14 w-14 sm:h-16 sm:w-16 rounded-lg bg-neutral-950 p-1.5 border border-neutral-800 overflow-hidden shrink-0 flex items-center justify-center">
+                        {p.imagen_url ? (
+                          <img
+                            src={p.imagen_url}
+                            alt={p.nombre}
+                            className="h-full w-full object-contain"
+                          />
+                        ) : (
+                          <Wrench className="h-6 w-6 text-neutral-700" />
+                        )}
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          {brand && (
+                            <span className="text-[10px] text-amber-400 font-bold uppercase truncate">
+                              {brand}
+                            </span>
+                          )}
+                          {p.codigo && (
+                            <span className="font-mono text-[10px] text-neutral-400 bg-neutral-950 px-1 rounded border border-neutral-800">
+                              #{p.codigo}
+                            </span>
+                          )}
+                        </div>
+                        <h4 className="font-bold text-xs sm:text-sm text-neutral-100 truncate mt-0.5">
+                          {p.nombre}
+                        </h4>
+                        <div className="flex items-center gap-2 mt-1">
+                          <span className="font-mono font-black text-sm text-white">
+                            {formatMoney(price)}
+                          </span>
+                          {inStock ? (
+                            <span className="text-[10px] font-mono text-emerald-400">
+                              • EN BODEGA
+                            </span>
+                          ) : (
+                            <span className="text-[10px] font-mono text-rose-400">
+                              • POR ENCARGO
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0">
                       {inStock && (
                         <Button
                           size="sm"
                           onClick={(e) => handleQuickAddClick(e, p)}
-                          className="h-8 px-2.5 bg-neutral-800 hover:bg-amber-500 hover:text-neutral-950 text-neutral-200 text-xs font-bold rounded-lg transition-colors shrink-0"
-                          title="Añadir a cotización"
+                          className="h-9 px-3 rounded-lg bg-amber-500 hover:bg-amber-400 text-neutral-950 font-black text-xs gap-1.5"
                         >
                           <ShoppingCart className="h-3.5 w-3.5" />
+                          <span className="hidden sm:inline">Cotizar</span>
                         </Button>
                       )}
                     </div>
                   </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
+                );
+              })}
+            </div>
+          )}
+
+          {/* Componente de Paginación */}
+          <CatalogPagination />
+        </div>
       </main>
 
       {/* Footer Técnico */}

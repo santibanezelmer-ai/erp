@@ -2,6 +2,8 @@
 
 import { useCatalog } from "@/components/catalog/CatalogContext";
 import { formatMoney } from "@/lib/format";
+import { CatalogPagination } from "@/components/catalog/shared/CatalogPagination";
+import { CatalogViewToggle } from "@/components/catalog/shared/CatalogViewToggle";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -25,6 +27,8 @@ export function BeautyGlowTheme() {
     negocio,
     config,
     productosFiltrados,
+    productosPaginados,
+    vistaModo,
     categorias,
     categoriaSel,
     setCategoriaSel,
@@ -256,6 +260,8 @@ export function BeautyGlowTheme() {
 
           {/* Sort & Reset */}
           <div className="flex items-center gap-2">
+            <CatalogViewToggle />
+
             <select
               value={ordenarPor}
               onChange={(e: any) => setOrdenarPor(e.target.value)}
@@ -281,120 +287,197 @@ export function BeautyGlowTheme() {
           </div>
         </div>
 
-        {/* Product Cards Grid */}
-        {productosFiltrados.length === 0 ? (
-          <div className="text-center py-20 bg-white dark:bg-neutral-900 rounded-3xl border border-rose-100 dark:border-neutral-800 p-8">
-            <Package className="h-12 w-12 text-rose-300 mx-auto mb-3" />
-            <h3 className="font-serif text-lg font-bold text-neutral-800 dark:text-neutral-100">
-              No se encontraron productos
-            </h3>
-            <p className="text-xs text-muted-foreground mt-1 max-w-sm mx-auto">
-              Intenta cambiar los términos de búsqueda o remover los filtros aplicados.
-            </p>
-            {hayFiltrosActivos && (
-              <Button
-                onClick={limpiarFiltros}
-                variant="outline"
-                size="sm"
-                className="mt-4 rounded-full text-xs"
-              >
-                Ver todos los productos
-              </Button>
-            )}
-          </div>
-        ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6">
-            {productosFiltrados.map((p) => {
-              const price = getUnitPrice(p);
-              const hasPromo = productHasPromo(p);
-              const maxDisc = productMaxDiscount(p);
-              const inStock = isDisponible(p);
-              const variants = variantsOf(p.id);
-
-              return (
-                <div
-                  key={p.id}
-                  onClick={() => openProductDetail(p)}
-                  className="group relative bg-white dark:bg-neutral-900 rounded-2xl border border-rose-100 dark:border-neutral-800 overflow-hidden shadow-2xs hover:shadow-md transition-all duration-300 flex flex-col justify-between cursor-pointer"
+        {/* Product Cards Grid & List */}
+        <div id="catalogo-productos-grid" className="scroll-mt-24 space-y-6">
+          {productosFiltrados.length === 0 ? (
+            <div className="text-center py-20 bg-white dark:bg-neutral-900 rounded-3xl border border-rose-100 dark:border-neutral-800 p-8">
+              <Package className="h-12 w-12 text-rose-300 mx-auto mb-3" />
+              <h3 className="font-serif text-lg font-bold text-neutral-800 dark:text-neutral-100">
+                No se encontraron productos
+              </h3>
+              <p className="text-xs text-muted-foreground mt-1 max-w-sm mx-auto">
+                Intenta cambiar los términos de búsqueda o remover los filtros aplicados.
+              </p>
+              {hayFiltrosActivos && (
+                <Button
+                  onClick={limpiarFiltros}
+                  variant="outline"
+                  size="sm"
+                  className="mt-4 rounded-full text-xs"
                 >
-                  {/* Photo Container */}
-                  <div className="relative aspect-4/5 w-full bg-rose-50/50 dark:bg-neutral-800 overflow-hidden flex items-center justify-center">
-                    {p.imagen_url ? (
-                      <img
-                        src={p.imagen_url}
-                        alt={p.nombre}
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                        loading="lazy"
-                      />
-                    ) : (
-                      <Package className="h-12 w-12 text-rose-200" />
-                    )}
+                  Ver todos los productos
+                </Button>
+              )}
+            </div>
+          ) : vistaModo === "cuadros" ? (
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6">
+              {productosPaginados.map((p) => {
+                const price = getUnitPrice(p);
+                const hasPromo = productHasPromo(p);
+                const maxDisc = productMaxDiscount(p);
+                const inStock = isDisponible(p);
+                const variants = variantsOf(p.id);
 
-                    {/* Badges */}
-                    <div className="absolute top-2.5 left-2.5 flex flex-col gap-1 z-10">
-                      {hasPromo && maxDisc > 0 && (
-                        <span className="bg-rose-600 text-white font-bold text-[10px] px-2 py-0.5 rounded-full shadow-xs">
-                          -{maxDisc}%
-                        </span>
+                return (
+                  <div
+                    key={p.id}
+                    onClick={() => openProductDetail(p)}
+                    className="group relative bg-white dark:bg-neutral-900 rounded-2xl border border-rose-100 dark:border-neutral-800 overflow-hidden shadow-2xs hover:shadow-md transition-all duration-300 flex flex-col justify-between cursor-pointer"
+                  >
+                    {/* Photo Container */}
+                    <div className="relative aspect-4/5 w-full bg-rose-50/50 dark:bg-neutral-800 overflow-hidden flex items-center justify-center">
+                      {p.imagen_url ? (
+                        <img
+                          src={p.imagen_url}
+                          alt={p.nombre}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                          loading="lazy"
+                        />
+                      ) : (
+                        <Package className="h-12 w-12 text-rose-200" />
                       )}
-                      {p.is_new_arrival && (
-                        <span className="bg-neutral-900 text-white font-bold text-[10px] px-2 py-0.5 rounded-full shadow-xs">
-                          NUEVO
-                        </span>
-                      )}
-                    </div>
 
-                    {!inStock && (
-                      <div className="absolute inset-0 bg-white/70 dark:bg-neutral-950/70 backdrop-blur-2xs flex items-center justify-center">
-                        <span className="text-[11px] font-bold text-neutral-800 dark:text-neutral-200 bg-white dark:bg-neutral-900 px-3 py-1 rounded-full border border-border shadow-xs">
-                          Agotado
-                        </span>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Body Info */}
-                  <div className="p-3.5 sm:p-4 flex flex-col flex-1 justify-between gap-2">
-                    <div>
-                      {p.categoria && (
-                        <span className="text-[10px] font-medium text-rose-500 uppercase tracking-wider block truncate">
-                          {p.categoria}
-                        </span>
-                      )}
-                      <h4 className="font-medium text-xs sm:text-sm text-neutral-900 dark:text-neutral-100 line-clamp-2 leading-snug group-hover:text-rose-600 transition-colors">
-                        {p.nombre}
-                      </h4>
-                    </div>
-
-                    <div className="pt-2 border-t border-rose-50 dark:border-neutral-800 flex items-center justify-between gap-2">
-                      <div>
-                        <div className="font-bold text-sm sm:text-base text-neutral-900 dark:text-white">
-                          {formatMoney(price)}
-                        </div>
-                        {hasPromo && p.precio_promocional && (
-                          <div className="text-[11px] text-muted-foreground line-through">
-                            {formatMoney(Number(p.precio_venta))}
-                          </div>
+                      {/* Badges */}
+                      <div className="absolute top-2.5 left-2.5 flex flex-col gap-1 z-10">
+                        {hasPromo && maxDisc > 0 && (
+                          <span className="bg-rose-600 text-white font-bold text-[10px] px-2 py-0.5 rounded-full shadow-xs">
+                            -{maxDisc}%
+                          </span>
+                        )}
+                        {p.is_new_arrival && (
+                          <span className="bg-neutral-900 text-white font-bold text-[10px] px-2 py-0.5 rounded-full shadow-xs">
+                            NUEVO
+                          </span>
                         )}
                       </div>
 
-                      {inStock && (
+                      {!inStock && (
+                        <div className="absolute inset-0 bg-white/70 dark:bg-neutral-950/70 backdrop-blur-2xs flex items-center justify-center">
+                          <span className="text-[11px] font-bold text-neutral-800 dark:text-neutral-200 bg-white dark:bg-neutral-900 px-3 py-1 rounded-full border border-border shadow-xs">
+                            Agotado
+                          </span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Body Info */}
+                    <div className="p-3.5 sm:p-4 flex flex-col flex-1 justify-between gap-2">
+                      <div>
+                        {p.categoria && (
+                          <span className="text-[10px] font-medium text-rose-500 uppercase tracking-wider block truncate">
+                            {p.categoria}
+                          </span>
+                        )}
+                        <h4 className="font-medium text-xs sm:text-sm text-neutral-900 dark:text-neutral-100 line-clamp-2 leading-snug group-hover:text-rose-600 transition-colors">
+                          {p.nombre}
+                        </h4>
+                      </div>
+
+                      <div className="pt-2 border-t border-rose-50 dark:border-neutral-800 flex items-center justify-between gap-2">
+                        <div>
+                          <div className="font-bold text-sm sm:text-base text-neutral-900 dark:text-white">
+                            {formatMoney(price)}
+                          </div>
+                          {hasPromo && p.precio_promocional && (
+                            <div className="text-[11px] text-muted-foreground line-through">
+                              {formatMoney(Number(p.precio_venta))}
+                            </div>
+                          )}
+                        </div>
+
+                        {inStock && (
+                          <Button
+                            size="icon"
+                            onClick={(e) => handleQuickAddClick(e, p)}
+                            className="h-8 w-8 rounded-full bg-rose-50 text-rose-700 hover:bg-rose-600 hover:text-white dark:bg-neutral-800 dark:text-rose-300 dark:hover:bg-rose-600 dark:hover:text-white transition-colors shrink-0"
+                            title="Añadir a la bolsa"
+                          >
+                            <ShoppingCart className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            /* Vista en Lista */
+            <div className="space-y-3">
+              {productosPaginados.map((p) => {
+                const price = getUnitPrice(p);
+                const hasPromo = productHasPromo(p);
+                const maxDisc = productMaxDiscount(p);
+                const inStock = isDisponible(p);
+
+                return (
+                  <div
+                    key={p.id}
+                    onClick={() => openProductDetail(p)}
+                    className="p-3 sm:p-4 rounded-2xl bg-white dark:bg-neutral-900 border border-rose-100 dark:border-neutral-800 hover:border-rose-300 flex items-center justify-between gap-4 transition-all cursor-pointer shadow-2xs"
+                  >
+                    <div className="flex items-center gap-3.5 min-w-0">
+                      <div className="h-16 w-16 sm:h-20 sm:w-20 rounded-xl bg-rose-50/50 dark:bg-neutral-800 overflow-hidden shrink-0 flex items-center justify-center">
+                        {p.imagen_url ? (
+                          <img
+                            src={p.imagen_url}
+                            alt={p.nombre}
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          <Package className="h-6 w-6 text-rose-300" />
+                        )}
+                      </div>
+                      <div className="min-w-0">
+                        {p.categoria && (
+                          <span className="text-[10px] text-rose-500 font-bold uppercase tracking-wider block truncate">
+                            {p.categoria}
+                          </span>
+                        )}
+                        <h4 className="font-semibold text-xs sm:text-sm text-foreground truncate">
+                          {p.nombre}
+                        </h4>
+                        <div className="flex items-center gap-2 mt-1">
+                          <span className="font-black text-sm sm:text-base text-foreground">
+                            {formatMoney(price)}
+                          </span>
+                          {hasPromo && p.precio_promocional && (
+                            <span className="text-xs text-muted-foreground line-through">
+                              {formatMoney(Number(p.precio_venta))}
+                            </span>
+                          )}
+                          {hasPromo && maxDisc > 0 && (
+                            <Badge className="bg-rose-600 text-white text-[10px] font-bold px-1.5 py-0.2">
+                              -{maxDisc}%
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0">
+                      {inStock ? (
                         <Button
-                          size="icon"
+                          size="sm"
                           onClick={(e) => handleQuickAddClick(e, p)}
-                          className="h-8 w-8 rounded-full bg-rose-50 text-rose-700 hover:bg-rose-600 hover:text-white dark:bg-neutral-800 dark:text-rose-300 dark:hover:bg-rose-600 dark:hover:text-white transition-colors shrink-0"
-                          title="Añadir a la bolsa"
+                          className="h-9 px-3 rounded-full bg-rose-600 hover:bg-rose-700 text-white font-semibold text-xs gap-1.5 shadow-2xs"
                         >
                           <ShoppingCart className="h-3.5 w-3.5" />
+                          <span className="hidden sm:inline">Añadir</span>
                         </Button>
+                      ) : (
+                        <span className="text-xs text-rose-500 font-semibold">Agotado</span>
                       )}
                     </div>
                   </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
+                );
+              })}
+            </div>
+          )}
+
+          {/* Componente de Paginación */}
+          <CatalogPagination />
+        </div>
       </main>
 
       {/* Footer Editorial */}

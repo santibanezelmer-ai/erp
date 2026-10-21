@@ -2,6 +2,8 @@
 
 import { useCatalog } from "@/components/catalog/CatalogContext";
 import { formatMoney } from "@/lib/format";
+import { CatalogPagination } from "@/components/catalog/shared/CatalogPagination";
+import { CatalogViewToggle } from "@/components/catalog/shared/CatalogViewToggle";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -30,6 +32,8 @@ export function FerreMaxTheme() {
     negocio,
     config,
     productosFiltrados,
+    productosPaginados,
+    vistaModo,
     categorias,
     categoriaSel,
     setCategoriaSel,
@@ -254,6 +258,8 @@ export function FerreMaxTheme() {
           </div>
 
           <div className="flex items-center gap-2">
+            <CatalogViewToggle />
+
             <select
               value={ordenarPor}
               onChange={(e: any) => setOrdenarPor(e.target.value)}
@@ -278,107 +284,181 @@ export function FerreMaxTheme() {
           </div>
         </div>
 
-        {/* Tarjetas Ferreteras Densas */}
-        {productosFiltrados.length === 0 ? (
-          <div className="text-center py-20 bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 p-8">
-            <Hammer className="h-12 w-12 text-slate-400 mx-auto mb-3" />
-            <h3 className="font-bold text-lg text-slate-800 dark:text-slate-200">
-              No encontramos materiales con ese criterio
-            </h3>
-            <p className="text-xs text-slate-500 mt-1">
-              Prueba buscando por palabras clave (ej: tornillo, disco, brocha, cable).
-            </p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-            {productosFiltrados.map((p) => {
-              const price = getUnitPrice(p);
-              const inStock = isDisponible(p);
-              const stockNum = getStock(p);
-              const hasPromo = productHasPromo(p);
-              const maxDisc = productMaxDiscount(p);
+        {/* Grilla y Lista Ferretera */}
+        <div id="catalogo-productos-grid" className="scroll-mt-24 space-y-6">
+          {productosFiltrados.length === 0 ? (
+            <div className="text-center py-20 bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 p-8">
+              <Hammer className="h-12 w-12 text-slate-400 mx-auto mb-3" />
+              <h3 className="font-bold text-lg text-slate-800 dark:text-slate-200">
+                No encontramos materiales con ese criterio
+              </h3>
+              <p className="text-xs text-slate-500 mt-1">
+                Prueba buscando por palabras clave (ej: tornillo, disco, brocha, cable).
+              </p>
+            </div>
+          ) : vistaModo === "cuadros" ? (
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+              {productosPaginados.map((p) => {
+                const price = getUnitPrice(p);
+                const inStock = isDisponible(p);
+                const stockNum = getStock(p);
+                const hasPromo = productHasPromo(p);
+                const maxDisc = productMaxDiscount(p);
 
-              return (
-                <div
-                  key={p.id}
-                  onClick={() => openProductDetail(p)}
-                  className="group bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 hover:border-blue-500 transition-all flex flex-col justify-between overflow-hidden shadow-2xs cursor-pointer"
-                >
-                  {/* Foto */}
-                  <div className="relative aspect-square w-full bg-slate-50 dark:bg-slate-950 p-2 flex items-center justify-center border-b border-slate-100 dark:border-slate-800">
-                    {p.imagen_url ? (
-                      <img
-                        src={p.imagen_url}
-                        alt={p.nombre}
-                        className="max-h-full max-w-full object-contain group-hover:scale-105 transition-transform"
-                        loading="lazy"
-                      />
-                    ) : (
-                      <Hammer className="h-10 w-10 text-slate-300" />
-                    )}
+                return (
+                  <div
+                    key={p.id}
+                    onClick={() => openProductDetail(p)}
+                    className="group bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 hover:border-blue-500 transition-all flex flex-col justify-between overflow-hidden shadow-2xs cursor-pointer"
+                  >
+                    {/* Foto */}
+                    <div className="relative aspect-square w-full bg-slate-50 dark:bg-slate-950 p-2 flex items-center justify-center border-b border-slate-100 dark:border-slate-800">
+                      {p.imagen_url ? (
+                        <img
+                          src={p.imagen_url}
+                          alt={p.nombre}
+                          className="max-h-full max-w-full object-contain group-hover:scale-105 transition-transform"
+                          loading="lazy"
+                        />
+                      ) : (
+                        <Hammer className="h-10 w-10 text-slate-300" />
+                      )}
 
-                    {hasPromo && maxDisc > 0 && (
-                      <span className="absolute top-2 left-2 bg-orange-600 text-white font-black text-[10px] px-2 py-0.5 rounded shadow-2xs">
-                        -{maxDisc}%
-                      </span>
-                    )}
-
-                    <div className="absolute bottom-2 right-2">
-                      <span
-                        className={`text-[10px] font-bold px-2 py-0.5 rounded ${
-                          inStock
-                            ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300"
-                            : "bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300"
-                        }`}
-                      >
-                        {inStock ? "STOCK DISPONIBLE" : "SIN STOCK"}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Datos del Producto */}
-                  <div className="p-3 flex flex-col flex-1 justify-between gap-2 text-left">
-                    <div>
-                      {p.categoria && (
-                        <span className="text-[10px] font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wider block truncate">
-                          {p.categoria}
+                      {hasPromo && maxDisc > 0 && (
+                        <span className="absolute top-2 left-2 bg-orange-600 text-white font-black text-[10px] px-2 py-0.5 rounded shadow-2xs">
+                          -{maxDisc}%
                         </span>
                       )}
-                      <h4 className="font-bold text-xs sm:text-sm text-slate-900 dark:text-slate-100 line-clamp-2 leading-snug group-hover:text-blue-600 transition-colors">
-                        {p.nombre}
-                      </h4>
+
+                      <div className="absolute bottom-2 right-2">
+                        <span
+                          className={`text-[10px] font-bold px-2 py-0.5 rounded ${
+                            inStock
+                              ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300"
+                              : "bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300"
+                          }`}
+                        >
+                          {inStock ? "STOCK DISPONIBLE" : "SIN STOCK"}
+                        </span>
+                      </div>
                     </div>
 
-                    <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
+                    {/* Datos del Producto */}
+                    <div className="p-3 flex flex-col flex-1 justify-between gap-2 text-left">
                       <div>
-                        <div className="font-black text-sm sm:text-base text-blue-900 dark:text-white">
-                          {formatMoney(price)}
-                        </div>
-                        {hasPromo && p.precio_promocional && (
-                          <div className="text-[11px] text-slate-400 line-through">
-                            {formatMoney(Number(p.precio_venta))}
-                          </div>
+                        {p.categoria && (
+                          <span className="text-[10px] font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wider block truncate">
+                            {p.categoria}
+                          </span>
                         )}
+                        <h4 className="font-bold text-xs sm:text-sm text-slate-900 dark:text-slate-100 line-clamp-2 leading-snug group-hover:text-blue-600 transition-colors">
+                          {p.nombre}
+                        </h4>
                       </div>
 
+                      <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
+                        <div>
+                          <div className="font-black text-sm sm:text-base text-blue-900 dark:text-white">
+                            {formatMoney(price)}
+                          </div>
+                          {hasPromo && p.precio_promocional && (
+                            <div className="text-[11px] text-slate-400 line-through">
+                              {formatMoney(Number(p.precio_venta))}
+                            </div>
+                          )}
+                        </div>
+
+                        {inStock && (
+                          <Button
+                            size="sm"
+                            onClick={(e) => handleQuickAddClick(e, p)}
+                            className="h-8 px-2.5 bg-orange-500 hover:bg-orange-600 text-white font-bold text-xs rounded transition-colors shrink-0"
+                            title="Añadir a la lista"
+                          >
+                            <ShoppingCart className="h-3.5 w-3.5 mr-1" />
+                            Pedir
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            /* Vista en Lista */
+            <div className="space-y-2.5">
+              {productosPaginados.map((p) => {
+                const price = getUnitPrice(p);
+                const inStock = isDisponible(p);
+                const hasPromo = productHasPromo(p);
+                const maxDisc = productMaxDiscount(p);
+
+                return (
+                  <div
+                    key={p.id}
+                    onClick={() => openProductDetail(p)}
+                    className="p-3 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-blue-400 flex items-center justify-between gap-4 transition-all cursor-pointer shadow-2xs"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="h-14 w-14 sm:h-16 sm:w-16 rounded bg-slate-50 dark:bg-slate-950 p-1 border border-slate-200 overflow-hidden shrink-0 flex items-center justify-center">
+                        {p.imagen_url ? (
+                          <img
+                            src={p.imagen_url}
+                            alt={p.nombre}
+                            className="h-full w-full object-contain"
+                          />
+                        ) : (
+                          <Hammer className="h-6 w-6 text-slate-300" />
+                        )}
+                      </div>
+                      <div className="min-w-0">
+                        {p.categoria && (
+                          <span className="text-[10px] text-blue-600 font-bold uppercase tracking-wider block truncate">
+                            {p.categoria}
+                          </span>
+                        )}
+                        <h4 className="font-bold text-xs sm:text-sm text-slate-900 dark:text-slate-100 truncate">
+                          {p.nombre}
+                        </h4>
+                        <div className="flex items-center gap-2 mt-1">
+                          <span className="font-black text-sm text-blue-900 dark:text-white">
+                            {formatMoney(price)}
+                          </span>
+                          {inStock ? (
+                            <span className="text-[10px] font-bold text-emerald-600">
+                              • DISPONIBLE
+                            </span>
+                          ) : (
+                            <span className="text-[10px] font-bold text-rose-500">
+                              • SIN STOCK
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0">
                       {inStock && (
                         <Button
                           size="sm"
                           onClick={(e) => handleQuickAddClick(e, p)}
-                          className="h-8 px-2.5 bg-orange-500 hover:bg-orange-600 text-white font-bold text-xs rounded transition-colors shrink-0"
-                          title="Añadir a la lista"
+                          className="h-8 px-3 rounded bg-orange-500 hover:bg-orange-600 text-white font-bold text-xs gap-1"
                         >
-                          <ShoppingCart className="h-3.5 w-3.5 mr-1" />
-                          Pedir
+                          <ShoppingCart className="h-3 w-3" />
+                          <span>Pedir</span>
                         </Button>
                       )}
                     </div>
                   </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
+                );
+              })}
+            </div>
+          )}
+
+          {/* Componente de Paginación */}
+          <CatalogPagination />
+        </div>
       </main>
 
       {/* Footer Industrial */}

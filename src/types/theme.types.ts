@@ -101,6 +101,15 @@ export interface CatalogContextValue {
   pickVariantProduct: Producto | null;
   setPickVariantProduct: (p: Producto | null) => void;
   handleQuickAddClick: (e: React.MouseEvent, p: Producto) => void;
+  // Vista y Paginación
+  vistaModo: "cuadros" | "lista";
+  setVistaModo: (v: "cuadros" | "lista") => void;
+  pagina: number;
+  setPagina: (p: number) => void;
+  porPagina: number;
+  setPorPagina: (n: number) => void;
+  totalPaginas: number;
+  productosPaginados: Producto[];
 }
 
 export interface ThemeProps {

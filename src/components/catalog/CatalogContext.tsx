@@ -54,6 +54,31 @@ export function CatalogProvider({
   const [filtroRapido, setFiltroRapido] = useState<"todos" | "ofertas" | "nuevos" | "disponibles">("todos");
   const [ordenarPor, setOrdenarPor] = useState<"destacados" | "precio_asc" | "precio_desc" | "nombre_asc" | "descuento">("destacados");
 
+  // Vista (cuadros / lista) y Paginación
+  const [vistaModo, setVistaModo] = useState<"cuadros" | "lista">("cuadros");
+  const [pagina, setPaginaState] = useState<number>(1);
+  const [porPagina, setPorPaginaState] = useState<number>(12);
+
+  const setPagina = (p: number) => {
+    setPaginaState(p);
+    if (typeof window !== "undefined") {
+      const el = document.getElementById("catalogo-productos-grid");
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+    }
+  };
+
+  const setPorPagina = (n: number) => {
+    setPorPaginaState(n);
+    setPaginaState(1);
+  };
+
+  // Reset de página al cambiar cualquier filtro
+  useEffect(() => {
+    setPaginaState(1);
+  }, [busqueda, categoriaSel, marcaSel, filtroRapido, ordenarPor]);
+
   // Carrito
   const [cart, setCart] = useState<CartItem[]>([]);
   const [isCartOpen, setIsCartOpen] = useState(false);
@@ -178,6 +203,13 @@ export function CatalogProvider({
 
     return res;
   }, [productos, busqueda, categoriaSel, marcaSel, filtroRapido, ordenarPor, marcas, variantes]);
+
+  // Paginación y corte de productos
+  const totalPaginas = Math.max(1, Math.ceil(productosFiltrados.length / porPagina));
+  const productosPaginados = useMemo(() => {
+    const start = (pagina - 1) * porPagina;
+    return productosFiltrados.slice(start, start + porPagina);
+  }, [productosFiltrados, pagina, porPagina]);
 
   const hayFiltrosActivos =
     busqueda.trim() !== "" ||
@@ -307,6 +339,14 @@ export function CatalogProvider({
     pickVariantProduct,
     setPickVariantProduct,
     handleQuickAddClick,
+    vistaModo,
+    setVistaModo,
+    pagina,
+    setPagina,
+    porPagina,
+    setPorPagina,
+    totalPaginas,
+    productosPaginados,
   };
 
   return (

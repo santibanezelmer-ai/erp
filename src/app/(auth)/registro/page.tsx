@@ -208,6 +208,17 @@ export default function RegisterPage() {
                 )}
               </Button>
 
+              <p className="text-center text-xs text-muted-foreground px-2">
+                Al crear tu cuenta, aceptas nuestros{" "}
+                <Link href="/terminos" target="_blank" className="text-primary hover:underline underline-offset-2">
+                  Términos y Condiciones
+                </Link>{" "}
+                y{" "}
+                <Link href="/privacidad" target="_blank" className="text-primary hover:underline underline-offset-2">
+                  Política de Privacidad
+                </Link>.
+              </p>
+
               <div className="text-center text-sm text-muted-foreground">
                 ¿Ya tienes una cuenta?{" "}
                 <Link

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { PLANES, formatPrecio, type Ciclo, type PlanId } from "@/lib/mercadopago";
 import { useTenant } from "@/contexts/tenant-context";
 import { createClient } from "@/lib/supabase/client";
@@ -357,13 +358,30 @@ export default function PlanesPage() {
         </Card>
       )}
 
-      {/* Sello de Seguridad */}
-      <div className="flex flex-col sm:flex-row items-center justify-center gap-2 text-xs text-muted-foreground text-center pt-2">
-        <ShieldCheck className="h-5 w-5 text-emerald-600 shrink-0" />
-        <span>
-          Tus pagos y renovaciones se procesan de forma 100% segura mediante cobro recurrente certificado por{" "}
-          <strong className="text-foreground">Mercado Pago Chile</strong>.
-        </span>
+      {/* Sello de Seguridad y Políticas */}
+      <div className="flex flex-col items-center justify-center gap-2 text-xs text-muted-foreground text-center pt-2">
+        <div className="flex items-center gap-2">
+          <ShieldCheck className="h-5 w-5 text-emerald-600 shrink-0" />
+          <span>
+            Tus pagos y renovaciones se procesan de forma 100% segura mediante cobro recurrente certificado por{" "}
+            <strong className="text-foreground">Mercado Pago Chile</strong>.
+          </span>
+        </div>
+        <div className="flex flex-wrap items-center justify-center gap-3 text-muted-foreground pt-1">
+          <span>🛡️ Garantía de satisfacción de 7 días</span>
+          <span>•</span>
+          <Link href="/devoluciones" target="_blank" className="hover:text-primary underline">
+            Política de Devoluciones y Cancelación
+          </Link>
+          <span>•</span>
+          <Link href="/terminos" target="_blank" className="hover:text-primary underline">
+            Términos de Servicio
+          </Link>
+          <span>•</span>
+          <Link href="/privacidad" target="_blank" className="hover:text-primary underline">
+            Privacidad
+          </Link>
+        </div>
       </div>
     </div>
   );

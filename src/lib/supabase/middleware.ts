@@ -47,6 +47,9 @@ export async function updateSession(request: NextRequest) {
       request.nextUrl.pathname.startsWith("/registro") ||
       request.nextUrl.pathname.startsWith("/unirse") ||
       request.nextUrl.pathname.startsWith("/invitacion") ||
+      request.nextUrl.pathname.startsWith("/terminos") ||
+      request.nextUrl.pathname.startsWith("/privacidad") ||
+      request.nextUrl.pathname.startsWith("/devoluciones") ||
       request.nextUrl.pathname.startsWith("/c/") || // Catálogo público
       request.nextUrl.pathname.startsWith("/kds/") || // Pantalla cocina por token
       request.nextUrl.pathname.startsWith("/api/public") ||

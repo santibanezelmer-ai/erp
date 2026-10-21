@@ -96,8 +96,26 @@ export default async function HomePage() {
       </main>
 
       {/* Footer */}
-      <footer className="border-t border-border/60 py-6 text-center text-xs text-muted-foreground">
-        © {new Date().getFullYear()} Operix ERP. Todos los derechos reservados.
+      <footer className="border-t border-border/60 py-8 px-6 text-xs text-muted-foreground bg-muted/20">
+        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div className="flex items-center gap-2">
+            <Logo className="h-5 w-5 opacity-80" />
+            <span>© {new Date().getFullYear()} Operix ERP. Todos los derechos reservados. Santiago, Chile.</span>
+          </div>
+          <div className="flex flex-wrap items-center gap-4">
+            <Link href="/terminos" className="hover:text-foreground transition-colors">
+              Términos y Condiciones
+            </Link>
+            <span>•</span>
+            <Link href="/privacidad" className="hover:text-foreground transition-colors">
+              Política de Privacidad
+            </Link>
+            <span>•</span>
+            <Link href="/devoluciones" className="hover:text-foreground transition-colors">
+              Política de Devoluciones
+            </Link>
+          </div>
+        </div>
       </footer>
     </div>
   );

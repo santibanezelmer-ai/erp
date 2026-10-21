@@ -621,28 +621,30 @@ export default function ProductosPage() {
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
           <Button
             variant="outline"
             size="sm"
             onClick={handleExportarExcel}
-            className="gap-1.5 text-xs font-semibold"
+            className="gap-1.5 text-xs font-semibold flex-1 sm:flex-initial justify-center"
           >
             <FileSpreadsheet className="h-4 w-4 text-emerald-600" />
-            Exportar Excel
+            <span className="hidden sm:inline">Exportar Excel</span>
+            <span className="sm:hidden">Exportar</span>
           </Button>
 
           <Button
             variant="outline"
             size="sm"
             onClick={() => setModalImportOpen(true)}
-            className="gap-1.5 text-xs font-semibold"
+            className="gap-1.5 text-xs font-semibold flex-1 sm:flex-initial justify-center"
           >
             <Upload className="h-4 w-4 text-blue-600" />
-            Importar Excel
+            <span className="hidden sm:inline">Importar Excel</span>
+            <span className="sm:hidden">Importar</span>
           </Button>
 
-          <Button onClick={abrirCrear} size="sm" className="gap-2 shadow-sm font-semibold">
+          <Button onClick={abrirCrear} size="sm" className="gap-2 shadow-sm font-semibold w-full sm:w-auto justify-center">
             <Plus className="h-4 w-4" />
             Nuevo Producto
           </Button>
@@ -806,14 +808,14 @@ export default function ProductosPage() {
                         title="Seleccionar todos los visibles"
                       />
                     </th>
-                    <th className="py-3 px-4">Producto</th>
-                    <th className="py-3 px-4">Código</th>
-                    <th className="py-3 px-4">Categoría</th>
-                    <th className="py-3 px-4 text-right">Precio Venta</th>
-                    <th className="py-3 px-4 text-right">Costo</th>
-                    <th className="py-3 px-4 text-center">Stock</th>
-                    <th className="py-3 px-4 text-center">Estado</th>
-                    <th className="py-3 px-4 text-right">Acciones</th>
+                    <th className="py-3 px-3">Producto</th>
+                    <th className="py-3 px-3 hidden md:table-cell">Código</th>
+                    <th className="py-3 px-3 hidden sm:table-cell">Categoría</th>
+                    <th className="py-3 px-3 text-right">Precio</th>
+                    <th className="py-3 px-3 text-right hidden sm:table-cell">Costo</th>
+                    <th className="py-3 px-3 text-center">Stock</th>
+                    <th className="py-3 px-3 text-center hidden lg:table-cell">Estado</th>
+                    <th className="py-3 px-3 text-right">Acciones</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
@@ -853,9 +855,9 @@ export default function ProductosPage() {
                             className="rounded border-border text-primary focus:ring-primary h-4 w-4 cursor-pointer"
                           />
                         </td>
-                        <td className="py-3 px-4">
-                          <div className="flex items-center gap-3">
-                            <div className="h-10 w-10 rounded-lg bg-muted border overflow-hidden shrink-0 flex items-center justify-center">
+                        <td className="py-2.5 px-3">
+                          <div className="flex items-center gap-2.5">
+                            <div className="h-9 w-9 sm:h-10 sm:w-10 rounded-lg bg-muted border overflow-hidden shrink-0 flex items-center justify-center">
                               {prod.imagen_url ? (
                                 <img
                                   src={prod.imagen_url}
@@ -864,30 +866,37 @@ export default function ProductosPage() {
                                   className="h-full w-full object-cover"
                                 />
                               ) : (
-                                <Package className="h-5 w-5 text-muted-foreground/40" />
+                                <Package className="h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground/40" />
                               )}
                             </div>
                             <div className="min-w-0">
                               <div
-                                className="font-semibold text-foreground truncate max-w-xs"
+                                className="font-semibold text-foreground truncate max-w-[140px] sm:max-w-xs text-xs sm:text-sm"
                                 title={prod.nombre}
                               >
                                 {prod.nombre}
                               </div>
-                              {vs.length > 0 && (
-                                <button
-                                  type="button"
-                                  onClick={() => setVariantesModalProd(prod)}
-                                  className="inline-flex items-center gap-1 text-[10px] font-semibold text-primary bg-primary/10 hover:bg-primary/20 px-1.5 py-0.5 rounded mt-0.5 transition-colors cursor-pointer"
-                                >
-                                  <Layers className="h-3 w-3" />
-                                  <span>{vs.length} variantes</span>
-                                </button>
-                              )}
+                              <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
+                                {prod.categoria && (
+                                  <span className="sm:hidden text-[10px] text-muted-foreground bg-muted px-1.5 py-0.2 rounded truncate max-w-[100px]">
+                                    {prod.categoria}
+                                  </span>
+                                )}
+                                {vs.length > 0 && (
+                                  <button
+                                    type="button"
+                                    onClick={() => setVariantesModalProd(prod)}
+                                    className="inline-flex items-center gap-1 text-[10px] font-semibold text-primary bg-primary/10 hover:bg-primary/20 px-1.5 py-0.5 rounded transition-colors cursor-pointer"
+                                  >
+                                    <Layers className="h-3 w-3" />
+                                    <span>{vs.length} var.</span>
+                                  </button>
+                                )}
+                              </div>
                             </div>
                           </div>
                         </td>
-                        <td className="py-3 px-4">
+                        <td className="py-2.5 px-3 hidden md:table-cell">
                           {prod.codigo ? (
                             <span className="font-mono text-xs text-muted-foreground flex items-center gap-1">
                               <Barcode className="h-3 w-3" />
@@ -897,7 +906,7 @@ export default function ProductosPage() {
                             <span className="text-xs text-muted-foreground/50">—</span>
                           )}
                         </td>
-                        <td className="py-3 px-4">
+                        <td className="py-2.5 px-3 hidden sm:table-cell">
                           {prod.categoria ? (
                             <button
                               type="button"
@@ -927,13 +936,13 @@ export default function ProductosPage() {
                             </button>
                           )}
                         </td>
-                        <td className="py-3 px-4 text-right font-bold text-foreground">
+                        <td className="py-2.5 px-3 text-right font-bold text-foreground text-xs sm:text-sm">
                           {formatMoney(prod.precio_venta)}
                         </td>
-                        <td className="py-3 px-4 text-right text-xs text-muted-foreground">
+                        <td className="py-2.5 px-3 text-right text-xs text-muted-foreground hidden sm:table-cell">
                           {formatMoney(prod.precio_costo)}
                         </td>
-                        <td className="py-3 px-4 text-center">
+                        <td className="py-2.5 px-3 text-center">
                           {prod.sin_control_stock ? (
                             <span className="text-xs text-muted-foreground italic">Ilimitado</span>
                           ) : (
@@ -960,7 +969,7 @@ export default function ProductosPage() {
                             </div>
                           )}
                         </td>
-                        <td className="py-3 px-4 text-center">
+                        <td className="py-2.5 px-3 text-center hidden lg:table-cell">
                           {prod.activo ? (
                             <span className="inline-flex items-center gap-1 text-[11px] text-emerald-600 dark:text-emerald-500 font-medium">
                               <CheckCircle2 className="h-3.5 w-3.5" />
@@ -973,7 +982,7 @@ export default function ProductosPage() {
                             </span>
                           )}
                         </td>
-                        <td className="py-3 px-4 text-right">
+                        <td className="py-2.5 px-3 text-right">
                           <div className="flex items-center justify-end gap-1">
                             <button
                               onClick={() => abrirModalEtiqueta(prod)}

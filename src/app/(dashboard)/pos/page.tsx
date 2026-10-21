@@ -71,6 +71,7 @@ export default function POSPage() {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [descuentoGlobal, setDescuentoGlobal] = useState<number>(0);
   const [clienteSeleccionado, setClienteSeleccionado] = useState<string>("");
+  const [mobileTab, setMobileTab] = useState<"catalogo" | "carrito">("catalogo");
 
   // Modal Nuevo Cliente Rápido
   const [modalNuevoClienteOpen, setModalNuevoClienteOpen] = useState(false);
@@ -534,6 +535,7 @@ export default function POSPage() {
       setCart([]);
       setDescuentoGlobal(0);
       setClienteSeleccionado("");
+      setMobileTab("catalogo");
       fetchData();
     } catch (err: any) {
       console.error("Error en checkout:", err);
@@ -598,9 +600,57 @@ export default function POSPage() {
   };
 
   return (
-    <div className="h-[calc(100vh-6rem)] flex flex-col lg:flex-row gap-4 overflow-hidden">
+    <div className="h-[calc(100vh-8.5rem)] lg:h-[calc(100vh-6rem)] flex flex-col lg:flex-row gap-3 sm:gap-4 overflow-hidden">
+      {/* Switcher Móvil: Catálogo vs Carrito */}
+      <div className="flex items-center gap-1.5 lg:hidden bg-card border border-border p-1 rounded-xl shrink-0 shadow-xs">
+        <button
+          type="button"
+          onClick={() => setMobileTab("catalogo")}
+          className={cn(
+            "flex-1 py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer",
+            mobileTab === "catalogo"
+              ? "bg-primary text-primary-foreground shadow-xs"
+              : "text-muted-foreground hover:text-foreground"
+          )}
+        >
+          <Package className="h-4 w-4" />
+          <span>Catálogo</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setMobileTab("carrito")}
+          className={cn(
+            "flex-1 py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all relative cursor-pointer",
+            mobileTab === "carrito"
+              ? "bg-primary text-primary-foreground shadow-xs"
+              : "text-muted-foreground hover:text-foreground"
+          )}
+        >
+          <ShoppingCart className="h-4 w-4" />
+          <span>Carrito ({cart.reduce((a, b) => a + b.qty, 0)})</span>
+          {cart.length > 0 && (
+            <span
+              className={cn(
+                "ml-1 px-1.5 py-0.2 rounded-full text-[10px] font-extrabold",
+                mobileTab === "carrito"
+                  ? "bg-primary-foreground/20 text-primary-foreground"
+                  : "bg-emerald-500 text-white animate-pulse"
+              )}
+            >
+              {formatMoney(total)}
+            </span>
+          )}
+        </button>
+      </div>
+
       {/* Columna Izquierda: Catálogo y Búsqueda */}
-      <div className="flex-1 flex flex-col gap-3 min-w-0 bg-card rounded-xl border border-border p-4 overflow-hidden">
+      <div
+        className={cn(
+          "flex-1 flex flex-col gap-3 min-w-0 bg-card rounded-xl border border-border p-3 sm:p-4 overflow-hidden shadow-xs",
+          mobileTab !== "catalogo" && "hidden lg:flex"
+        )}
+      >
         {/* Barra superior de búsqueda */}
         <div className="flex items-center gap-2">
           <form onSubmit={handleBarcodeSubmit} className="relative flex-1">
@@ -743,13 +793,46 @@ export default function POSPage() {
             </div>
           )}
         </div>
+
+        {/* Barra flotante inferior en móvil para ver carrito y total */}
+        {mobileTab === "catalogo" && cart.length > 0 && (
+          <div className="lg:hidden shrink-0 pt-2 border-t border-border">
+            <Button
+              type="button"
+              onClick={() => setMobileTab("carrito")}
+              className="w-full h-11 bg-primary text-primary-foreground font-bold text-sm shadow-md flex items-center justify-between px-4 rounded-xl"
+            >
+              <div className="flex items-center gap-2">
+                <ShoppingCart className="h-4 w-4" />
+                <span>Ver Carrito ({cart.reduce((a, b) => a + b.qty, 0)} ítems)</span>
+              </div>
+              <div className="flex items-center gap-1.5 font-black">
+                <span>{formatMoney(total)}</span>
+                <ChevronRight className="h-4 w-4" />
+              </div>
+            </Button>
+          </div>
+        )}
       </div>
 
       {/* Columna Derecha: Carrito / Ticket de Venta */}
-      <div className="w-full lg:w-96 flex flex-col bg-card rounded-xl border border-border p-4 shadow-sm">
+      <div
+        className={cn(
+          "w-full lg:w-96 flex flex-col bg-card rounded-xl border border-border p-3 sm:p-4 shadow-sm",
+          mobileTab !== "carrito" && "hidden lg:flex"
+        )}
+      >
         {/* Cabecera del ticket */}
         <div className="flex items-center justify-between pb-3 border-b border-border">
           <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setMobileTab("catalogo")}
+              className="lg:hidden p-1 rounded-md text-muted-foreground hover:bg-muted mr-1"
+              title="Volver al catálogo"
+            >
+              <ChevronRight className="h-5 w-5 rotate-180" />
+            </button>
             <ShoppingCart className="h-5 w-5 text-primary" />
             <span className="font-bold text-base">Orden Actual</span>
             <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full font-semibold">

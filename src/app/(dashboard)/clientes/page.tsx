@@ -590,23 +590,24 @@ export default function ClientesPage() {
           </p>
         </div>
 
-        <div className="flex items-center gap-2.5 flex-wrap">
-          <div className="bg-card border border-border px-3.5 py-1.5 rounded-xl text-xs font-semibold shadow-xs">
-            <span className="text-muted-foreground mr-1.5">Deuda Total por Cobrar:</span>
-            <span className="text-amber-600 font-bold text-base">{formatMoney(deudaTotalGlobal)}</span>
+        <div className="flex flex-wrap items-center gap-2.5 w-full sm:w-auto">
+          <div className="bg-card border border-border px-3.5 py-1.5 rounded-xl text-xs font-semibold shadow-xs flex-1 sm:flex-initial">
+            <span className="text-muted-foreground mr-1.5">Deuda por Cobrar:</span>
+            <span className="text-amber-600 font-bold text-sm sm:text-base">{formatMoney(deudaTotalGlobal)}</span>
           </div>
 
-          <Link href="/fiados">
+          <Link href="/fiados" className="flex-1 sm:flex-initial">
             <Button
               variant="outline"
-              className="gap-2 shadow-xs border-amber-500/40 text-amber-600 hover:bg-amber-500/10 font-bold"
+              className="gap-2 shadow-xs border-amber-500/40 text-amber-600 hover:bg-amber-500/10 font-bold w-full justify-center"
             >
               <BadgeDollarSign className="h-4 w-4" />
-              Módulo de Fiados
+              <span className="hidden sm:inline">Módulo de Fiados</span>
+              <span className="sm:hidden">Fiados</span>
             </Button>
           </Link>
 
-          <Button onClick={abrirCrear} className="gap-2 shadow-sm font-bold">
+          <Button onClick={abrirCrear} className="gap-2 shadow-sm font-bold w-full sm:w-auto justify-center">
             <Plus className="h-4 w-4" />
             Nuevo Cliente
           </Button>
@@ -668,11 +669,11 @@ export default function ClientesPage() {
               <table className="w-full text-left text-sm">
                 <thead className="bg-muted/50 border-b border-border text-xs text-muted-foreground uppercase font-semibold">
                   <tr>
-                    <th className="py-3 px-4">Cliente</th>
-                    <th className="py-3 px-4">Teléfono</th>
-                    <th className="py-3 px-4">Correo</th>
-                    <th className="py-3 px-4 text-right">Deuda Actual</th>
-                    <th className="py-3 px-4 text-right">Acciones</th>
+                    <th className="py-2.5 sm:py-3 px-3 sm:px-4">Cliente</th>
+                    <th className="py-2.5 sm:py-3 px-3 sm:px-4 hidden sm:table-cell">Teléfono</th>
+                    <th className="py-2.5 sm:py-3 px-3 sm:px-4 hidden md:table-cell">Correo</th>
+                    <th className="py-2.5 sm:py-3 px-3 sm:px-4 text-right">Deuda</th>
+                    <th className="py-2.5 sm:py-3 px-3 sm:px-4 text-right">Acciones</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
@@ -680,13 +681,19 @@ export default function ClientesPage() {
                     const deuda = Number(c.deuda_total || 0);
                     return (
                       <tr key={c.id} className="hover:bg-muted/30 transition-colors">
-                        <td className="py-3 px-4">
-                          <div className="font-semibold text-foreground">{c.nombre}</div>
+                        <td className="py-2.5 sm:py-3 px-3 sm:px-4">
+                          <div className="font-semibold text-foreground text-xs sm:text-sm">{c.nombre}</div>
+                          {c.telefono && (
+                            <div className="text-[11px] text-muted-foreground sm:hidden flex items-center gap-1 mt-0.5">
+                              <Phone className="h-2.5 w-2.5 text-primary" />
+                              {c.telefono}
+                            </div>
+                          )}
                           {c.direccion && (
-                            <div className="text-xs text-muted-foreground">{c.direccion}</div>
+                            <div className="text-[11px] text-muted-foreground hidden sm:block truncate max-w-xs">{c.direccion}</div>
                           )}
                         </td>
-                        <td className="py-3 px-4 text-xs text-muted-foreground">
+                        <td className="py-2.5 sm:py-3 px-3 sm:px-4 text-xs text-muted-foreground hidden sm:table-cell">
                           {c.telefono ? (
                             <span className="flex items-center gap-1">
                               <Phone className="h-3 w-3" />
@@ -696,7 +703,7 @@ export default function ClientesPage() {
                             "—"
                           )}
                         </td>
-                        <td className="py-3 px-4 text-xs text-muted-foreground">
+                        <td className="py-2.5 sm:py-3 px-3 sm:px-4 text-xs text-muted-foreground hidden md:table-cell">
                           {c.email ? (
                             <span className="flex items-center gap-1">
                               <Mail className="h-3 w-3" />
@@ -706,18 +713,18 @@ export default function ClientesPage() {
                             "—"
                           )}
                         </td>
-                        <td className="py-3 px-4 text-right">
+                        <td className="py-2.5 sm:py-3 px-3 sm:px-4 text-right">
                           {deuda > 0 ? (
-                            <span className="font-bold text-amber-600 dark:text-amber-500">
+                            <span className="font-bold text-xs sm:text-sm text-amber-600 dark:text-amber-500">
                               {formatMoney(deuda)}
                             </span>
                           ) : (
-                            <span className="text-xs text-emerald-600 dark:text-emerald-500 font-semibold">
+                            <span className="text-[11px] sm:text-xs text-emerald-600 dark:text-emerald-500 font-semibold">
                               Al día ($0)
                             </span>
                           )}
                         </td>
-                        <td className="py-3 px-4 text-right">
+                        <td className="py-2.5 sm:py-3 px-3 sm:px-4 text-right">
                           <div className="flex items-center justify-end gap-1.5">
                             {deuda > 0 && (
                               <>

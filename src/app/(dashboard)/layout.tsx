@@ -172,11 +172,13 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
             <div className="relative">
               <button
                 onClick={() => setBranchDropdownOpen(!branchDropdownOpen)}
-                className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-border bg-background hover:bg-muted/50 text-xs font-medium transition-colors"
+                className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1.5 rounded-lg border border-border bg-background hover:bg-muted/50 text-xs font-medium transition-colors max-w-[150px] sm:max-w-xs"
               >
-                <Building2 className="h-3.5 w-3.5 text-primary" />
-                <span>Sucursal: {sucursalActiva?.nombre || "Principal"}</span>
-                <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+                <Building2 className="h-3.5 w-3.5 text-primary shrink-0" />
+                <span className="truncate">
+                  {sucursalActiva?.nombre || "Principal"}
+                </span>
+                <ChevronDown className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
               </button>
 
               {branchDropdownOpen && (
@@ -233,9 +235,75 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
         </header>
 
         {/* Page body */}
-        <main className="flex-1 overflow-y-auto p-4 lg:p-6 bg-muted/20">
+        <main className="flex-1 overflow-y-auto p-3 sm:p-4 lg:p-6 pb-24 lg:pb-6 bg-muted/20">
           {children}
         </main>
+
+        {/* Barra de Navegación Inferior Móvil (Bottom Navigation Bar) */}
+        <nav className="fixed bottom-0 left-0 right-0 z-40 bg-card/95 backdrop-blur-md border-t border-border flex items-center justify-around h-16 px-1 lg:hidden shadow-lg safe-bottom">
+          <Link
+            href="/dashboard"
+            className={cn(
+              "flex flex-col items-center justify-center flex-1 py-1 text-[11px] font-medium transition-colors",
+              pathname === "/dashboard"
+                ? "text-primary font-bold"
+                : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            <LayoutDashboard className="h-5 w-5 mb-0.5" />
+            <span>Inicio</span>
+          </Link>
+
+          <Link
+            href="/pos"
+            className={cn(
+              "flex flex-col items-center justify-center flex-1 py-1 text-[11px] font-medium transition-colors relative",
+              pathname === "/pos"
+                ? "text-primary font-bold"
+                : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            <div className="p-1 rounded-full bg-primary/10">
+              <ShoppingCart className="h-5 w-5 text-primary" />
+            </div>
+            <span>POS</span>
+          </Link>
+
+          <Link
+            href="/productos"
+            className={cn(
+              "flex flex-col items-center justify-center flex-1 py-1 text-[11px] font-medium transition-colors",
+              pathname.startsWith("/productos")
+                ? "text-primary font-bold"
+                : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            <Package className="h-5 w-5 mb-0.5" />
+            <span>Stock</span>
+          </Link>
+
+          <Link
+            href="/ventas"
+            className={cn(
+              "flex flex-col items-center justify-center flex-1 py-1 text-[11px] font-medium transition-colors",
+              pathname.startsWith("/ventas")
+                ? "text-primary font-bold"
+                : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            <Receipt className="h-5 w-5 mb-0.5" />
+            <span>Ventas</span>
+          </Link>
+
+          <button
+            type="button"
+            onClick={() => setMobileOpen(true)}
+            className="flex flex-col items-center justify-center flex-1 py-1 text-[11px] font-medium text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+          >
+            <Menu className="h-5 w-5 mb-0.5" />
+            <span>Más</span>
+          </button>
+        </nav>
       </div>
     </div>
   );

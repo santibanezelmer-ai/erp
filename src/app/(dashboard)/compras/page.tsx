@@ -255,11 +255,11 @@ export default function ComprasPage() {
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={() => setOpenModalProv(true)} className="text-xs">
+        <div className="grid grid-cols-1 sm:flex sm:items-center gap-2 w-full sm:w-auto">
+          <Button variant="outline" size="sm" onClick={() => setOpenModalProv(true)} className="text-xs w-full sm:w-auto justify-center">
             + Nuevo Proveedor
           </Button>
-          <Button size="sm" onClick={() => setOpenModalCompra(true)} className="gap-1.5 text-xs shadow-sm">
+          <Button size="sm" onClick={() => setOpenModalCompra(true)} className="gap-1.5 text-xs shadow-sm w-full sm:w-auto justify-center">
             <PackagePlus className="h-4 w-4" />
             Registrar Compra / Factura
           </Button>
@@ -283,34 +283,38 @@ export default function ComprasPage() {
               <table className="w-full text-left text-sm">
                 <thead className="bg-muted/50 border-b border-border text-xs text-muted-foreground uppercase font-semibold">
                   <tr>
-                    <th className="py-3 px-4">Fecha</th>
-                    <th className="py-3 px-4">N° Documento</th>
-                    <th className="py-3 px-4">Proveedor</th>
-                    <th className="py-3 px-4 text-right">Total Factura</th>
-                    <th className="py-3 px-4 text-center">Estado</th>
+                    <th className="py-2.5 sm:py-3 px-3 sm:px-4">Fecha</th>
+                    <th className="py-2.5 sm:py-3 px-3 sm:px-4 hidden sm:table-cell">N° Doc.</th>
+                    <th className="py-2.5 sm:py-3 px-3 sm:px-4">Proveedor</th>
+                    <th className="py-2.5 sm:py-3 px-3 sm:px-4 text-right">Total</th>
+                    <th className="py-2.5 sm:py-3 px-3 sm:px-4 text-center">Estado</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
                   {compras.map((c) => (
                     <tr key={c.id} className="hover:bg-muted/30 transition-colors">
-                      <td className="py-3 px-4 text-xs text-muted-foreground">
+                      <td className="py-2.5 sm:py-3 px-3 sm:px-4 text-xs text-muted-foreground whitespace-nowrap">
                         {new Date(c.created_at).toLocaleDateString([], {
-                          dateStyle: "medium",
+                          dateStyle: "short",
                         })}
                       </td>
-                      <td className="py-3 px-4 font-mono font-bold text-xs text-foreground">
+                      <td className="py-2.5 sm:py-3 px-3 sm:px-4 font-mono font-bold text-xs text-foreground hidden sm:table-cell">
                         {c.numero_doc || `OC-${c.id.slice(0, 6).toUpperCase()}`}
                       </td>
-                      <td className="py-3 px-4 font-semibold text-foreground">
-                        {c.proveedor_nombre || "Proveedor General"}
+                      <td className="py-2.5 sm:py-3 px-3 sm:px-4 font-semibold text-xs sm:text-sm text-foreground">
+                        <div>{c.proveedor_nombre || "Proveedor General"}</div>
+                        <div className="sm:hidden text-[10px] text-muted-foreground font-mono">
+                          {c.numero_doc || `OC-${c.id.slice(0, 6).toUpperCase()}`}
+                        </div>
                       </td>
-                      <td className="py-3 px-4 text-right font-bold text-sm text-foreground">
+                      <td className="py-2.5 sm:py-3 px-3 sm:px-4 text-right font-bold text-xs sm:text-sm text-foreground">
                         {formatMoney(c.total)}
                       </td>
-                      <td className="py-3 px-4 text-center">
-                        <span className="inline-flex items-center gap-1 text-[11px] text-emerald-600 dark:text-emerald-500 font-bold bg-emerald-500/10 px-2 py-0.5 rounded-full">
+                      <td className="py-2.5 sm:py-3 px-3 sm:px-4 text-center">
+                        <span className="inline-flex items-center gap-1 text-[10px] sm:text-[11px] text-emerald-600 dark:text-emerald-500 font-bold bg-emerald-500/10 px-2 py-0.5 rounded-full">
                           <CheckCircle2 className="h-3 w-3" />
-                          Stock Ingresado
+                          <span className="hidden sm:inline">Stock Ingresado</span>
+                          <span className="sm:hidden">Ingresado</span>
                         </span>
                       </td>
                     </tr>

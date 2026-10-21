@@ -237,20 +237,21 @@ export default function VentasPage() {
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2.5 w-full sm:w-auto">
           <Button
             variant="outline"
             size="sm"
             onClick={handleExportarExcel}
-            className="gap-2 text-xs font-semibold"
+            className="gap-2 text-xs font-semibold flex-1 sm:flex-initial justify-center"
           >
             <FileSpreadsheet className="h-4 w-4 text-emerald-600" />
-            Exportar Excel
+            <span className="hidden sm:inline">Exportar Excel</span>
+            <span className="sm:hidden">Exportar</span>
           </Button>
 
-          <div className="flex items-center gap-3 bg-card border border-border px-4 py-2 rounded-xl text-xs font-semibold shadow-xs">
-            <span className="text-muted-foreground">Total Filtrado:</span>
-            <span className="text-primary text-base font-bold">{formatMoney(totalVentasMonto)}</span>
+          <div className="flex items-center justify-between sm:justify-start gap-2 bg-card border border-border px-3 py-1.5 rounded-xl text-xs font-semibold shadow-xs flex-1 sm:flex-initial">
+            <span className="text-muted-foreground">Total:</span>
+            <span className="text-primary text-sm sm:text-base font-bold">{formatMoney(totalVentasMonto)}</span>
           </div>
         </div>
       </div>
@@ -302,37 +303,37 @@ export default function VentasPage() {
               <table className="w-full text-left text-sm">
                 <thead className="bg-muted/50 border-b border-border text-xs text-muted-foreground uppercase font-semibold">
                   <tr>
-                    <th className="py-3 px-4">Ticket ID</th>
-                    <th className="py-3 px-4">Fecha y Hora</th>
-                    <th className="py-3 px-4">Método de Pago</th>
-                    <th className="py-3 px-4 text-right">Subtotal</th>
-                    <th className="py-3 px-4 text-right">Descuento</th>
-                    <th className="py-3 px-4 text-right">Total</th>
-                    <th className="py-3 px-4 text-center">Estado</th>
-                    <th className="py-3 px-4 text-right">Acciones</th>
+                    <th className="py-2.5 sm:py-3 px-3 sm:px-4">Ticket</th>
+                    <th className="py-2.5 sm:py-3 px-3 sm:px-4">Fecha</th>
+                    <th className="py-2.5 sm:py-3 px-3 sm:px-4">Pago</th>
+                    <th className="py-2.5 sm:py-3 px-3 sm:px-4 text-right hidden md:table-cell">Subtotal</th>
+                    <th className="py-2.5 sm:py-3 px-3 sm:px-4 text-right hidden md:table-cell">Descuento</th>
+                    <th className="py-2.5 sm:py-3 px-3 sm:px-4 text-right">Total</th>
+                    <th className="py-2.5 sm:py-3 px-3 sm:px-4 text-center">Estado</th>
+                    <th className="py-2.5 sm:py-3 px-3 sm:px-4 text-right">Acciones</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
                   {ventasFiltradas.map((v) => (
                     <tr key={v.id} className="hover:bg-muted/30 transition-colors">
-                      <td className="py-3 px-4 font-mono font-bold text-xs text-foreground">
+                      <td className="py-2.5 sm:py-3 px-3 sm:px-4 font-mono font-bold text-xs text-foreground">
                         #{v.id.slice(0, 8).toUpperCase()}
                       </td>
-                      <td className="py-3 px-4 text-xs text-muted-foreground">
+                      <td className="py-2.5 sm:py-3 px-3 sm:px-4 text-xs text-muted-foreground whitespace-nowrap">
                         {new Date(v.created_at).toLocaleString([], {
                           dateStyle: "short",
                           timeStyle: "short",
                         })}
                       </td>
-                      <td className="py-3 px-4">
+                      <td className="py-2.5 sm:py-3 px-3 sm:px-4">
                         <span className="capitalize text-xs font-semibold px-2 py-0.5 rounded-full bg-muted">
                           {v.pago || "Efectivo"}
                         </span>
                       </td>
-                      <td className="py-3 px-4 text-right text-xs text-muted-foreground">
+                      <td className="py-2.5 sm:py-3 px-3 sm:px-4 text-right text-xs text-muted-foreground hidden md:table-cell">
                         {formatMoney(v.subtotal)}
                       </td>
-                      <td className="py-3 px-4 text-right text-xs text-muted-foreground">
+                      <td className="py-2.5 sm:py-3 px-3 sm:px-4 text-right text-xs text-muted-foreground hidden md:table-cell">
                         {Number(v.descuento || 0) > 0 ? (
                           <span className="text-amber-600 font-semibold">
                             -{formatMoney(v.descuento)}
@@ -341,23 +342,23 @@ export default function VentasPage() {
                           "—"
                         )}
                       </td>
-                      <td className="py-3 px-4 text-right font-bold text-sm text-foreground">
+                      <td className="py-2.5 sm:py-3 px-3 sm:px-4 text-right font-bold text-xs sm:text-sm text-foreground">
                         {formatMoney(v.total)}
                       </td>
-                      <td className="py-3 px-4 text-center">
+                      <td className="py-2.5 sm:py-3 px-3 sm:px-4 text-center">
                         {v.estado === "anulada" ? (
                           <span className="inline-flex items-center gap-1 text-[11px] text-destructive font-semibold">
                             <XCircle className="h-3.5 w-3.5" />
-                            Anulada
+                            <span className="hidden sm:inline">Anulada</span>
                           </span>
                         ) : (
                           <span className="inline-flex items-center gap-1 text-[11px] text-emerald-600 dark:text-emerald-500 font-semibold">
                             <CheckCircle2 className="h-3.5 w-3.5" />
-                            Completada
+                            <span className="hidden sm:inline">Completada</span>
                           </span>
                         )}
                       </td>
-                      <td className="py-3 px-4 text-right">
+                      <td className="py-2.5 sm:py-3 px-3 sm:px-4 text-right">
                         <div className="flex items-center justify-end gap-1">
                           <button
                             onClick={() => verDetalle(v)}

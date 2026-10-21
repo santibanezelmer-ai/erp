@@ -763,12 +763,12 @@ export default function FiadosPage() {
                       </div>
 
                       {/* Botones de Acción */}
-                      <div className="flex items-center gap-2 flex-wrap" onClick={(e) => e.stopPropagation()}>
+                      <div className="grid grid-cols-1 sm:flex sm:items-center gap-2 w-full sm:w-auto" onClick={(e) => e.stopPropagation()}>
                         <Button
                           size="sm"
                           variant="outline"
                           onClick={() => enviarWhatsAppDetalle(cliente)}
-                          className="h-8 text-xs gap-1.5 border-emerald-500/40 text-emerald-600 hover:bg-emerald-500/10 font-semibold shadow-2xs"
+                          className="h-8 text-xs gap-1.5 border-emerald-500/40 text-emerald-600 hover:bg-emerald-500/10 font-semibold shadow-2xs w-full sm:w-auto justify-center"
                         >
                           <MessageCircle className="h-3.5 w-3.5" />
                           Enviar por WhatsApp
@@ -778,7 +778,7 @@ export default function FiadosPage() {
                           size="sm"
                           variant="outline"
                           onClick={() => imprimirComprobante(cliente)}
-                          className="h-8 text-xs gap-1.5 font-semibold shadow-2xs"
+                          className="h-8 text-xs gap-1.5 font-semibold shadow-2xs w-full sm:w-auto justify-center"
                         >
                           <Printer className="h-3.5 w-3.5" />
                           Imprimir Ticket
@@ -787,7 +787,7 @@ export default function FiadosPage() {
                         <Button
                           size="sm"
                           onClick={() => abrirModalAbono(cliente)}
-                          className="h-8 text-xs gap-1.5 font-bold shadow-xs bg-amber-600 hover:bg-amber-700 text-white"
+                          className="h-8 text-xs gap-1.5 font-bold shadow-xs bg-amber-600 hover:bg-amber-700 text-white w-full sm:w-auto justify-center"
                         >
                           <DollarSign className="h-3.5 w-3.5" />
                           Abonar Saldo
@@ -804,7 +804,7 @@ export default function FiadosPage() {
                               <th className="py-2.5 px-3 whitespace-nowrap">Fecha / Ticket</th>
                               <th className="py-2.5 px-3">Producto Adeudado</th>
                               <th className="py-2.5 px-3 text-right">Cant.</th>
-                              <th className="py-2.5 px-3 text-right">Precio Unitario</th>
+                              <th className="py-2.5 px-3 text-right hidden sm:table-cell">Precio Unitario</th>
                               <th className="py-2.5 px-3 text-right">Subtotal</th>
                             </tr>
                           </thead>
@@ -847,7 +847,7 @@ export default function FiadosPage() {
                                 <td className="py-2.5 px-3 text-right font-semibold text-foreground">
                                   {item.qty}
                                 </td>
-                                <td className="py-2.5 px-3 text-right text-muted-foreground">
+                                <td className="py-2.5 px-3 text-right text-muted-foreground hidden sm:table-cell">
                                   {formatMoney(item.precio)}
                                 </td>
                                 <td className="py-2.5 px-3 text-right font-bold text-foreground">

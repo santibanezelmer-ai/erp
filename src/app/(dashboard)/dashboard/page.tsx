@@ -109,25 +109,25 @@ export default function DashboardPage() {
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
-          <Link href="/productos">
-            <Button variant="outline" size="sm" className="gap-1.5 text-xs">
+        <div className="flex items-center gap-2 w-full sm:w-auto">
+          <Link href="/productos" className="flex-1 sm:flex-initial">
+            <Button variant="outline" size="sm" className="gap-1.5 text-xs w-full justify-center">
               <Plus className="h-3.5 w-3.5" />
               Nuevo Producto
             </Button>
           </Link>
 
-          <Link href="/pos">
-            <Button size="sm" className="gap-1.5 text-xs shadow-sm">
+          <Link href="/pos" className="flex-1 sm:flex-initial">
+            <Button size="sm" className="gap-1.5 text-xs shadow-sm w-full justify-center">
               <ShoppingCart className="h-3.5 w-3.5" />
-              Abrir Punto de Venta
+              Abrir POS
             </Button>
           </Link>
         </div>
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">

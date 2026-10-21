@@ -227,16 +227,17 @@ export default function TiendaOnlinePage() {
         </div>
 
         {/* Acciones de Publicación */}
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
           {hasDraft && (
             <Button
               variant="outline"
               size="sm"
               onClick={handleDiscardDraft}
-              className="text-xs gap-1.5"
+              className="text-xs gap-1.5 flex-1 sm:flex-initial justify-center"
             >
               <RotateCcw className="h-3.5 w-3.5" />
-              Descartar Borrador
+              <span className="hidden sm:inline">Descartar Borrador</span>
+              <span className="sm:hidden">Descartar</span>
             </Button>
           )}
 
@@ -245,17 +246,18 @@ export default function TiendaOnlinePage() {
             size="sm"
             onClick={handleSaveDraft}
             disabled={saving}
-            className="text-xs gap-1.5"
+            className="text-xs gap-1.5 flex-1 sm:flex-initial justify-center"
           >
             {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
-            Guardar Borrador
+            <span className="hidden sm:inline">Guardar Borrador</span>
+            <span className="sm:hidden">Guardar</span>
           </Button>
 
           <Button
             size="sm"
             onClick={handlePublish}
             disabled={publishing}
-            className="text-xs gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-xs"
+            className="text-xs gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-xs w-full sm:w-auto justify-center"
           >
             {publishing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
             Publicar en Mi Tienda
@@ -307,18 +309,18 @@ export default function TiendaOnlinePage() {
 
       {/* Tabs Principales */}
       <Tabs value={tab} onValueChange={setTab} className="space-y-6">
-        <TabsList className="bg-muted p-1 rounded-xl">
-          <TabsTrigger value="galeria" className="text-xs sm:text-sm font-semibold gap-2">
+        <TabsList className="bg-muted p-1 rounded-xl w-full flex overflow-x-auto justify-start sm:justify-center scrollbar-none">
+          <TabsTrigger value="galeria" className="text-xs sm:text-sm font-semibold gap-1.5 sm:gap-2 flex-1 sm:flex-initial whitespace-nowrap">
             <Layout className="h-4 w-4" />
-            Galería de Plantillas
+            Galería
           </TabsTrigger>
-          <TabsTrigger value="personalizar" className="text-xs sm:text-sm font-semibold gap-2">
+          <TabsTrigger value="personalizar" className="text-xs sm:text-sm font-semibold gap-1.5 sm:gap-2 flex-1 sm:flex-initial whitespace-nowrap">
             <Palette className="h-4 w-4" />
-            Personalizar Tema
+            Personalizar
           </TabsTrigger>
-          <TabsTrigger value="preview" className="text-xs sm:text-sm font-semibold gap-2">
+          <TabsTrigger value="preview" className="text-xs sm:text-sm font-semibold gap-1.5 sm:gap-2 flex-1 sm:flex-initial whitespace-nowrap">
             <Eye className="h-4 w-4" />
-            Vista Previa en Vivo
+            Vista Previa
           </TabsTrigger>
         </TabsList>
 

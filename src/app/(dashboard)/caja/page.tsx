@@ -261,12 +261,12 @@ export default function CajaPage() {
         </div>
 
         {sesionActiva ? (
-          <div className="flex items-center gap-2">
+          <div className="grid grid-cols-1 sm:flex sm:items-center gap-2 w-full sm:w-auto">
             <Button
               variant="outline"
               size="sm"
               onClick={() => setOpenModalMovimiento(true)}
-              className="gap-1.5 text-xs"
+              className="gap-1.5 text-xs w-full sm:w-auto justify-center"
             >
               Movimiento de Efectivo (+ / -)
             </Button>
@@ -277,14 +277,14 @@ export default function CajaPage() {
                 setMontoContado(String(saldoEsperado));
                 setOpenModalCierre(true);
               }}
-              className="gap-1.5 text-xs shadow-sm"
+              className="gap-1.5 text-xs shadow-sm w-full sm:w-auto justify-center"
             >
               <Lock className="h-3.5 w-3.5" />
               Cerrar Turno / Arqueo
             </Button>
           </div>
         ) : (
-          <Button onClick={() => setOpenModalApertura(true)} className="gap-2 shadow-sm">
+          <Button onClick={() => setOpenModalApertura(true)} className="gap-2 shadow-sm w-full sm:w-auto justify-center">
             <Unlock className="h-4 w-4" />
             Abrir Turno de Caja
           </Button>

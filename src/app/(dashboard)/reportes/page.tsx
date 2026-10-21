@@ -144,10 +144,10 @@ export default function ReportesPage() {
         </div>
 
         {/* Filtro de Periodo */}
-        <div className="flex items-center gap-1.5 bg-background border border-border p-1 rounded-xl">
+        <div className="flex items-center gap-1.5 bg-background border border-border p-1 rounded-xl w-full sm:w-auto overflow-x-auto scrollbar-none">
           {[
             { id: "hoy", label: "Hoy" },
-            { id: "7dias", label: "Últimos 7 días" },
+            { id: "7dias", label: "7 días" },
             { id: "mes", label: "Este mes" },
             { id: "todos", label: "Todo" },
           ].map((p) => (
@@ -155,7 +155,7 @@ export default function ReportesPage() {
               key={p.id}
               onClick={() => setPeriodo(p.id as any)}
               className={cn(
-                "px-3 py-1.5 rounded-lg text-xs font-semibold transition-all",
+                "px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap flex-1 sm:flex-initial text-center cursor-pointer",
                 periodo === p.id
                   ? "bg-primary text-primary-foreground shadow-xs"
                   : "text-muted-foreground hover:text-foreground"

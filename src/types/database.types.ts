@@ -685,6 +685,10 @@ export type Database = {
           modulos_override: Json
           moneda: string | null
           negocio_id: string
+          plantilla_id: string
+          plantilla_config: Json
+          plantilla_draft: Json | null
+          plantilla_updated_at: string
           rut: string | null
           telefono: string | null
         }
@@ -698,6 +702,10 @@ export type Database = {
           modulos_override?: Json
           moneda?: string | null
           negocio_id: string
+          plantilla_id?: string
+          plantilla_config?: Json
+          plantilla_draft?: Json | null
+          plantilla_updated_at?: string
           rut?: string | null
           telefono?: string | null
         }
@@ -711,6 +719,10 @@ export type Database = {
           modulos_override?: Json
           moneda?: string | null
           negocio_id?: string
+          plantilla_id?: string
+          plantilla_config?: Json
+          plantilla_draft?: Json | null
+          plantilla_updated_at?: string
           rut?: string | null
           telefono?: string | null
         }

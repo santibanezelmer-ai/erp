@@ -1,19 +1,27 @@
 import { NextResponse } from "next/server";
+import { probarConexionAPIGateway } from "@/lib/apigateway";
 import { probarConexionLibreDTE } from "@/lib/libredte";
 
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { hash } = body;
+    const { token, hash, proveedor = "apigateway" } = body;
+    const credencial = token || hash;
 
-    if (!hash || typeof hash !== "string") {
+    if (!credencial || typeof credencial !== "string") {
       return NextResponse.json(
-        { ok: false, mensaje: "Se requiere el Token / Hash de LibreDTE" },
+        { ok: false, mensaje: "Se requiere el Token de API Gateway" },
         { status: 400 }
       );
     }
 
-    const resultado = await probarConexionLibreDTE(hash);
+    if (proveedor === "libredte") {
+      const resultado = await probarConexionLibreDTE(credencial);
+      return NextResponse.json(resultado);
+    }
+
+    // Por defecto probar con API Gateway
+    const resultado = await probarConexionAPIGateway(credencial);
     return NextResponse.json(resultado);
   } catch (err: any) {
     return NextResponse.json(

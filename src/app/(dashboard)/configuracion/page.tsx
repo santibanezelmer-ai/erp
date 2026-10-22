@@ -106,17 +106,21 @@ export default function ConfiguracionPage() {
   const [productosCount, setProductosCount] = useState<number>(0);
   const [dominioBase, setDominioBase] = useState("operixerp.cl");
 
-  // Estados Facturación LibreDTE (Chile - SII)
+  // Estados Facturación Fiscal (API Gateway / LibreDTE - SII)
   const [dteActivo, setDteActivo] = useState(false);
-  const [dteHash, setDteHash] = useState("");
+  const [dteProveedor, setDteProveedor] = useState<"apigateway" | "libredte">("apigateway");
+  const [dteHash, setDteHash] = useState(""); // Token de API Gateway o Hash de LibreDTE
   const [dteRutEmisor, setDteRutEmisor] = useState("");
+  const [dteRutVendedor, setDteRutVendedor] = useState("");
+  const [dteClaveSII, setDteClaveSII] = useState("");
+  const [dteCdgSIISucur, setDteCdgSIISucur] = useState("0");
   const [dteRazonSocial, setDteRazonSocial] = useState("");
   const [dteGiro, setDteGiro] = useState("");
   const [dteActeco, setDteActeco] = useState("477111");
   const [dteDireccion, setDteDireccion] = useState("");
   const [dteComuna, setDteComuna] = useState("Santiago");
   const [dteCiudad, setDteCiudad] = useState("Santiago");
-  const [dteAmbiente, setDteAmbiente] = useState<"certificacion" | "produccion">("certificacion");
+  const [dteAmbiente, setDteAmbiente] = useState<"certificacion" | "produccion">("produccion");
   const [dteTipoDefault, setDteTipoDefault] = useState<39 | 33>(39);
   const [dteEmisionAuto, setDteEmisionAuto] = useState(true);
 
@@ -273,7 +277,7 @@ export default function ConfiguracionPage() {
     }
   };
 
-  // Cargar configuración de LibreDTE
+  // Cargar configuración de Facturación Electrónica (API Gateway / LibreDTE)
   const cargarConfiguracionFiscal = async () => {
     if (!negocio?.id) return;
     const supabase = createClient();
@@ -286,8 +290,12 @@ export default function ConfiguracionPage() {
 
       const c = (data?.libredte_config as any) || {};
       setDteActivo(Boolean(c.activo));
-      setDteHash(c.hash || "");
+      setDteProveedor(c.proveedor || (c.token ? "apigateway" : "apigateway"));
+      setDteHash(c.token || c.hash || "");
       setDteRutEmisor(c.rutEmisor || data?.rut || (negocio as any).rut || "");
+      setDteRutVendedor(c.rutVendedor || c.rutEmisor || data?.rut || (negocio as any).rut || "");
+      setDteClaveSII(c.claveSII || "");
+      setDteCdgSIISucur(String(c.cdgSIISucur ?? "0"));
       setDteRazonSocial(c.razonSocial || data?.business_name || negocio.nombre || "");
       setDteGiro(c.giro || "");
       setDteActeco(c.acteco ? String(c.acteco) : "477111");
@@ -302,10 +310,10 @@ export default function ConfiguracionPage() {
     }
   };
 
-  // Probar conexión con LibreDTE API
+  // Probar conexión con API Gateway
   const probarConexionDte = async () => {
     if (!dteHash.trim()) {
-      toast.error("Por favor ingresa tu Token / Hash de LibreDTE");
+      toast.error("Por favor ingresa tu Token de API Gateway");
       return;
     }
     setProbandoDte(true);
@@ -314,7 +322,7 @@ export default function ConfiguracionPage() {
       const res = await fetch("/api/libredte/test", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ hash: dteHash.trim() }),
+        body: JSON.stringify({ token: dteHash.trim(), proveedor: dteProveedor }),
       });
       const data = await res.json();
       setTestDteResultado(data);
@@ -324,7 +332,7 @@ export default function ConfiguracionPage() {
         toast.error(data.mensaje);
       }
     } catch (err: any) {
-      const msg = err.message || "Error al conectar con LibreDTE";
+      const msg = err.message || "Error al conectar con API Gateway";
       setTestDteResultado({ ok: false, mensaje: msg });
       toast.error(msg);
     } finally {
@@ -332,13 +340,13 @@ export default function ConfiguracionPage() {
     }
   };
 
-  // Guardar configuración fiscal LibreDTE
+  // Guardar configuración fiscal
   const guardarConfiguracionFiscal = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!negocio?.id) return;
 
     if (dteActivo && !dteHash.trim()) {
-      toast.error("Para activar la facturación debes ingresar tu Hash / Token de LibreDTE");
+      toast.error("Para activar la facturación debes ingresar tu Token de API Gateway");
       return;
     }
 
@@ -347,13 +355,23 @@ export default function ConfiguracionPage() {
       return;
     }
 
+    if (dteActivo && dteProveedor === "apigateway" && !dteClaveSII.trim()) {
+      toast.error("Debes ingresar la clave tributaria del SII para emitir en eBoleta");
+      return;
+    }
+
     setSavingDte(true);
     const supabase = createClient();
     try {
       const libredtePayload = {
         activo: dteActivo,
+        proveedor: dteProveedor,
+        token: dteHash.trim(),
         hash: dteHash.trim(),
         rutEmisor: limpiarRut(dteRutEmisor.trim()),
+        rutVendedor: limpiarRut(dteRutVendedor.trim() || dteRutEmisor.trim()),
+        claveSII: dteClaveSII.trim(),
+        cdgSIISucur: Number(dteCdgSIISucur) || 0,
         razonSocial: dteRazonSocial.trim(),
         giro: dteGiro.trim(),
         acteco: Number(dteActeco) || 477111,
@@ -380,7 +398,7 @@ export default function ConfiguracionPage() {
         );
 
       if (error) throw error;
-      toast.success("¡Configuración fiscal de LibreDTE guardada exitosamente!");
+      toast.success("¡Configuración fiscal guardada exitosamente!");
     } catch (err: any) {
       toast.error(err.message || "Error al guardar configuración fiscal");
     } finally {
@@ -828,28 +846,28 @@ export default function ConfiguracionPage() {
         </CardContent>
       </Card>
 
-      {/* Facturación Electrónica SII - LibreDTE */}
+      {/* Facturación Electrónica SII - API Gateway / LibreDTE */}
       <Card className="border-primary/20 shadow-xs">
         <CardHeader className="pb-4 border-b border-border">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
               <CardTitle className="text-base font-bold flex items-center gap-2">
                 <Landmark className="h-5 w-5 text-primary" />
-                <span>🇨🇱 Facturación Electrónica SII (LibreDTE)</span>
+                <span>🇨🇱 Facturación Electrónica SII (Boleta Oficial)</span>
               </CardTitle>
               <CardDescription>
-                Emite Boletas (DTE 39) y Facturas (DTE 33) oficiales ante el SII de Chile conectando tu cuenta de LibreDTE.
+                Emite Boletas Electrónicas (DTE 39) válidas ante el SII de Chile en tiempo real al cobrar en el POS.
               </CardDescription>
             </div>
 
             <div className="flex items-center gap-2 bg-muted/50 px-3 py-1.5 rounded-xl border border-border">
               <span className="text-xs font-semibold text-foreground">
-                {dteActivo ? "LibreDTE Activo" : "LibreDTE Desactivado"}
+                {dteActivo ? "Facturación Activa" : "Facturación Desactivada"}
               </span>
               <Switch
                 checked={dteActivo}
                 onCheckedChange={setDteActivo}
-                aria-label="Activar LibreDTE"
+                aria-label="Activar Facturación Electrónica"
               />
             </div>
           </div>
@@ -857,16 +875,77 @@ export default function ConfiguracionPage() {
 
         <CardContent className="space-y-5 pt-5">
           <form onSubmit={guardarConfiguracionFiscal} className="space-y-5">
-            {/* 1. Credencial API de LibreDTE */}
-            <div className="p-4 rounded-xl border border-border bg-muted/20 space-y-3">
+            {/* 1. Proveedor de Facturación */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 rounded-xl border border-border bg-muted/20">
+              <div className="space-y-1.5 sm:col-span-2">
+                <Label className="text-xs font-bold text-foreground">Proveedor de Conexión SII</Label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                  <div
+                    onClick={() => setDteProveedor("apigateway")}
+                    className={cn(
+                      "p-3 rounded-lg border cursor-pointer transition-all flex flex-col justify-between",
+                      dteProveedor === "apigateway"
+                        ? "border-primary bg-primary/5 text-primary font-semibold ring-1 ring-primary"
+                        : "border-border hover:border-muted-foreground/40 bg-background text-foreground"
+                    )}
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs font-bold flex items-center gap-1.5">
+                        <CheckCircle2 className={cn("h-4 w-4", dteProveedor === "apigateway" ? "text-primary" : "text-muted-foreground")} />
+                        API Gateway (eBoleta SII)
+                      </span>
+                      <span className="text-[10px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 px-2 py-0.5 rounded-full font-bold">
+                        Recomendado
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-muted-foreground font-normal">
+                      Emisión directa mediante el portal eBoleta del SII. No requiere certificado .pfx ni folios CAF manuales.
+                    </p>
+                  </div>
+
+                  <div
+                    onClick={() => setDteProveedor("libredte")}
+                    className={cn(
+                      "p-3 rounded-lg border cursor-pointer transition-all flex flex-col justify-between",
+                      dteProveedor === "libredte"
+                        ? "border-primary bg-primary/5 text-primary font-semibold ring-1 ring-primary"
+                        : "border-border hover:border-muted-foreground/40 bg-background text-foreground"
+                    )}
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs font-bold flex items-center gap-1.5">
+                        <CheckCircle2 className={cn("h-4 w-4", dteProveedor === "libredte" ? "text-primary" : "text-muted-foreground")} />
+                        LibreDTE (libredte.cl)
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-muted-foreground font-normal">
+                      Plataforma DTE clásica. Requiere firma digital (.pfx) cargada en LibreDTE y folios autorizados.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* 2. Credenciales del Proveedor */}
+            <div className="p-4 rounded-xl border border-border bg-muted/20 space-y-4">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <div>
                   <Label htmlFor="dte-hash" className="text-xs font-bold flex items-center gap-1.5">
                     <KeyRound className="h-3.5 w-3.5 text-primary" />
-                    <span>Token / Hash Personal de LibreDTE *</span>
+                    <span>
+                      {dteProveedor === "apigateway" ? "Token de Conexión (apigateway.cl) *" : "Token / Hash de LibreDTE *"}
+                    </span>
                   </Label>
                   <p className="text-[11px] text-muted-foreground mt-0.5">
-                    Se obtiene en <a href="https://libredte.cl" target="_blank" rel="noopener noreferrer" className="text-primary underline font-medium">libredte.cl</a> ingresando a <strong>Mi Cuenta &gt; Datos de Usuario &gt; Hash</strong>.
+                    {dteProveedor === "apigateway" ? (
+                      <>
+                        Obtén tu token en <a href="https://apigateway.cl" target="_blank" rel="noopener noreferrer" className="text-primary underline font-medium">apigateway.cl</a> en la sección <strong>Conexiones &gt; Operix POS &gt; Token</strong>.
+                      </>
+                    ) : (
+                      <>
+                        Se obtiene en <a href="https://libredte.cl" target="_blank" rel="noopener noreferrer" className="text-primary underline font-medium">libredte.cl</a> ingresando a <strong>Mi Cuenta &gt; Datos de Usuario &gt; Hash</strong>.
+                      </>
+                    )}
                   </p>
                 </div>
 
@@ -892,7 +971,11 @@ export default function ConfiguracionPage() {
                     setDteHash(e.target.value);
                     setTestDteResultado(null);
                   }}
-                  placeholder="Pega aquí tu Hash de LibreDTE (ej: a1b2c3d4e5f6...)"
+                  placeholder={
+                    dteProveedor === "apigateway"
+                      ? "Pega aquí el Token de API Gateway (ej: 42adfa481e14936...)"
+                      : "Pega aquí tu Hash de LibreDTE (ej: a1b2c3d4e5f6...)"
+                  }
                   className="bg-background font-mono text-xs pr-10"
                 />
               </div>
@@ -914,9 +997,66 @@ export default function ConfiguracionPage() {
                   <span>{testDteResultado.mensaje}</span>
                 </div>
               )}
+
+              {/* Si es API Gateway, requerir Clave SII y RUT Vendedor */}
+              {dteProveedor === "apigateway" && (
+                <div className="pt-3 border-t border-border grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="dte-rut-vendedor" className="text-xs font-bold">
+                      RUT Usuario / Vendedor SII *
+                    </Label>
+                    <Input
+                      id="dte-rut-vendedor"
+                      placeholder="12.345.678-9"
+                      value={dteRutVendedor}
+                      onChange={(e) => setDteRutVendedor(e.target.value)}
+                      onBlur={() => setDteRutVendedor(limpiarRut(dteRutVendedor))}
+                      className="bg-background text-xs font-mono"
+                      required={dteActivo}
+                    />
+                    <p className="text-[10px] text-muted-foreground">
+                      RUT autorizado para emitir en sii.cl (o representante).
+                    </p>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label htmlFor="dte-clave-sii" className="text-xs font-bold">
+                      Clave Tributaria del SII *
+                    </Label>
+                    <Input
+                      id="dte-clave-sii"
+                      type="password"
+                      placeholder="••••••••"
+                      value={dteClaveSII}
+                      onChange={(e) => setDteClaveSII(e.target.value)}
+                      className="bg-background text-xs font-mono"
+                      required={dteActivo}
+                    />
+                    <p className="text-[10px] text-muted-foreground">
+                      Clave con la que ingresas a sii.cl para firmar eBoleta.
+                    </p>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label htmlFor="dte-cdg-sucur" className="text-xs font-bold">
+                      Código Sucursal SII
+                    </Label>
+                    <Input
+                      id="dte-cdg-sucur"
+                      placeholder="0"
+                      value={dteCdgSIISucur}
+                      onChange={(e) => setDteCdgSIISucur(e.target.value.replace(/[^0-9]/g, ""))}
+                      className="bg-background text-xs font-mono"
+                    />
+                    <p className="text-[10px] text-muted-foreground">
+                      0 para Casa Matriz o código asignado por el SII.
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
 
-            {/* 2. Datos de la Empresa Emisora ante el SII */}
+            {/* 3. Datos de la Empresa Emisora ante el SII */}
             <div className="space-y-3">
               <span className="text-xs font-bold text-foreground uppercase tracking-wider block">
                 Datos de la Empresa Emisora (SII)
@@ -924,56 +1064,54 @@ export default function ConfiguracionPage() {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
-                  <Label htmlFor="dte-rut">RUT Emisor *</Label>
+                  <Label htmlFor="dte-rut">RUT Emisor (Empresa) *</Label>
                   <Input
                     id="dte-rut"
                     placeholder="76.123.456-7"
                     value={dteRutEmisor}
                     onChange={(e) => setDteRutEmisor(e.target.value)}
                     onBlur={() => setDteRutEmisor(limpiarRut(dteRutEmisor))}
-                    className="bg-background text-xs"
+                    className="bg-background text-xs font-mono"
                     required={dteActivo}
                   />
-                  <p className="text-[10px] text-muted-foreground">RUT de la empresa autorizada en el SII.</p>
+                  <p className="text-[10px] text-muted-foreground">RUT de la empresa titular ante el SII.</p>
                 </div>
 
                 <div className="space-y-1.5">
                   <Label htmlFor="dte-rzn">Razón Social *</Label>
                   <Input
                     id="dte-rzn"
-                    placeholder="Mi Empresa SpA o Juan Pérez Pérez"
+                    placeholder="Mi Empresa SpA o Juan Pérez"
                     value={dteRazonSocial}
                     onChange={(e) => setDteRazonSocial(e.target.value)}
                     className="bg-background text-xs"
                     required={dteActivo}
                   />
-                  <p className="text-[10px] text-muted-foreground">Nombre legal según iniciación de actividades.</p>
+                  <p className="text-[10px] text-muted-foreground">Razón social según iniciación de actividades.</p>
                 </div>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
-                  <Label htmlFor="dte-giro">Giro Comercial *</Label>
+                  <Label htmlFor="dte-giro">Giro Comercial</Label>
                   <Input
                     id="dte-giro"
-                    placeholder="Venta al por menor de prendas de vestir, cafetería..."
+                    placeholder="Venta al por menor de prendas, abarrotes, cafetería..."
                     value={dteGiro}
                     onChange={(e) => setDteGiro(e.target.value)}
                     className="bg-background text-xs"
-                    required={dteActivo}
                   />
                   <p className="text-[10px] text-muted-foreground">Giro registrado ante el SII.</p>
                 </div>
 
                 <div className="space-y-1.5">
-                  <Label htmlFor="dte-acteco">Código Actividad Económica (Acteco SII) *</Label>
+                  <Label htmlFor="dte-acteco">Código Actividad Económica (Acteco)</Label>
                   <Input
                     id="dte-acteco"
                     placeholder="477111"
                     value={dteActeco}
                     onChange={(e) => setDteActeco(e.target.value.replace(/[^0-9]/g, ""))}
                     className="bg-background text-xs font-mono"
-                    required={dteActivo}
                   />
                   <p className="text-[10px] text-muted-foreground">Código de 6 dígitos del SII (ej: 477111, 561000).</p>
                 </div>
@@ -992,14 +1130,13 @@ export default function ConfiguracionPage() {
                 </div>
 
                 <div className="space-y-1.5">
-                  <Label htmlFor="dte-com">Comuna *</Label>
+                  <Label htmlFor="dte-com">Comuna</Label>
                   <Input
                     id="dte-com"
-                    placeholder="Providencia, Santiago, Viña del Mar..."
+                    placeholder="Santiago, Providencia, etc."
                     value={dteComuna}
                     onChange={(e) => setDteComuna(e.target.value)}
                     className="bg-background text-xs"
-                    required={dteActivo}
                   />
                 </div>
 
@@ -1016,28 +1153,13 @@ export default function ConfiguracionPage() {
               </div>
             </div>
 
-            {/* 3. Modalidad y Opciones de Emisión en POS */}
+            {/* 4. Modalidad y Opciones de Emisión en POS */}
             <div className="p-4 rounded-xl border border-border bg-card space-y-4">
               <span className="text-xs font-bold text-foreground uppercase tracking-wider block">
                 Comportamiento en Punto de Venta (POS)
               </span>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <Label className="text-xs">Ambiente de Operación</Label>
-                  <select
-                    value={dteAmbiente}
-                    onChange={(e) => setDteAmbiente(e.target.value as any)}
-                    className="w-full text-xs rounded-lg border border-border bg-background p-2 font-medium"
-                  >
-                    <option value="certificacion">🧪 Certificación (Pruebas / Sandbox SII)</option>
-                    <option value="produccion">🚀 Producción (Documentos Oficiales Reales)</option>
-                  </select>
-                  <p className="text-[10px] text-muted-foreground">
-                    Usa <em>Certificación</em> para ensayar sin declarar impuestos y <em>Producción</em> cuando tu empresa ya esté autorizada por el SII.
-                  </p>
-                </div>
-
                 <div className="space-y-1.5">
                   <Label className="text-xs">Documento por Defecto</Label>
                   <select
@@ -1052,6 +1174,21 @@ export default function ConfiguracionPage() {
                     Documento tributario seleccionado automáticamente al abrir la ventana de cobro.
                   </p>
                 </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Ambiente de Operación</Label>
+                  <select
+                    value={dteAmbiente}
+                    onChange={(e) => setDteAmbiente(e.target.value as any)}
+                    className="w-full text-xs rounded-lg border border-border bg-background p-2 font-medium"
+                  >
+                    <option value="produccion">🚀 Producción (eBoleta SII Oficial)</option>
+                    <option value="certificacion">🧪 Certificación (Pruebas / Sandbox)</option>
+                  </select>
+                  <p className="text-[10px] text-muted-foreground">
+                    eBoleta de API Gateway opera directamente en producción con el portal del SII.
+                  </p>
+                </div>
               </div>
 
               <div className="flex items-center justify-between pt-2 border-t border-border/60">
@@ -1060,7 +1197,7 @@ export default function ConfiguracionPage() {
                     Emisión Automática al Cobrar en POS
                   </span>
                   <span className="text-[11px] text-muted-foreground block">
-                    Al presionar "Cobrar" en el POS, generar y timbrar la Boleta Electrónica en LibreDTE en el mismo instante y mostrar su enlace PDF con folio del SII.
+                    Al presionar "Cobrar" en el POS, generar y timbrar la Boleta Electrónica en el SII inmediatamente y obtener su Folio y enlace a PDF oficial.
                   </span>
                 </div>
                 <Switch

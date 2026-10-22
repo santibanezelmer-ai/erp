@@ -30,8 +30,20 @@ import {
   Globe,
   ExternalLink,
   Check,
+  FileText,
+  FileCheck,
+  AlertCircle,
+  KeyRound,
+  Landmark,
+  HelpCircle,
+  Send,
+  Receipt,
+  Sparkles,
+  Save,
 } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
+import { limpiarRut } from "@/lib/libredte";
 
 interface Colaborador {
   id: string;
@@ -94,6 +106,25 @@ export default function ConfiguracionPage() {
   const [productosCount, setProductosCount] = useState<number>(0);
   const [dominioBase, setDominioBase] = useState("operixerp.cl");
 
+  // Estados Facturación LibreDTE (Chile - SII)
+  const [dteActivo, setDteActivo] = useState(false);
+  const [dteHash, setDteHash] = useState("");
+  const [dteRutEmisor, setDteRutEmisor] = useState("");
+  const [dteRazonSocial, setDteRazonSocial] = useState("");
+  const [dteGiro, setDteGiro] = useState("");
+  const [dteActeco, setDteActeco] = useState("477111");
+  const [dteDireccion, setDteDireccion] = useState("");
+  const [dteComuna, setDteComuna] = useState("Santiago");
+  const [dteCiudad, setDteCiudad] = useState("Santiago");
+  const [dteAmbiente, setDteAmbiente] = useState<"certificacion" | "produccion">("certificacion");
+  const [dteTipoDefault, setDteTipoDefault] = useState<39 | 33>(39);
+  const [dteEmisionAuto, setDteEmisionAuto] = useState(true);
+
+  // Estados de prueba y guardado DTE
+  const [probandoDte, setProbandoDte] = useState(false);
+  const [testDteResultado, setTestDteResultado] = useState<{ ok: boolean; mensaje: string } | null>(null);
+  const [savingDte, setSavingDte] = useState(false);
+
   useEffect(() => {
     if (negocio) {
       setNombreNegocio(negocio.nombre || "");
@@ -110,6 +141,7 @@ export default function ConfiguracionPage() {
       setSlug(negocio.slug || "");
       cargarEquipo();
       cargarConteoProductos();
+      cargarConfiguracionFiscal();
     }
     if (typeof window !== "undefined") {
       const h = window.location.host.split(":")[0];
@@ -238,6 +270,121 @@ export default function ConfiguracionPage() {
       toast.error(err.message || "Error al subir la imagen");
     } finally {
       setUploadingLogo(false);
+    }
+  };
+
+  // Cargar configuración de LibreDTE
+  const cargarConfiguracionFiscal = async () => {
+    if (!negocio?.id) return;
+    const supabase = createClient();
+    try {
+      const { data } = await supabase
+        .from("configuracion")
+        .select("libredte_config, rut, business_name, direccion")
+        .eq("negocio_id", negocio.id)
+        .maybeSingle();
+
+      const c = (data?.libredte_config as any) || {};
+      setDteActivo(Boolean(c.activo));
+      setDteHash(c.hash || "");
+      setDteRutEmisor(c.rutEmisor || data?.rut || (negocio as any).rut || "");
+      setDteRazonSocial(c.razonSocial || data?.business_name || negocio.nombre || "");
+      setDteGiro(c.giro || "");
+      setDteActeco(c.acteco ? String(c.acteco) : "477111");
+      setDteDireccion(c.direccion || data?.direccion || (negocio as any).direccion || "");
+      setDteComuna(c.comuna || "Santiago");
+      setDteCiudad(c.ciudad || c.comuna || "Santiago");
+      setDteAmbiente(c.ambiente === "produccion" ? "produccion" : "certificacion");
+      setDteTipoDefault(Number(c.tipoDteDefault) === 33 ? 33 : 39);
+      setDteEmisionAuto(c.emisionAutomatica !== false);
+    } catch (err) {
+      console.error("Error al cargar configuracion fiscal:", err);
+    }
+  };
+
+  // Probar conexión con LibreDTE API
+  const probarConexionDte = async () => {
+    if (!dteHash.trim()) {
+      toast.error("Por favor ingresa tu Token / Hash de LibreDTE");
+      return;
+    }
+    setProbandoDte(true);
+    setTestDteResultado(null);
+    try {
+      const res = await fetch("/api/libredte/test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ hash: dteHash.trim() }),
+      });
+      const data = await res.json();
+      setTestDteResultado(data);
+      if (data.ok) {
+        toast.success(data.mensaje);
+      } else {
+        toast.error(data.mensaje);
+      }
+    } catch (err: any) {
+      const msg = err.message || "Error al conectar con LibreDTE";
+      setTestDteResultado({ ok: false, mensaje: msg });
+      toast.error(msg);
+    } finally {
+      setProbandoDte(false);
+    }
+  };
+
+  // Guardar configuración fiscal LibreDTE
+  const guardarConfiguracionFiscal = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!negocio?.id) return;
+
+    if (dteActivo && !dteHash.trim()) {
+      toast.error("Para activar la facturación debes ingresar tu Hash / Token de LibreDTE");
+      return;
+    }
+
+    if (dteActivo && !dteRutEmisor.trim()) {
+      toast.error("Debes ingresar el RUT emisor de la empresa ante el SII");
+      return;
+    }
+
+    setSavingDte(true);
+    const supabase = createClient();
+    try {
+      const libredtePayload = {
+        activo: dteActivo,
+        hash: dteHash.trim(),
+        rutEmisor: limpiarRut(dteRutEmisor.trim()),
+        razonSocial: dteRazonSocial.trim(),
+        giro: dteGiro.trim(),
+        acteco: Number(dteActeco) || 477111,
+        direccion: dteDireccion.trim(),
+        comuna: dteComuna.trim(),
+        ciudad: dteCiudad.trim(),
+        ambiente: dteAmbiente,
+        tipoDteDefault: Number(dteTipoDefault),
+        emisionAutomatica: dteEmisionAuto,
+        updated_at: new Date().toISOString(),
+      };
+
+      const { error } = await supabase
+        .from("configuracion")
+        .upsert(
+          {
+            negocio_id: negocio.id,
+            libredte_config: libredtePayload,
+            rut: limpiarRut(dteRutEmisor.trim()) || undefined,
+            business_name: dteRazonSocial.trim() || undefined,
+            direccion: dteDireccion.trim() || undefined,
+          },
+          { onConflict: "negocio_id" }
+        );
+
+      if (error) throw error;
+      toast.success("¡Configuración fiscal de LibreDTE guardada exitosamente!");
+    } catch (err: any) {
+      toast.error(err.message || "Error al guardar configuración fiscal");
+    } finally {
+      setSavingDte(false);
     }
   };
 
@@ -678,6 +825,258 @@ export default function ConfiguracionPage() {
               </button>
             </div>
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Facturación Electrónica SII - LibreDTE */}
+      <Card className="border-primary/20 shadow-xs">
+        <CardHeader className="pb-4 border-b border-border">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <CardTitle className="text-base font-bold flex items-center gap-2">
+                <Landmark className="h-5 w-5 text-primary" />
+                <span>🇨🇱 Facturación Electrónica SII (LibreDTE)</span>
+              </CardTitle>
+              <CardDescription>
+                Emite Boletas (DTE 39) y Facturas (DTE 33) oficiales ante el SII de Chile conectando tu cuenta de LibreDTE.
+              </CardDescription>
+            </div>
+
+            <div className="flex items-center gap-2 bg-muted/50 px-3 py-1.5 rounded-xl border border-border">
+              <span className="text-xs font-semibold text-foreground">
+                {dteActivo ? "LibreDTE Activo" : "LibreDTE Desactivado"}
+              </span>
+              <Switch
+                checked={dteActivo}
+                onCheckedChange={setDteActivo}
+                aria-label="Activar LibreDTE"
+              />
+            </div>
+          </div>
+        </CardHeader>
+
+        <CardContent className="space-y-5 pt-5">
+          <form onSubmit={guardarConfiguracionFiscal} className="space-y-5">
+            {/* 1. Credencial API de LibreDTE */}
+            <div className="p-4 rounded-xl border border-border bg-muted/20 space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div>
+                  <Label htmlFor="dte-hash" className="text-xs font-bold flex items-center gap-1.5">
+                    <KeyRound className="h-3.5 w-3.5 text-primary" />
+                    <span>Token / Hash Personal de LibreDTE *</span>
+                  </Label>
+                  <p className="text-[11px] text-muted-foreground mt-0.5">
+                    Se obtiene en <a href="https://libredte.cl" target="_blank" rel="noopener noreferrer" className="text-primary underline font-medium">libredte.cl</a> ingresando a <strong>Mi Cuenta &gt; Datos de Usuario &gt; Hash</strong>.
+                  </p>
+                </div>
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={probarConexionDte}
+                  disabled={probandoDte || !dteHash.trim()}
+                  className="h-8 text-xs gap-1.5 shrink-0 border-primary/40 text-primary hover:bg-primary/10 font-semibold"
+                >
+                  {probandoDte ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+                  <span>{probandoDte ? "Verificando..." : "Probar Conexión"}</span>
+                </Button>
+              </div>
+
+              <div className="relative">
+                <Input
+                  id="dte-hash"
+                  type="password"
+                  value={dteHash}
+                  onChange={(e) => {
+                    setDteHash(e.target.value);
+                    setTestDteResultado(null);
+                  }}
+                  placeholder="Pega aquí tu Hash de LibreDTE (ej: a1b2c3d4e5f6...)"
+                  className="bg-background font-mono text-xs pr-10"
+                />
+              </div>
+
+              {testDteResultado && (
+                <div
+                  className={cn(
+                    "text-xs p-3 rounded-lg border flex items-center gap-2",
+                    testDteResultado.ok
+                      ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-700 dark:text-emerald-400"
+                      : "bg-destructive/10 border-destructive/30 text-destructive"
+                  )}
+                >
+                  {testDteResultado.ok ? (
+                    <CheckCircle2 className="h-4 w-4 shrink-0" />
+                  ) : (
+                    <AlertCircle className="h-4 w-4 shrink-0" />
+                  )}
+                  <span>{testDteResultado.mensaje}</span>
+                </div>
+              )}
+            </div>
+
+            {/* 2. Datos de la Empresa Emisora ante el SII */}
+            <div className="space-y-3">
+              <span className="text-xs font-bold text-foreground uppercase tracking-wider block">
+                Datos de la Empresa Emisora (SII)
+              </span>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <Label htmlFor="dte-rut">RUT Emisor *</Label>
+                  <Input
+                    id="dte-rut"
+                    placeholder="76.123.456-7"
+                    value={dteRutEmisor}
+                    onChange={(e) => setDteRutEmisor(e.target.value)}
+                    onBlur={() => setDteRutEmisor(limpiarRut(dteRutEmisor))}
+                    className="bg-background text-xs"
+                    required={dteActivo}
+                  />
+                  <p className="text-[10px] text-muted-foreground">RUT de la empresa autorizada en el SII.</p>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="dte-rzn">Razón Social *</Label>
+                  <Input
+                    id="dte-rzn"
+                    placeholder="Mi Empresa SpA o Juan Pérez Pérez"
+                    value={dteRazonSocial}
+                    onChange={(e) => setDteRazonSocial(e.target.value)}
+                    className="bg-background text-xs"
+                    required={dteActivo}
+                  />
+                  <p className="text-[10px] text-muted-foreground">Nombre legal según iniciación de actividades.</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <Label htmlFor="dte-giro">Giro Comercial *</Label>
+                  <Input
+                    id="dte-giro"
+                    placeholder="Venta al por menor de prendas de vestir, cafetería..."
+                    value={dteGiro}
+                    onChange={(e) => setDteGiro(e.target.value)}
+                    className="bg-background text-xs"
+                    required={dteActivo}
+                  />
+                  <p className="text-[10px] text-muted-foreground">Giro registrado ante el SII.</p>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="dte-acteco">Código Actividad Económica (Acteco SII) *</Label>
+                  <Input
+                    id="dte-acteco"
+                    placeholder="477111"
+                    value={dteActeco}
+                    onChange={(e) => setDteActeco(e.target.value.replace(/[^0-9]/g, ""))}
+                    className="bg-background text-xs font-mono"
+                    required={dteActivo}
+                  />
+                  <p className="text-[10px] text-muted-foreground">Código de 6 dígitos del SII (ej: 477111, 561000).</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="space-y-1.5 sm:col-span-1">
+                  <Label htmlFor="dte-dir">Dirección Casa Matriz</Label>
+                  <Input
+                    id="dte-dir"
+                    placeholder="Av. Providencia 1234"
+                    value={dteDireccion}
+                    onChange={(e) => setDteDireccion(e.target.value)}
+                    className="bg-background text-xs"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="dte-com">Comuna *</Label>
+                  <Input
+                    id="dte-com"
+                    placeholder="Providencia, Santiago, Viña del Mar..."
+                    value={dteComuna}
+                    onChange={(e) => setDteComuna(e.target.value)}
+                    className="bg-background text-xs"
+                    required={dteActivo}
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="dte-ciu">Ciudad</Label>
+                  <Input
+                    id="dte-ciu"
+                    placeholder="Santiago"
+                    value={dteCiudad}
+                    onChange={(e) => setDteCiudad(e.target.value)}
+                    className="bg-background text-xs"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* 3. Modalidad y Opciones de Emisión en POS */}
+            <div className="p-4 rounded-xl border border-border bg-card space-y-4">
+              <span className="text-xs font-bold text-foreground uppercase tracking-wider block">
+                Comportamiento en Punto de Venta (POS)
+              </span>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Ambiente de Operación</Label>
+                  <select
+                    value={dteAmbiente}
+                    onChange={(e) => setDteAmbiente(e.target.value as any)}
+                    className="w-full text-xs rounded-lg border border-border bg-background p-2 font-medium"
+                  >
+                    <option value="certificacion">🧪 Certificación (Pruebas / Sandbox SII)</option>
+                    <option value="produccion">🚀 Producción (Documentos Oficiales Reales)</option>
+                  </select>
+                  <p className="text-[10px] text-muted-foreground">
+                    Usa <em>Certificación</em> para ensayar sin declarar impuestos y <em>Producción</em> cuando tu empresa ya esté autorizada por el SII.
+                  </p>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Documento por Defecto</Label>
+                  <select
+                    value={dteTipoDefault}
+                    onChange={(e) => setDteTipoDefault(Number(e.target.value) as any)}
+                    className="w-full text-xs rounded-lg border border-border bg-background p-2 font-medium"
+                  >
+                    <option value={39}>🧾 Boleta Electrónica (DTE 39)</option>
+                    <option value={33}>📄 Factura Electrónica (DTE 33)</option>
+                  </select>
+                  <p className="text-[10px] text-muted-foreground">
+                    Documento tributario seleccionado automáticamente al abrir la ventana de cobro.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between pt-2 border-t border-border/60">
+                <div className="space-y-0.5 pr-4">
+                  <span className="text-xs font-bold text-foreground block">
+                    Emisión Automática al Cobrar en POS
+                  </span>
+                  <span className="text-[11px] text-muted-foreground block">
+                    Al presionar "Cobrar" en el POS, generar y timbrar la Boleta Electrónica en LibreDTE en el mismo instante y mostrar su enlace PDF con folio del SII.
+                  </span>
+                </div>
+                <Switch
+                  checked={dteEmisionAuto}
+                  onCheckedChange={setDteEmisionAuto}
+                />
+              </div>
+            </div>
+
+            <div className="pt-2">
+              <Button type="submit" disabled={savingDte} className="gap-2 shadow-sm font-bold">
+                {savingDte ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                <span>{savingDte ? "Guardando configuración fiscal..." : "Guardar Configuración Fiscal"}</span>
+              </Button>
+            </div>
+          </form>
         </CardContent>
       </Card>
 

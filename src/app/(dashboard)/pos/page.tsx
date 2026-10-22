@@ -32,6 +32,9 @@ import {
   Package,
   Layers,
   ChevronRight,
+  Landmark,
+  FileText,
+  ExternalLink,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { BarcodeScanner } from "@/components/BarcodeScanner";
@@ -106,7 +109,19 @@ export default function POSPage() {
     efectivoRecibido: number | null;
     vuelto: number;
     items: CartItem[];
+    dteFolio?: number;
+    dteTipo?: number;
+    dtePdfUrl?: string;
   } | null>(null);
+
+  // Estados Facturación LibreDTE
+  const [libredteConfig, setLibredteConfig] = useState<any>(null);
+  const [tipoDocumentoFiscal, setTipoDocumentoFiscal] = useState<"interno" | "boleta" | "factura">("boleta");
+  const [facturaReceptorRut, setFacturaReceptorRut] = useState("");
+  const [facturaReceptorRzn, setFacturaReceptorRzn] = useState("");
+  const [facturaReceptorGiro, setFacturaReceptorGiro] = useState("");
+  const [facturaReceptorDir, setFacturaReceptorDir] = useState("");
+  const [facturaReceptorComuna, setFacturaReceptorComuna] = useState("");
 
   // Fetch products, variants and clients
   const fetchData = async () => {
@@ -115,7 +130,7 @@ export default function POSPage() {
     const supabase = createClient();
 
     try {
-      const [prodsRes, clientesRes, varsRes] = await Promise.all([
+      const [prodsRes, clientesRes, varsRes, cfgRes] = await Promise.all([
         supabase
           .from("productos")
           .select("*")
@@ -133,11 +148,25 @@ export default function POSPage() {
           .eq("negocio_id", negocio.id)
           .eq("activo", true)
           .order("nombre", { ascending: true }),
+        supabase
+          .from("configuracion")
+          .select("libredte_config")
+          .eq("negocio_id", negocio.id)
+          .maybeSingle(),
       ]);
 
       setProductos(prodsRes.data || []);
       setClientes(clientesRes.data || []);
       setVariantes(varsRes.data || []);
+
+      const dteCfg = (cfgRes.data?.libredte_config as any) || null;
+      if (dteCfg?.activo) {
+        setLibredteConfig(dteCfg);
+        setTipoDocumentoFiscal(dteCfg.tipoDteDefault === 33 ? "factura" : "boleta");
+      } else {
+        setLibredteConfig(null);
+        setTipoDocumentoFiscal("interno");
+      }
     } catch (err: any) {
       toast.error(err.message || "Error al cargar datos del POS");
     } finally {
@@ -516,6 +545,58 @@ export default function POSPage() {
         }
       }
 
+      // Emisión de DTE en LibreDTE (SII) si está habilitado y seleccionado
+      let dteDataResult: any = null;
+      if (
+        libredteConfig?.activo &&
+        (tipoDocumentoFiscal === "boleta" || tipoDocumentoFiscal === "factura") &&
+        ventaId
+      ) {
+        try {
+          const tDteNum = tipoDocumentoFiscal === "factura" ? 33 : 39;
+          const receptorObj =
+            tipoDocumentoFiscal === "factura"
+              ? {
+                  rut: facturaReceptorRut.trim(),
+                  razonSocial: facturaReceptorRzn.trim() || "EMPRESA RECEPTORA",
+                  giro: facturaReceptorGiro.trim() || "GIRO COMERCIAL",
+                  direccion: facturaReceptorDir.trim(),
+                  comuna: facturaReceptorComuna.trim(),
+                }
+              : clienteActual
+              ? {
+                  rut: (clienteActual as any).rut || "66666666-6",
+                  razonSocial: clienteActual.nombre,
+                }
+              : undefined;
+
+          const resDte = await fetch("/api/libredte/emitir", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              ventaId,
+              negocioId: negocio.id,
+              tipoDte: tDteNum,
+              receptor: receptorObj,
+            }),
+          });
+
+          dteDataResult = await resDte.json();
+
+          if (dteDataResult?.ok) {
+            toast.success(
+              `¡${tDteNum === 33 ? "Factura" : "Boleta"} Electrónica Folio #${dteDataResult.folio} emitida ante el SII!`
+            );
+          } else {
+            toast.warning(
+              `Venta registrada, pero aviso en LibreDTE: ${dteDataResult?.error || "Revisa tus folios CAF en LibreDTE"}`
+            );
+          }
+        } catch (errDte) {
+          console.error("Error al emitir DTE:", errDte);
+        }
+      }
+
       setUltimaVenta({
         id: ventaId || `V-${Date.now().toString().slice(-6)}`,
         total,
@@ -525,6 +606,9 @@ export default function POSPage() {
         efectivoRecibido: metodoPago === "efectivo" ? Number(efectivoRecibido) : null,
         vuelto,
         items: [...cart],
+        dteFolio: dteDataResult?.folio,
+        dteTipo: dteDataResult?.tipoDte,
+        dtePdfUrl: dteDataResult?.pdfUrl,
       });
 
       setPagoModalOpen(false);
@@ -1127,6 +1211,95 @@ export default function POSPage() {
               )}
             </div>
 
+            {/* Selector de Documento Tributario (Chile - LibreDTE) */}
+            {libredteConfig?.activo && (
+              <div className="space-y-2 p-3 rounded-xl border border-primary/30 bg-primary/5">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold flex items-center gap-1.5 text-foreground">
+                    <Landmark className="h-4 w-4 text-primary" />
+                    <span>Documento Tributario (SII)</span>
+                  </span>
+                  <span className="text-[10px] font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-full uppercase">
+                    {libredteConfig.ambiente === "produccion" ? "SII Oficial" : "Certificación"}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-3 gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setTipoDocumentoFiscal("boleta")}
+                    className={cn(
+                      "py-1.5 px-2 rounded-lg text-xs font-semibold border transition-all text-center",
+                      tipoDocumentoFiscal === "boleta"
+                        ? "bg-primary text-primary-foreground border-primary shadow-xs font-bold"
+                        : "bg-background border-border hover:bg-muted text-muted-foreground"
+                    )}
+                  >
+                    🧾 Boleta (39)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setTipoDocumentoFiscal("factura")}
+                    className={cn(
+                      "py-1.5 px-2 rounded-lg text-xs font-semibold border transition-all text-center",
+                      tipoDocumentoFiscal === "factura"
+                        ? "bg-primary text-primary-foreground border-primary shadow-xs font-bold"
+                        : "bg-background border-border hover:bg-muted text-muted-foreground"
+                    )}
+                  >
+                    📄 Factura (33)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setTipoDocumentoFiscal("interno")}
+                    className={cn(
+                      "py-1.5 px-2 rounded-lg text-xs font-semibold border transition-all text-center",
+                      tipoDocumentoFiscal === "interno"
+                        ? "bg-primary text-primary-foreground border-primary shadow-xs font-bold"
+                        : "bg-background border-border hover:bg-muted text-muted-foreground"
+                    )}
+                  >
+                    🏷️ Interno
+                  </button>
+                </div>
+
+                {/* Si es Factura, solicitar datos fiscales de la empresa receptora */}
+                {tipoDocumentoFiscal === "factura" && (
+                  <div className="space-y-2 pt-2 border-t border-primary/20 text-xs">
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <Label className="text-[10px] font-bold">RUT Empresa *</Label>
+                        <Input
+                          placeholder="77.123.456-K"
+                          value={facturaReceptorRut}
+                          onChange={(e) => setFacturaReceptorRut(e.target.value)}
+                          className="h-8 text-xs bg-background"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-[10px] font-bold">Razón Social *</Label>
+                        <Input
+                          placeholder="Empresa SpA"
+                          value={facturaReceptorRzn}
+                          onChange={(e) => setFacturaReceptorRzn(e.target.value)}
+                          className="h-8 text-xs bg-background"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <Label className="text-[10px] font-bold">Giro Comercial *</Label>
+                      <Input
+                        placeholder="Servicios, Comercializadora..."
+                        value={facturaReceptorGiro}
+                        onChange={(e) => setFacturaReceptorGiro(e.target.value)}
+                        className="h-8 text-xs bg-background"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Métodos de Pago */}
             <div className="grid grid-cols-2 gap-2">
               <button
@@ -1285,6 +1458,33 @@ export default function POSPage() {
                 </div>
               )}
             </div>
+
+            {/* Documento Tributario LibreDTE (SII) */}
+            {ultimaVenta?.dteFolio && (
+              <div className="p-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-xs space-y-2 text-left">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 font-bold text-emerald-700 dark:text-emerald-400">
+                    <CheckCircle2 className="h-4 w-4 shrink-0" />
+                    <span>{ultimaVenta.dteTipo === 33 ? "Factura Electrónica" : "Boleta Electrónica"} SII</span>
+                  </div>
+                  <span className="font-mono font-black text-xs bg-background px-2 py-0.5 rounded border border-emerald-500/20 text-foreground">
+                    Folio #{ultimaVenta.dteFolio}
+                  </span>
+                </div>
+                {ultimaVenta.dtePdfUrl && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={() => window.open(ultimaVenta.dtePdfUrl, "_blank")}
+                    className="w-full h-8 text-xs gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-xs justify-center"
+                  >
+                    <FileText className="h-3.5 w-3.5" />
+                    <span>Ver DTE Oficial (PDF Térmico SII)</span>
+                    <ExternalLink className="h-3 w-3" />
+                  </Button>
+                )}
+              </div>
+            )}
 
             <div className="grid grid-cols-2 gap-2 pt-2">
               <Button

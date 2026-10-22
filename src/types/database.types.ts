@@ -689,6 +689,7 @@ export type Database = {
           plantilla_config: Json
           plantilla_draft: Json | null
           plantilla_updated_at: string
+          libredte_config: Json | null
           rut: string | null
           telefono: string | null
         }
@@ -706,6 +707,7 @@ export type Database = {
           plantilla_config?: Json
           plantilla_draft?: Json | null
           plantilla_updated_at?: string
+          libredte_config?: Json | null
           rut?: string | null
           telefono?: string | null
         }
@@ -723,6 +725,7 @@ export type Database = {
           plantilla_config?: Json
           plantilla_draft?: Json | null
           plantilla_updated_at?: string
+          libredte_config?: Json | null
           rut?: string | null
           telefono?: string | null
         }
@@ -2595,6 +2598,12 @@ export type Database = {
           sucursal_id: string | null
           total: number | null
           usuario_id: string | null
+          dte_tipo: number | null
+          dte_folio: number | null
+          dte_pdf_url: string | null
+          dte_estado: string | null
+          dte_error: string | null
+          dte_fecha: string | null
         }
         Insert: {
           cliente_id?: string | null
@@ -2609,6 +2618,12 @@ export type Database = {
           sucursal_id?: string | null
           total?: number | null
           usuario_id?: string | null
+          dte_tipo?: number | null
+          dte_folio?: number | null
+          dte_pdf_url?: string | null
+          dte_estado?: string | null
+          dte_error?: string | null
+          dte_fecha?: string | null
         }
         Update: {
           cliente_id?: string | null
@@ -2623,6 +2638,12 @@ export type Database = {
           sucursal_id?: string | null
           total?: number | null
           usuario_id?: string | null
+          dte_tipo?: number | null
+          dte_folio?: number | null
+          dte_pdf_url?: string | null
+          dte_estado?: string | null
+          dte_error?: string | null
+          dte_fecha?: string | null
         }
         Relationships: [
           {

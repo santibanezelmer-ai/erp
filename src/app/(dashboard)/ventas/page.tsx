@@ -24,6 +24,10 @@ import {
   Printer,
   Download,
   FileSpreadsheet,
+  Landmark,
+  FileText,
+  ExternalLink,
+  AlertCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { imprimirTicketTermico, descargarTicketPDF } from "@/lib/ticket";
@@ -148,6 +152,45 @@ export default function VentasPage() {
       }
     } catch (err: any) {
       toast.error(err.message || "Error al anular la venta");
+    }
+  };
+
+  const [emitiendoDte, setEmitiendoDte] = useState(false);
+
+  const emitirDteVenta = async (v: Venta, tipoDte: 39 | 33) => {
+    if (!negocio?.id) return;
+    setEmitiendoDte(true);
+    try {
+      toast.info("Emitiendo documento en LibreDTE ante el SII...");
+      const res = await fetch("/api/libredte/emitir", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ventaId: v.id,
+          negocioId: negocio.id,
+          tipoDte,
+        }),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        toast.success(`¡${tipoDte === 33 ? "Factura" : "Boleta"} Electrónica Folio #${data.folio} emitida ante el SII con éxito!`);
+        fetchVentas();
+        if (ventaSeleccionada && ventaSeleccionada.id === v.id) {
+          setVentaSeleccionada({
+            ...ventaSeleccionada,
+            dte_tipo: data.tipoDte,
+            dte_folio: data.folio,
+            dte_pdf_url: data.pdfUrl,
+            dte_estado: "emitido",
+          } as any);
+        }
+      } else {
+        toast.error(data.error || "No se pudo emitir el DTE");
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Error al comunicar con LibreDTE");
+    } finally {
+      setEmitiendoDte(false);
     }
   };
 
@@ -309,6 +352,7 @@ export default function VentasPage() {
                     <th className="py-2.5 sm:py-3 px-3 sm:px-4 text-right hidden md:table-cell">Subtotal</th>
                     <th className="py-2.5 sm:py-3 px-3 sm:px-4 text-right hidden md:table-cell">Descuento</th>
                     <th className="py-2.5 sm:py-3 px-3 sm:px-4 text-right">Total</th>
+                    <th className="py-2.5 sm:py-3 px-3 sm:px-4 text-center hidden sm:table-cell">DTE (SII)</th>
                     <th className="py-2.5 sm:py-3 px-3 sm:px-4 text-center">Estado</th>
                     <th className="py-2.5 sm:py-3 px-3 sm:px-4 text-right">Acciones</th>
                   </tr>
@@ -344,6 +388,34 @@ export default function VentasPage() {
                       </td>
                       <td className="py-2.5 sm:py-3 px-3 sm:px-4 text-right font-bold text-xs sm:text-sm text-foreground">
                         {formatMoney(v.total)}
+                      </td>
+                      <td className="py-2.5 sm:py-3 px-3 sm:px-4 text-center hidden sm:table-cell">
+                        {(v as any).dte_folio ? (
+                          <a
+                            href={(v as any).dte_pdf_url || "#"}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            title="Ver PDF Oficial DTE de LibreDTE"
+                            className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 px-2 py-0.5 rounded-full hover:bg-emerald-500/20 transition-colors"
+                          >
+                            <Landmark className="h-3 w-3" />
+                            <span>
+                              {(v as any).dte_tipo === 33 ? "Factura" : "Boleta"} #{(v as any).dte_folio}
+                            </span>
+                            <ExternalLink className="h-2.5 w-2.5" />
+                          </a>
+                        ) : (v as any).dte_estado === "error" ? (
+                          <span
+                            className="inline-flex items-center gap-1 text-[10px] text-destructive bg-destructive/10 px-2 py-0.5 rounded-full font-bold cursor-pointer"
+                            title={(v as any).dte_error || "Error al emitir DTE"}
+                            onClick={() => verDetalle(v)}
+                          >
+                            <AlertCircle className="h-3 w-3" />
+                            Error DTE
+                          </span>
+                        ) : (
+                          <span className="text-[10px] text-muted-foreground/60 italic">Ticket</span>
+                        )}
                       </td>
                       <td className="py-2.5 sm:py-3 px-3 sm:px-4 text-center">
                         {v.estado === "anulada" ? (
@@ -440,6 +512,62 @@ export default function VentasPage() {
                     <span>Método de pago:</span>
                     <span>{ventaSeleccionada?.pago}</span>
                   </div>
+                </div>
+
+                {/* Sección Documento Tributario LibreDTE (SII) */}
+                <div className="p-3 rounded-xl border border-border bg-card space-y-2 text-xs">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-foreground flex items-center gap-1.5">
+                      <Landmark className="h-4 w-4 text-primary" />
+                      <span>Documento Tributario (SII)</span>
+                    </span>
+
+                    {(ventaSeleccionada as any)?.dte_folio ? (
+                      <span className="font-mono font-bold text-emerald-600 bg-emerald-500/10 px-2 py-0.5 rounded text-[11px]">
+                        {(ventaSeleccionada as any)?.dte_tipo === 33 ? "Factura" : "Boleta"} #{(ventaSeleccionada as any)?.dte_folio}
+                      </span>
+                    ) : (ventaSeleccionada as any)?.dte_estado === "error" ? (
+                      <span className="text-[10px] text-destructive bg-destructive/10 px-2 py-0.5 rounded font-bold">
+                        Error Emisión
+                      </span>
+                    ) : (
+                      <span className="text-[11px] text-muted-foreground italic">Ticket Interno</span>
+                    )}
+                  </div>
+
+                  {(ventaSeleccionada as any)?.dte_pdf_url ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={() => window.open((ventaSeleccionada as any).dte_pdf_url, "_blank")}
+                      className="w-full h-8 text-xs gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-xs justify-center"
+                    >
+                      <FileText className="h-3.5 w-3.5" />
+                      <span>Ver Documento Oficial SII (PDF LibreDTE)</span>
+                      <ExternalLink className="h-3 w-3" />
+                    </Button>
+                  ) : (
+                    <div className="pt-1 flex flex-col gap-1.5">
+                      {(ventaSeleccionada as any)?.dte_error && (
+                        <p className="text-[11px] text-destructive bg-destructive/5 p-1.5 rounded border border-destructive/20">
+                          <strong>Aviso:</strong> {(ventaSeleccionada as any).dte_error}
+                        </p>
+                      )}
+                      {ventaSeleccionada?.estado !== "anulada" && (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() => emitirDteVenta(ventaSeleccionada!, 39)}
+                          disabled={emitiendoDte}
+                          className="w-full h-8 text-xs gap-1.5 border-primary/40 text-primary hover:bg-primary/10 font-bold justify-center"
+                        >
+                          {emitiendoDte ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Landmark className="h-3.5 w-3.5" />}
+                          <span>{emitiendoDte ? "Emitiendo en LibreDTE..." : "Emitir Boleta Electrónica SII"}</span>
+                        </Button>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 <div className="space-y-2 pt-1">

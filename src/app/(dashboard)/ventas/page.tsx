@@ -48,6 +48,7 @@ export default function VentasPage() {
   const [ventaSeleccionada, setVentaSeleccionada] = useState<Venta | null>(null);
   const [detalles, setDetalles] = useState<DetalleVenta[]>([]);
   const [loadingDetalles, setLoadingDetalles] = useState(false);
+  const [configFiscal, setConfigFiscal] = useState<any>(null);
 
   const fetchVentas = async () => {
     if (!negocio?.id) return;
@@ -55,20 +56,39 @@ export default function VentasPage() {
     const supabase = createClient();
 
     try {
-      let query = supabase
-        .from("ventas")
-        .select("*")
-        .eq("negocio_id", negocio.id)
-        .order("created_at", { ascending: false })
-        .limit(100);
+      const [ventasRes, cfgRes] = await Promise.all([
+        (() => {
+          let q = supabase
+            .from("ventas")
+            .select("*")
+            .eq("negocio_id", negocio.id)
+            .order("created_at", { ascending: false })
+            .limit(100);
+          if (sucursalActiva?.id) {
+            q = q.eq("sucursal_id", sucursalActiva.id);
+          }
+          return q;
+        })(),
+        supabase
+          .from("configuracion")
+          .select("libredte_config, rut, business_name, direccion, telefono")
+          .eq("negocio_id", negocio.id)
+          .maybeSingle(),
+      ]);
 
-      if (sucursalActiva?.id) {
-        query = query.eq("sucursal_id", sucursalActiva.id);
+      if (ventasRes.error) throw ventasRes.error;
+      setVentas(ventasRes.data || []);
+
+      if (cfgRes.data) {
+        const rawConfig = (cfgRes.data.libredte_config as Record<string, any>) || {};
+        setConfigFiscal({
+          ...rawConfig,
+          negocioRut: cfgRes.data.rut,
+          negocioName: cfgRes.data.business_name,
+          negocioDir: cfgRes.data.direccion,
+          negocioTel: cfgRes.data.telefono,
+        });
       }
-
-      const { data, error } = await query;
-      if (error) throw error;
-      setVentas(data || []);
     } catch (err: any) {
       toast.error(err.message || "Error al cargar el historial de ventas");
     } finally {
@@ -205,15 +225,19 @@ export default function VentasPage() {
 
   const handleImprimirTicketModal = (ancho: 58 | 80 = 80) => {
     if (!ventaSeleccionada || !negocio) return;
+    const esDte = Boolean(ventaSeleccionada.dte_folio);
     imprimirTicketTermico(
       {
-        negocioNombre: negocio.nombre,
-        negocioRut: (negocio as any).rut || null,
-        negocioTelefono: (negocio as any).telefono || null,
-        negocioDireccion: (negocio as any).direccion || null,
+        negocioNombre: configFiscal?.razonSocial || configFiscal?.negocioName || negocio.nombre,
+        negocioRut: configFiscal?.rutEmisor || configFiscal?.negocioRut || (negocio as any).rut || null,
+        negocioGiro: configFiscal?.giro || null,
+        negocioDireccion: configFiscal?.direccion || configFiscal?.negocioDir || (negocio as any).direccion || null,
+        negocioComuna: configFiscal?.comuna || null,
+        negocioCiudad: configFiscal?.ciudad || null,
+        negocioTelefono: configFiscal?.negocioTel || (negocio as any).telefono || null,
         sucursalNombre: sucursalActiva?.nombre || null,
         logoUrl: (negocio as any)?.logo_url || (negocio?.perfil?.startsWith("http") ? negocio.perfil : null),
-        folio: ventaSeleccionada.id.slice(0, 8).toUpperCase(),
+        folio: esDte ? String(ventaSeleccionada.dte_folio) : ventaSeleccionada.id.slice(0, 8).toUpperCase(),
         fecha: ventaSeleccionada.created_at,
         items: detalles.map((d) => ({
           nombre: d.nombre || "Ítem",
@@ -226,6 +250,11 @@ export default function VentasPage() {
         total: Number(ventaSeleccionada.total || 0),
         metodoPago: ventaSeleccionada.pago || "efectivo",
         efectivoRecibido: (ventaSeleccionada as any).efectivo_rec || null,
+        dteTipo: ventaSeleccionada.dte_tipo || (esDte ? 39 : null),
+        dteFolio: ventaSeleccionada.dte_folio,
+        dteEsOficial: esDte,
+        dtePdfUrl: ventaSeleccionada.dte_pdf_url,
+        cdgSIISucur: configFiscal?.cdgSIISucur ?? 0,
       },
       ancho
     );
@@ -233,13 +262,17 @@ export default function VentasPage() {
 
   const handleDescargarPDFModal = () => {
     if (!ventaSeleccionada || !negocio) return;
+    const esDte = Boolean(ventaSeleccionada.dte_folio);
     descargarTicketPDF({
-      negocioNombre: negocio.nombre,
-      negocioRut: (negocio as any).rut || null,
-      negocioTelefono: (negocio as any).telefono || null,
-      negocioDireccion: (negocio as any).direccion || null,
+      negocioNombre: configFiscal?.razonSocial || configFiscal?.negocioName || negocio.nombre,
+      negocioRut: configFiscal?.rutEmisor || configFiscal?.negocioRut || (negocio as any).rut || null,
+      negocioGiro: configFiscal?.giro || null,
+      negocioDireccion: configFiscal?.direccion || configFiscal?.negocioDir || (negocio as any).direccion || null,
+      negocioComuna: configFiscal?.comuna || null,
+      negocioCiudad: configFiscal?.ciudad || null,
+      negocioTelefono: configFiscal?.negocioTel || (negocio as any).telefono || null,
       sucursalNombre: sucursalActiva?.nombre || null,
-      folio: ventaSeleccionada.id.slice(0, 8).toUpperCase(),
+      folio: esDte ? String(ventaSeleccionada.dte_folio) : ventaSeleccionada.id.slice(0, 8).toUpperCase(),
       fecha: ventaSeleccionada.created_at,
       items: detalles.map((d) => ({
         nombre: d.nombre || "Ítem",
@@ -252,6 +285,11 @@ export default function VentasPage() {
       total: Number(ventaSeleccionada.total || 0),
       metodoPago: ventaSeleccionada.pago || "efectivo",
       efectivoRecibido: (ventaSeleccionada as any).efectivo_rec || null,
+      dteTipo: ventaSeleccionada.dte_tipo || (esDte ? 39 : null),
+      dteFolio: ventaSeleccionada.dte_folio,
+      dteEsOficial: esDte,
+      dtePdfUrl: ventaSeleccionada.dte_pdf_url,
+      cdgSIISucur: configFiscal?.cdgSIISucur ?? 0,
     });
   };
 

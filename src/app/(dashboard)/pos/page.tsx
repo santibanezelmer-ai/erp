@@ -631,15 +631,19 @@ export default function POSPage() {
 
   const handleImprimirTicket = (ancho: 58 | 80 = 80) => {
     if (!ultimaVenta || !negocio) return;
+    const esDte = Boolean(ultimaVenta.dteFolio);
     imprimirTicketTermico(
       {
-        negocioNombre: negocio.nombre,
-        negocioRut: (negocio as any).rut || null,
+        negocioNombre: libredteConfig?.razonSocial || negocio.nombre,
+        negocioRut: libredteConfig?.rutEmisor || (negocio as any).rut || null,
+        negocioGiro: libredteConfig?.giro || null,
+        negocioDireccion: libredteConfig?.direccion || (negocio as any).direccion || null,
+        negocioComuna: libredteConfig?.comuna || null,
+        negocioCiudad: libredteConfig?.ciudad || null,
         negocioTelefono: (negocio as any).telefono || null,
-        negocioDireccion: (negocio as any).direccion || null,
         sucursalNombre: sucursalActiva?.nombre || null,
         logoUrl: (negocio as any)?.logo_url || (negocio?.perfil?.startsWith("http") ? negocio.perfil : null),
-        folio: ultimaVenta.id.slice(0, 8).toUpperCase(),
+        folio: esDte ? String(ultimaVenta.dteFolio) : ultimaVenta.id.slice(0, 8).toUpperCase(),
         cajero: profile?.nombre || "Caja Principal",
         items: ultimaVenta.items.map((i) => ({
           nombre: i.nombre,
@@ -653,6 +657,11 @@ export default function POSPage() {
         metodoPago: ultimaVenta.pago,
         efectivoRecibido: ultimaVenta.efectivoRecibido,
         vuelto: ultimaVenta.vuelto,
+        dteTipo: ultimaVenta.dteTipo || (esDte ? 39 : null),
+        dteFolio: ultimaVenta.dteFolio,
+        dteEsOficial: esDte,
+        dtePdfUrl: ultimaVenta.dtePdfUrl,
+        cdgSIISucur: libredteConfig?.cdgSIISucur ?? 0,
       },
       ancho
     );
@@ -660,13 +669,17 @@ export default function POSPage() {
 
   const handleDescargarPDF = () => {
     if (!ultimaVenta || !negocio) return;
+    const esDte = Boolean(ultimaVenta.dteFolio);
     descargarTicketPDF({
-      negocioNombre: negocio.nombre,
-      negocioRut: (negocio as any).rut || null,
+      negocioNombre: libredteConfig?.razonSocial || negocio.nombre,
+      negocioRut: libredteConfig?.rutEmisor || (negocio as any).rut || null,
+      negocioGiro: libredteConfig?.giro || null,
+      negocioDireccion: libredteConfig?.direccion || (negocio as any).direccion || null,
+      negocioComuna: libredteConfig?.comuna || null,
+      negocioCiudad: libredteConfig?.ciudad || null,
       negocioTelefono: (negocio as any).telefono || null,
-      negocioDireccion: (negocio as any).direccion || null,
       sucursalNombre: sucursalActiva?.nombre || null,
-      folio: ultimaVenta.id.slice(0, 8).toUpperCase(),
+      folio: esDte ? String(ultimaVenta.dteFolio) : ultimaVenta.id.slice(0, 8).toUpperCase(),
       cajero: profile?.nombre || "Caja Principal",
       items: ultimaVenta.items.map((i) => ({
         nombre: i.nombre,
@@ -680,6 +693,11 @@ export default function POSPage() {
       metodoPago: ultimaVenta.pago,
       efectivoRecibido: ultimaVenta.efectivoRecibido,
       vuelto: ultimaVenta.vuelto,
+      dteTipo: ultimaVenta.dteTipo || (esDte ? 39 : null),
+      dteFolio: ultimaVenta.dteFolio,
+      dteEsOficial: esDte,
+      dtePdfUrl: ultimaVenta.dtePdfUrl,
+      cdgSIISucur: libredteConfig?.cdgSIISucur ?? 0,
     });
   };
 

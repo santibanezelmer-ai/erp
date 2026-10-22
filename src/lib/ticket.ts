@@ -11,8 +11,11 @@ export interface TicketItem {
 export interface TicketData {
   negocioNombre: string;
   negocioRut?: string | null;
-  negocioTelefono?: string | null;
+  negocioGiro?: string | null;
   negocioDireccion?: string | null;
+  negocioComuna?: string | null;
+  negocioCiudad?: string | null;
+  negocioTelefono?: string | null;
   sucursalNombre?: string | null;
   logoUrl?: string | null;
   folio: string;
@@ -29,6 +32,12 @@ export interface TicketData {
   vuelto?: number | null;
   mensajePie?: string;
   mesa?: string | null;
+  // Propiedades Fiscales Oficiales (SII Chile)
+  dteTipo?: number | null; // 39: Boleta Electrónica, 33: Factura Electrónica
+  dteFolio?: number | string | null;
+  dteEsOficial?: boolean;
+  dtePdfUrl?: string | null;
+  cdgSIISucur?: number | string | null;
 }
 
 /**
@@ -45,6 +54,12 @@ export function imprimirTicketTermico(data: TicketData, anchoMm: 58 | 80 = 80) {
         second: "2-digit",
       })
     : new Date().toLocaleString("es-CL");
+
+  const esDteOficial = Boolean(data.dteFolio || data.dteEsOficial);
+  const tipoDteNum = Number(data.dteTipo || 39);
+  const dteNombre = tipoDteNum === 33 ? "FACTURA ELECTRÓNICA" : "BOLETA ELECTRÓNICA";
+  const ivaEstimado = Math.round(data.total - data.total / 1.19);
+  const rutEmisor = data.negocioRut || "76.000.000-0";
 
   const printWindow = window.open("", "_blank", "width=400,height=600");
   if (!printWindow) {
@@ -74,7 +89,7 @@ export function imprimirTicketTermico(data: TicketData, anchoMm: 58 | 80 = 80) {
     <html>
       <head>
         <meta charset="utf-8" />
-        <title>Ticket #${data.folio}</title>
+        <title>${esDteOficial ? `${dteNombre} N° ${data.dteFolio}` : `Ticket #${data.folio}`}</title>
         <style>
           @page {
             margin: 0;
@@ -104,7 +119,7 @@ export function imprimirTicketTermico(data: TicketData, anchoMm: 58 | 80 = 80) {
             margin: 6px 0;
           }
           .title {
-            font-size: 15px;
+            font-size: 14px;
             font-weight: 800;
             text-transform: uppercase;
             margin-bottom: 2px;
@@ -120,6 +135,26 @@ export function imprimirTicketTermico(data: TicketData, anchoMm: 58 | 80 = 80) {
             font-weight: 800;
             margin: 4px 0;
           }
+          .sii-box {
+            border: 2px solid #000;
+            padding: 6px 4px;
+            text-align: center;
+            margin: 8px 0 4px 0;
+            font-weight: 800;
+          }
+          .sii-box .sii-rut {
+            font-size: 13px;
+            letter-spacing: 0.5px;
+          }
+          .sii-box .sii-tipo {
+            font-size: 13px;
+            text-transform: uppercase;
+            margin: 2px 0;
+          }
+          .sii-box .sii-folio {
+            font-size: 15px;
+            font-weight: 900;
+          }
           @media print {
             body { padding: 4px; }
             .no-print { display: none; }
@@ -134,19 +169,41 @@ export function imprimirTicketTermico(data: TicketData, anchoMm: 58 | 80 = 80) {
               : ""
           }
           <div class="title">${data.negocioNombre}</div>
-          ${data.negocioRut ? `<div>RUT / NIF: ${data.negocioRut}</div>` : ""}
+          ${data.negocioGiro ? `<div style="font-size: 10px; color: #222;">${data.negocioGiro}</div>` : ""}
+          ${!esDteOficial && data.negocioRut ? `<div>RUT: ${data.negocioRut}</div>` : ""}
           ${data.sucursalNombre ? `<div>Sucursal: ${data.sucursalNombre}</div>` : ""}
           ${data.negocioDireccion ? `<div>${data.negocioDireccion}</div>` : ""}
+          ${data.negocioComuna ? `<div>${data.negocioComuna}${data.negocioCiudad ? ` - ${data.negocioCiudad}` : ""}</div>` : ""}
           ${data.negocioTelefono ? `<div>Tel: ${data.negocioTelefono}</div>` : ""}
         </div>
+
+        ${
+          esDteOficial
+            ? `
+          <div class="sii-box">
+            <div class="sii-rut">R.U.T.: ${rutEmisor}</div>
+            <div class="sii-tipo">${dteNombre}</div>
+            <div class="sii-folio">N° ${data.dteFolio}</div>
+          </div>
+          <div class="text-center" style="font-size: 9px; font-weight: bold; margin-bottom: 6px;">
+            S.I.I. - ${data.negocioComuna ? data.negocioComuna.toUpperCase() : "SANTIAGO ORIENTE"}
+          </div>
+        `
+            : `
+          <div class="divider"></div>
+          <div>
+            <div style="display: flex; justify-content: space-between;">
+              <span class="font-bold">COMPROBANTE: #${data.folio}</span>
+              <span>${fechaStr}</span>
+            </div>
+          </div>
+        `
+        }
 
         <div class="divider"></div>
 
         <div>
-          <div style="display: flex; justify-content: space-between;">
-            <span class="font-bold">TICKET: #${data.folio}</span>
-            <span>${fechaStr}</span>
-          </div>
+          ${esDteOficial ? `<div style="display: flex; justify-content: space-between; margin-bottom: 2px;"><span>Fecha Emisión:</span><span class="font-bold">${fechaStr}</span></div>` : ""}
           ${data.mesa ? `<div class="font-bold" style="font-size: 12px; margin-top: 2px;">MESA / COMANDA: ${data.mesa}</div>` : ""}
           ${data.cajero ? `<div>Atendido por: ${data.cajero}</div>` : ""}
           ${data.clienteNombre ? `<div>Cliente: ${data.clienteNombre}</div>` : ""}
@@ -180,6 +237,15 @@ export function imprimirTicketTermico(data: TicketData, anchoMm: 58 | 80 = 80) {
             <span>TOTAL:</span>
             <span>${formatMoney(data.total)}</span>
           </div>
+          ${
+            esDteOficial && tipoDteNum === 39
+              ? `
+            <div class="totals-row" style="font-size: 10px; color: #444; margin-top: 1px;">
+              <span>(El IVA de esta boleta es: ${formatMoney(ivaEstimado)})</span>
+            </div>
+          `
+              : ""
+          }
           <div class="divider"></div>
           <div class="totals-row">
             <span>Forma de Pago:</span>
@@ -203,11 +269,28 @@ export function imprimirTicketTermico(data: TicketData, anchoMm: 58 | 80 = 80) {
 
         <div class="divider"></div>
 
-        <div class="text-center" style="margin-top: 8px; font-size: 10px; color: #333;">
-          <div>${data.mensajePie || "¡Gracias por su preferencia!"}</div>
-          <div style="font-size: 9px; margin-top: 4px; color: #666;">Documento no válido como factura tributaria</div>
-          <div style="font-size: 8px; margin-top: 2px; color: #888;">Operix ERP - Potenciado por IA</div>
-        </div>
+        ${
+          esDteOficial
+            ? `
+          <div style="border: 1px solid #000; padding: 6px 4px; text-align: center; margin-top: 8px; font-size: 9px; line-height: 1.3;">
+            <div style="font-weight: 800; text-transform: uppercase;">Timbre Electrónico SII</div>
+            <div style="font-size: 8px; margin-top: 1px;">Res. N° 80 de 2014 - Verifique documento en www.sii.cl</div>
+          </div>
+          <div class="text-center" style="margin-top: 6px; font-size: 10px; font-weight: 600;">
+            ${data.mensajePie || "¡Gracias por su compra!"}
+          </div>
+          <div class="text-center" style="font-size: 8px; color: #666; margin-top: 2px;">
+            Operix ERP - Facturación eBoleta SII
+          </div>
+        `
+            : `
+          <div class="text-center" style="margin-top: 8px; font-size: 10px; color: #333;">
+            <div>${data.mensajePie || "¡Gracias por su preferencia!"}</div>
+            <div style="font-size: 9px; margin-top: 4px; color: #666;">Documento no válido como factura tributaria</div>
+            <div style="font-size: 8px; margin-top: 2px; color: #888;">Operix ERP - Potenciado por IA</div>
+          </div>
+        `
+        }
 
         <script>
           window.onload = function() {
@@ -232,61 +315,102 @@ export function imprimirTicketTermico(data: TicketData, anchoMm: 58 | 80 = 80) {
 export async function descargarTicketPDF(data: TicketData) {
   const { jsPDF } = await import("jspdf");
 
-  // Formato tipo ticket (80mm de ancho x 160mm altura variable)
+  const esDteOficial = Boolean(data.dteFolio || data.dteEsOficial);
+  const tipoDteNum = Number(data.dteTipo || 39);
+  const dteNombre = tipoDteNum === 33 ? "FACTURA ELECTRÓNICA" : "BOLETA ELECTRÓNICA";
+  const ivaEstimado = Math.round(data.total - data.total / 1.19);
+  const rutEmisor = data.negocioRut || "76.000.000-0";
+
+  // Formato tipo ticket (80mm de ancho x altura dinámica)
   const doc = new jsPDF({
     unit: "mm",
-    format: [80, Math.max(160, 80 + data.items.length * 10)],
+    format: [80, Math.max(170, 95 + data.items.length * 8)],
   });
 
   let y = 10;
   doc.setFont("courier", "bold");
-  doc.setFontSize(12);
+  doc.setFontSize(11);
   doc.text(data.negocioNombre, 40, y, { align: "center" });
 
-  y += 5;
+  y += 4;
   doc.setFont("courier", "normal");
-  doc.setFontSize(8);
-  if (data.negocioRut) {
+  doc.setFontSize(7.5);
+  if (data.negocioGiro) {
+    doc.text(data.negocioGiro.slice(0, 36), 40, y, { align: "center" });
+    y += 3.5;
+  }
+  if (!esDteOficial && data.negocioRut) {
     doc.text(`RUT: ${data.negocioRut}`, 40, y, { align: "center" });
-    y += 4;
+    y += 3.5;
   }
   if (data.sucursalNombre) {
     doc.text(`Sucursal: ${data.sucursalNombre}`, 40, y, { align: "center" });
-    y += 4;
+    y += 3.5;
   }
   if (data.negocioDireccion) {
     doc.text(data.negocioDireccion, 40, y, { align: "center" });
-    y += 4;
+    y += 3.5;
+  }
+  if (data.negocioComuna) {
+    doc.text(`${data.negocioComuna}${data.negocioCiudad ? ` - ${data.negocioCiudad}` : ""}`, 40, y, { align: "center" });
+    y += 3.5;
   }
 
   y += 2;
-  doc.line(5, y, 75, y);
-  y += 5;
 
-  doc.text(`Ticket: #${data.folio}`, 5, y);
-  y += 4;
+  // Si es DTE oficial, dibujar caja tributaria del SII
+  if (esDteOficial) {
+    doc.setLineWidth(0.5);
+    doc.rect(10, y, 60, 16);
+    y += 4.5;
+    doc.setFont("courier", "bold");
+    doc.setFontSize(9);
+    doc.text(`R.U.T.: ${rutEmisor}`, 40, y, { align: "center" });
+    y += 4;
+    doc.text(dteNombre, 40, y, { align: "center" });
+    y += 4.5;
+    doc.setFontSize(10);
+    doc.text(`N° ${data.dteFolio}`, 40, y, { align: "center" });
+    y += 6;
+
+    doc.setFontSize(7);
+    doc.text(`S.I.I. - ${data.negocioComuna ? data.negocioComuna.toUpperCase() : "SANTIAGO ORIENTE"}`, 40, y, { align: "center" });
+    y += 4;
+  } else {
+    doc.line(5, y, 75, y);
+    y += 4;
+    doc.text(`Ticket: #${data.folio}`, 5, y);
+    y += 3.5;
+  }
+
   const fechaStr = data.fecha ? new Date(data.fecha).toLocaleString("es-CL") : new Date().toLocaleString("es-CL");
+  doc.setFont("courier", "normal");
+  doc.setFontSize(7.5);
   doc.text(`Fecha: ${fechaStr}`, 5, y);
-  y += 4;
+  y += 3.5;
 
   if (data.mesa) {
     doc.setFont("courier", "bold");
     doc.text(`Mesa: ${data.mesa}`, 5, y);
     doc.setFont("courier", "normal");
-    y += 4;
+    y += 3.5;
   }
   if (data.cajero) {
     doc.text(`Cajero: ${data.cajero}`, 5, y);
-    y += 4;
+    y += 3.5;
   }
   if (data.clienteNombre) {
     doc.text(`Cliente: ${data.clienteNombre}`, 5, y);
-    y += 4;
+    y += 3.5;
+  }
+  if (data.clienteRut) {
+    doc.text(`RUT Cli: ${data.clienteRut}`, 5, y);
+    y += 3.5;
   }
 
   y += 2;
   doc.line(5, y, 75, y);
-  y += 5;
+  y += 4;
 
   doc.setFont("courier", "bold");
   doc.text("CANT  DESCRIPCIÓN         TOTAL", 5, y);
@@ -298,49 +422,77 @@ export async function descargarTicketPDF(data: TicketData) {
     const precioStr = formatMoney(item.subtotal);
     doc.text(`${item.qty}x  ${nombreRecortado}`, 5, y);
     doc.text(precioStr, 75, y, { align: "right" });
-    y += 4;
+    y += 3.5;
   }
 
   y += 2;
   doc.line(5, y, 75, y);
-  y += 5;
+  y += 4;
 
   doc.text("Subtotal:", 5, y);
   doc.text(formatMoney(data.subtotal), 75, y, { align: "right" });
-  y += 4;
+  y += 3.5;
 
   if (data.descuento && data.descuento > 0) {
     doc.text("Descuento:", 5, y);
     doc.text(`-${formatMoney(data.descuento)}`, 75, y, { align: "right" });
-    y += 4;
+    y += 3.5;
   }
 
   doc.setFont("courier", "bold");
-  doc.setFontSize(10);
+  doc.setFontSize(9.5);
   doc.text("TOTAL:", 5, y);
   doc.text(formatMoney(data.total), 75, y, { align: "right" });
-  y += 5;
+  y += 4.5;
+
+  if (esDteOficial && tipoDteNum === 39) {
+    doc.setFont("courier", "normal");
+    doc.setFontSize(6.5);
+    doc.text(`(IVA de esta boleta: ${formatMoney(ivaEstimado)})`, 5, y);
+    y += 3.5;
+  }
 
   doc.setFont("courier", "normal");
-  doc.setFontSize(8);
+  doc.setFontSize(7.5);
   doc.text(`Pago: ${data.metodoPago.toUpperCase()}`, 5, y);
-  y += 4;
+  y += 3.5;
 
   if (data.metodoPago === "efectivo" && data.efectivoRecibido != null) {
     doc.text(`Recibido: ${formatMoney(data.efectivoRecibido)}`, 5, y);
-    y += 4;
+    y += 3.5;
     doc.text(`Vuelto: ${formatMoney(data.vuelto || 0)}`, 5, y);
-    y += 4;
+    y += 3.5;
   }
 
-  y += 4;
+  y += 3;
   doc.line(5, y, 75, y);
-  y += 6;
+  y += 5;
 
-  doc.setFontSize(7);
-  doc.text(data.mensajePie || "¡Gracias por su preferencia!", 40, y, { align: "center" });
-  y += 4;
-  doc.text("Operix ERP", 40, y, { align: "center" });
+  if (esDteOficial) {
+    doc.rect(10, y, 60, 10);
+    y += 3.5;
+    doc.setFont("courier", "bold");
+    doc.setFontSize(7);
+    doc.text("Timbre Electrónico SII", 40, y, { align: "center" });
+    y += 3;
+    doc.setFont("courier", "normal");
+    doc.setFontSize(5.5);
+    doc.text("Res. N° 80 de 2014 - Verifique en www.sii.cl", 40, y, { align: "center" });
+    y += 7;
 
-  doc.save(`Ticket-${data.folio}.pdf`);
+    doc.setFontSize(7);
+    doc.text(data.mensajePie || "¡Gracias por su compra!", 40, y, { align: "center" });
+    y += 3.5;
+    doc.text("Operix ERP - eBoleta SII", 40, y, { align: "center" });
+    doc.save(`Boleta-SII-${data.dteFolio || data.folio}.pdf`);
+  } else {
+    doc.setFontSize(7);
+    doc.text(data.mensajePie || "¡Gracias por su preferencia!", 40, y, { align: "center" });
+    y += 3.5;
+    doc.setFontSize(6);
+    doc.text("Documento no válido como factura", 40, y, { align: "center" });
+    y += 3;
+    doc.text("Operix ERP", 40, y, { align: "center" });
+    doc.save(`Ticket-${data.folio}.pdf`);
+  }
 }

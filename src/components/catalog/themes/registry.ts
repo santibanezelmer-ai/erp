@@ -91,6 +91,120 @@ export const THEMES_LIST: ThemeMetadata[] = [
       },
     },
   },
+  {
+    id: "food",
+    name: "Bistro & Food",
+    tagline: "Menú digital apetitoso, cálido y pensado para restaurantes",
+    description:
+      "Diseño gastronómico especializado para restaurantes, pizzerías, sushi, hamburgueserías, cafeterías y delivery. Destaca fotos de platos, ingredientes, categorías de carta y pedidos directos a WhatsApp.",
+    category: "gastronomia",
+    compatibleRubros: [
+      "Restaurantes",
+      "Pizzerías",
+      "Comida Rápida",
+      "Sushi",
+      "Cafeterías",
+      "Pastelerías",
+      "Delivery y Dark Kitchen",
+    ],
+    previewImage: "/themes/food-preview.jpg",
+    version: "1.0.0",
+    defaultConfig: {
+      primaryColor: "#ea580c", // orange-600
+      accentColor: "#f59e0b", // amber-500
+      backgroundColor: "#fffaf5",
+      fontFamily: "sans",
+      bannerTitle: "Nuestra Carta & Especialidades del Chef",
+      bannerSubtitle:
+        "Platos frescos elaborados al momento con los mejores ingredientes. Haz tu pedido a la mesa o a domicilio por WhatsApp.",
+      bannerBadgeText: "🔥 Cocina Abierta & Delivery Activo",
+      bannerButtonText: "Ver Carta Completa",
+      sectionsVisibility: {
+        bannerHero: true,
+        busquedaRapida: true,
+        categoriasPills: true,
+        ofertasDestacadas: true,
+        novedades: true,
+        marcasGrid: false,
+        todosLosProductos: true,
+      },
+    },
+  },
+  {
+    id: "market",
+    name: "Market Fresh",
+    tagline: "Almacén de barrio, botillería y minimarket ágil",
+    description:
+      "Formato de compra rápida de alta densidad con selectores de cantidad en la misma tarjeta. Perfecto para abarrotes, minimarkets, botillerías, verdulerías y tiendas de conveniencia.",
+    category: "almacen",
+    compatibleRubros: [
+      "Minimarkets",
+      "Almacenes de Barrio",
+      "Botillerías y Licores",
+      "Frutas y Verduras",
+      "Panaderías",
+      "Abarrotes y Limpieza",
+    ],
+    previewImage: "/themes/market-preview.jpg",
+    version: "1.0.0",
+    defaultConfig: {
+      primaryColor: "#16a34a", // emerald-600
+      accentColor: "#059669", // teal-600
+      backgroundColor: "#f8faf8",
+      fontFamily: "sans",
+      bannerTitle: "Tu Almacén & Minimarket de Confianza",
+      bannerSubtitle:
+        "Abarrotes, bebidas, lácteos, snacks y productos frescos para tu día a día. Pide directo y recibe en minutos.",
+      bannerBadgeText: "🥬 Precios Bajos y Calidad Siempre",
+      bannerButtonText: "Ver Productos",
+      sectionsVisibility: {
+        bannerHero: true,
+        busquedaRapida: true,
+        categoriasPills: true,
+        ofertasDestacadas: true,
+        novedades: false,
+        marcasGrid: false,
+        todosLosProductos: true,
+      },
+    },
+  },
+  {
+    id: "fashion",
+    name: "Moda & Boutique",
+    tagline: "Editorial minimalista y lookbook de temporada",
+    description:
+      "Estética limpia y contemporánea inspirada en revistas de moda. Tarjetas en formato vertical 3:4, selector visual de tallas y colores, ideal para boutiques de vestuario y calzado.",
+    category: "moda",
+    compatibleRubros: [
+      "Ropa y Vestuario",
+      "Boutiques",
+      "Calzado y Zapatillas",
+      "Accesorios y Carteras",
+      "Joyería",
+    ],
+    previewImage: "/themes/fashion-preview.jpg",
+    version: "1.0.0",
+    defaultConfig: {
+      primaryColor: "#18181b", // zinc-900
+      accentColor: "#d97706", // amber-600
+      backgroundColor: "#fafaf9",
+      fontFamily: "sans",
+      bannerTitle: "Nueva Colección de Temporada",
+      bannerSubtitle:
+        "Prendas de diseño, calzado y accesorios exclusivos seleccionados para destacar tu estilo propio.",
+      bannerBadgeText: "✨ New Arrivals • Edición Limitada",
+      bannerButtonText: "Explorar Colección",
+      sectionsVisibility: {
+        bannerHero: true,
+        busquedaRapida: true,
+        categoriasPills: true,
+        ofertasDestacadas: true,
+        novedades: true,
+        marcasGrid: false,
+        todosLosProductos: true,
+      },
+    },
+  },
 ];
 
 export function getThemeMetadata(themeId?: string | null): ThemeMetadata {

@@ -6,9 +6,17 @@ export type Producto = Database["public"]["Tables"]["productos"]["Row"];
 export type Variante = Database["public"]["Tables"]["producto_variantes"]["Row"];
 export type Marca = { id: string; nombre: string; logo_url?: string | null };
 
-export type ThemeId = "beauty" | "autoparts" | "ferremax";
+export type ThemeId = "beauty" | "autoparts" | "ferremax" | "food" | "market" | "fashion";
 
-export type ThemeCategory = "belleza" | "automotriz" | "ferreteria" | "general" | "retail";
+export type ThemeCategory =
+  | "belleza"
+  | "automotriz"
+  | "ferreteria"
+  | "gastronomia"
+  | "almacen"
+  | "moda"
+  | "general"
+  | "retail";
 
 export interface ThemeSectionsVisibility {
   bannerHero?: boolean;

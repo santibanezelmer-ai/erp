@@ -329,29 +329,31 @@ export default function TiendaOnlinePage() {
           {/* Filtro por Rubro */}
           <div className="flex items-center gap-2 overflow-x-auto pb-1">
             <span className="text-xs font-semibold text-muted-foreground mr-1">Filtrar por rubro:</span>
-            {["todos", "belleza", "automotriz", "ferreteria"].map((rubro) => (
+            {[
+              { id: "todos", label: "Todas las Plantillas" },
+              { id: "gastronomia", label: "🍔 Comida / Restaurantes" },
+              { id: "almacen", label: "🛒 Minimarket / Abarrotes" },
+              { id: "moda", label: "👗 Moda / Boutique" },
+              { id: "belleza", label: "🌸 Belleza / Cosmética" },
+              { id: "automotriz", label: "⚙️ Automotriz / Repuestos" },
+              { id: "ferreteria", label: "🔨 Ferretería / Obras" },
+            ].map((rubro) => (
               <button
-                key={rubro}
-                onClick={() => setFiltroRubro(rubro)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${
-                  filtroRubro === rubro
+                key={rubro.id}
+                onClick={() => setFiltroRubro(rubro.id)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all whitespace-nowrap cursor-pointer ${
+                  filtroRubro === rubro.id
                     ? "bg-primary text-primary-foreground border-primary font-bold shadow-xs"
                     : "bg-card text-muted-foreground border-border hover:text-foreground"
                 }`}
               >
-                {rubro === "todos"
-                  ? "Todas las Plantillas"
-                  : rubro === "belleza"
-                  ? "🌸 Belleza / Cosmética"
-                  : rubro === "automotriz"
-                  ? "⚙️ Automotriz / Repuestos"
-                  : "🔨 Ferretería / Obras"}
+                {rubro.label}
               </button>
             ))}
           </div>
 
           {/* Cards de Plantillas */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {themesFiltered.map((theme) => {
               const isSelected = activeThemeId === theme.id;
 
@@ -369,10 +371,16 @@ export default function TiendaOnlinePage() {
                     <div
                       className={`h-40 w-full p-4 flex flex-col justify-between border-b border-border ${
                         theme.id === "beauty"
-                          ? "bg-gradient-to-br from-rose-100 via-rose-50 to-pink-100 dark:from-rose-950 dark:to-neutral-900"
+                          ? "bg-gradient-to-br from-rose-100 via-rose-50 to-pink-100 dark:from-rose-950 dark:to-neutral-900 text-neutral-900 dark:text-white"
                           : theme.id === "autoparts"
                           ? "bg-gradient-to-br from-neutral-900 via-neutral-950 to-black text-white"
-                          : "bg-gradient-to-br from-blue-900 via-blue-800 to-slate-900 text-white"
+                          : theme.id === "ferremax"
+                          ? "bg-gradient-to-br from-blue-900 via-blue-800 to-slate-900 text-white"
+                          : theme.id === "food"
+                          ? "bg-gradient-to-br from-orange-600 via-amber-600 to-stone-900 text-white"
+                          : theme.id === "market"
+                          ? "bg-gradient-to-br from-emerald-600 via-emerald-700 to-teal-900 text-white"
+                          : "bg-gradient-to-br from-neutral-900 via-zinc-800 to-neutral-950 text-white"
                       }`}
                     >
                       <div className="flex items-center justify-between">
@@ -382,7 +390,13 @@ export default function TiendaOnlinePage() {
                               ? "bg-white/80 text-rose-700"
                               : theme.id === "autoparts"
                               ? "bg-amber-500 text-neutral-950 font-black"
-                              : "bg-orange-500 text-white font-bold"
+                              : theme.id === "ferremax"
+                              ? "bg-orange-500 text-white font-bold"
+                              : theme.id === "food"
+                              ? "bg-amber-400 text-orange-950 font-black"
+                              : theme.id === "market"
+                              ? "bg-emerald-300 text-emerald-950 font-black"
+                              : "bg-white text-neutral-950 font-black"
                           }`}
                         >
                           {theme.category}

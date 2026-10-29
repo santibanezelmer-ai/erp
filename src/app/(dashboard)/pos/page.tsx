@@ -35,6 +35,7 @@ import {
   Landmark,
   FileText,
   ExternalLink,
+  AlertCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { BarcodeScanner } from "@/components/BarcodeScanner";
@@ -112,6 +113,7 @@ export default function POSPage() {
     dteFolio?: number;
     dteTipo?: number;
     dtePdfUrl?: string;
+    dteEstado?: string;
   } | null>(null);
 
   // Estados Facturación LibreDTE
@@ -578,18 +580,25 @@ export default function POSPage() {
               negocioId: negocio.id,
               tipoDte: tDteNum,
               receptor: receptorObj,
+              medioPago: metodoPago,
             }),
           });
 
           dteDataResult = await resDte.json();
 
-          if (dteDataResult?.ok) {
+          if (dteDataResult?.ok && dteDataResult?.folio) {
             toast.success(
               `¡${tDteNum === 33 ? "Factura" : "Boleta"} Electrónica Folio #${dteDataResult.folio} emitida ante el SII!`
             );
-          } else {
+          } else if (dteDataResult?.estado === "pendiente_conciliacion") {
             toast.warning(
-              `Venta registrada, pero aviso en LibreDTE: ${dteDataResult?.error || "Revisa tus folios CAF en LibreDTE"}`
+              "⚠️ Emisión pendiente de conciliación: el SII o API Gateway demoró en responder. No reintente de inmediato; verifique el estado en el módulo de Ventas.",
+              { duration: 8000 }
+            );
+          } else {
+            const proveedorLabel = libredteConfig?.proveedor === "apigateway" ? "API Gateway" : "LibreDTE";
+            toast.warning(
+              `Venta registrada, pero aviso en ${proveedorLabel}: ${dteDataResult?.error || "Revisa la configuración tributaria del SII"}`
             );
           }
         } catch (errDte) {
@@ -606,9 +615,10 @@ export default function POSPage() {
         efectivoRecibido: metodoPago === "efectivo" ? Number(efectivoRecibido) : null,
         vuelto,
         items: [...cart],
-        dteFolio: dteDataResult?.folio,
-        dteTipo: dteDataResult?.tipoDte,
-        dtePdfUrl: dteDataResult?.pdfUrl,
+        dteFolio: dteDataResult?.ok && dteDataResult?.folio ? Number(dteDataResult.folio) : undefined,
+        dteTipo: dteDataResult?.ok ? dteDataResult?.tipoDte : undefined,
+        dtePdfUrl: dteDataResult?.ok ? dteDataResult?.pdfUrl : undefined,
+        dteEstado: dteDataResult?.estado || (dteDataResult?.ok ? "emitido" : dteDataResult ? "error" : undefined),
       });
 
       setPagoModalOpen(false);
@@ -1257,12 +1267,20 @@ export default function POSPage() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => setTipoDocumentoFiscal("factura")}
+                    disabled={libredteConfig?.proveedor === "apigateway"}
+                    onClick={() => {
+                      if (libredteConfig?.proveedor === "apigateway") {
+                        toast.info("API Gateway eBoleta sólo emite Boletas (39/41). Para Facturas (33) se requiere LibreDTE con certificado digital.");
+                        return;
+                      }
+                      setTipoDocumentoFiscal("factura");
+                    }}
                     className={cn(
                       "py-1.5 px-2 rounded-lg text-xs font-semibold border transition-all text-center",
                       tipoDocumentoFiscal === "factura"
                         ? "bg-primary text-primary-foreground border-primary shadow-xs font-bold"
-                        : "bg-background border-border hover:bg-muted text-muted-foreground"
+                        : "bg-background border-border hover:bg-muted text-muted-foreground",
+                      libredteConfig?.proveedor === "apigateway" && "opacity-40 cursor-not-allowed hover:bg-background"
                     )}
                   >
                     📄 Factura (33)
@@ -1280,6 +1298,12 @@ export default function POSPage() {
                     🏷️ Interno
                   </button>
                 </div>
+
+                {libredteConfig?.proveedor === "apigateway" && (
+                  <p className="text-[10px] text-muted-foreground italic">
+                    * API Gateway eBoleta emite boletas oficiales (39 y 41). Factura (33) requiere LibreDTE.
+                  </p>
+                )}
 
                 {/* Si es Factura, solicitar datos fiscales de la empresa receptora */}
                 {tipoDocumentoFiscal === "factura" && (
@@ -1477,8 +1501,8 @@ export default function POSPage() {
               )}
             </div>
 
-            {/* Documento Tributario LibreDTE (SII) */}
-            {ultimaVenta?.dteFolio && (
+            {/* Documento Tributario LibreDTE / API Gateway (SII) */}
+            {ultimaVenta?.dteFolio ? (
               <div className="p-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-xs space-y-2 text-left">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-1.5 font-bold text-emerald-700 dark:text-emerald-400">
@@ -1502,7 +1526,17 @@ export default function POSPage() {
                   </Button>
                 )}
               </div>
-            )}
+            ) : ultimaVenta?.dteEstado === "pendiente_conciliacion" ? (
+              <div className="p-3 rounded-xl border border-amber-500/30 bg-amber-500/10 text-xs space-y-1.5 text-left">
+                <div className="flex items-center gap-1.5 font-bold text-amber-700 dark:text-amber-400">
+                  <AlertCircle className="h-4 w-4 shrink-0" />
+                  <span>Emisión en Revisión / Conciliación SII</span>
+                </div>
+                <p className="text-[11px] text-amber-800 dark:text-amber-300">
+                  El servidor del SII o la pasarela demoró en responder. Para evitar duplicar folios tributarios, no se reintentó automáticamente. Puede verificar su estado en el módulo Ventas.
+                </p>
+              </div>
+            ) : null}
 
             <div className="grid grid-cols-2 gap-2 pt-2">
               <Button

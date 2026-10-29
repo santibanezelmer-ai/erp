@@ -28,6 +28,8 @@ import {
   FileText,
   ExternalLink,
   AlertCircle,
+  AlertTriangle,
+  ShieldAlert,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { imprimirTicketTermico, descargarTicketPDF } from "@/lib/ticket";
@@ -179,9 +181,17 @@ export default function VentasPage() {
 
   const emitirDteVenta = async (v: Venta, tipoDte: 39 | 33) => {
     if (!negocio?.id) return;
+
+    if ((v as any).dte_estado === "pendiente_conciliacion") {
+      toast.warning(
+        "Esta venta está pendiente de conciliación con el SII. Por seguridad tributaria, el reintento automático está bloqueado para evitar duplicar folios."
+      );
+      return;
+    }
+
     setEmitiendoDte(true);
     try {
-      toast.info("Emitiendo documento en LibreDTE ante el SII...");
+      toast.info("Emitiendo documento fiscal ante el SII...");
       const res = await fetch("/api/libredte/emitir", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -189,6 +199,7 @@ export default function VentasPage() {
           ventaId: v.id,
           negocioId: negocio.id,
           tipoDte,
+          medioPago: v.pago || "efectivo",
         }),
       });
       const data = await res.json();
@@ -202,13 +213,22 @@ export default function VentasPage() {
             dte_folio: data.folio,
             dte_pdf_url: data.pdfUrl,
             dte_estado: "emitido",
+            dte_error: null,
           } as any);
         }
       } else {
         toast.error(data.error || "No se pudo emitir el DTE");
+        fetchVentas();
+        if (ventaSeleccionada && ventaSeleccionada.id === v.id) {
+          setVentaSeleccionada({
+            ...ventaSeleccionada,
+            dte_estado: data.estado || "error",
+            dte_error: data.error,
+          } as any);
+        }
       }
     } catch (err: any) {
-      toast.error(err.message || "Error al comunicar con LibreDTE");
+      toast.error(err.message || "Error al comunicar con el servicio de emisión tributaria");
     } finally {
       setEmitiendoDte(false);
     }
@@ -442,6 +462,15 @@ export default function VentasPage() {
                             </span>
                             <ExternalLink className="h-2.5 w-2.5" />
                           </a>
+                        ) : (v as any).dte_estado === "pendiente_conciliacion" ? (
+                          <span
+                            className="inline-flex items-center gap-1 text-[10px] text-amber-700 dark:text-amber-400 bg-amber-500/10 border border-amber-500/30 px-2 py-0.5 rounded-full font-bold cursor-pointer"
+                            title={(v as any).dte_error || "Emisión pendiente de conciliación con el SII"}
+                            onClick={() => verDetalle(v)}
+                          >
+                            <AlertTriangle className="h-3 w-3" />
+                            Conciliación DTE
+                          </span>
                         ) : (v as any).dte_estado === "error" ? (
                           <span
                             className="inline-flex items-center gap-1 text-[10px] text-destructive bg-destructive/10 px-2 py-0.5 rounded-full font-bold cursor-pointer"
@@ -564,6 +593,10 @@ export default function VentasPage() {
                       <span className="font-mono font-bold text-emerald-600 bg-emerald-500/10 px-2 py-0.5 rounded text-[11px]">
                         {(ventaSeleccionada as any)?.dte_tipo === 33 ? "Factura" : "Boleta"} #{(ventaSeleccionada as any)?.dte_folio}
                       </span>
+                    ) : (ventaSeleccionada as any)?.dte_estado === "pendiente_conciliacion" ? (
+                      <span className="text-[10px] text-amber-700 dark:text-amber-400 bg-amber-500/10 border border-amber-500/30 px-2 py-0.5 rounded font-bold">
+                        Pendiente Conciliación
+                      </span>
                     ) : (ventaSeleccionada as any)?.dte_estado === "error" ? (
                       <span className="text-[10px] text-destructive bg-destructive/10 px-2 py-0.5 rounded font-bold">
                         Error Emisión
@@ -581,28 +614,48 @@ export default function VentasPage() {
                       className="w-full h-8 text-xs gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-xs justify-center"
                     >
                       <FileText className="h-3.5 w-3.5" />
-                      <span>Ver Documento Oficial SII (PDF LibreDTE)</span>
+                      <span>Ver Documento Oficial SII (PDF Oficial)</span>
                       <ExternalLink className="h-3 w-3" />
                     </Button>
                   ) : (
                     <div className="pt-1 flex flex-col gap-1.5">
-                      {(ventaSeleccionada as any)?.dte_error && (
-                        <p className="text-[11px] text-destructive bg-destructive/5 p-1.5 rounded border border-destructive/20">
-                          <strong>Aviso:</strong> {(ventaSeleccionada as any).dte_error}
-                        </p>
-                      )}
-                      {ventaSeleccionada?.estado !== "anulada" && (
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          onClick={() => emitirDteVenta(ventaSeleccionada!, 39)}
-                          disabled={emitiendoDte}
-                          className="w-full h-8 text-xs gap-1.5 border-primary/40 text-primary hover:bg-primary/10 font-bold justify-center"
-                        >
-                          {emitiendoDte ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Landmark className="h-3.5 w-3.5" />}
-                          <span>{emitiendoDte ? "Emitiendo en LibreDTE..." : "Emitir Boleta Electrónica SII"}</span>
-                        </Button>
+                      {(ventaSeleccionada as any)?.dte_estado === "pendiente_conciliacion" ? (
+                        <div className="space-y-2">
+                          <p className="text-[11px] text-amber-800 dark:text-amber-300 bg-amber-500/10 p-2.5 rounded border border-amber-500/25">
+                            <strong>⚠️ Estado Incierto:</strong> {(ventaSeleccionada as any).dte_error || "La solicitud fue enviada pero el proveedor o SII tardó en responder. El reintento automático se encuentra bloqueado para evitar duplicar folios."}
+                          </p>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            disabled
+                            className="w-full h-8 text-xs gap-1.5 opacity-60 cursor-not-allowed justify-center"
+                          >
+                            <ShieldAlert className="h-3.5 w-3.5 text-amber-600" />
+                            <span>Reintento bloqueado (esperando conciliación con SII)</span>
+                          </Button>
+                        </div>
+                      ) : (
+                        <>
+                          {(ventaSeleccionada as any)?.dte_error && (
+                            <p className="text-[11px] text-destructive bg-destructive/5 p-1.5 rounded border border-destructive/20">
+                              <strong>Aviso:</strong> {(ventaSeleccionada as any).dte_error}
+                            </p>
+                          )}
+                          {ventaSeleccionada?.estado !== "anulada" && (
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              onClick={() => emitirDteVenta(ventaSeleccionada!, 39)}
+                              disabled={emitiendoDte}
+                              className="w-full h-8 text-xs gap-1.5 border-primary/40 text-primary hover:bg-primary/10 font-bold justify-center"
+                            >
+                              {emitiendoDte ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Landmark className="h-3.5 w-3.5" />}
+                              <span>{emitiendoDte ? "Emitiendo documento fiscal..." : "Emitir Boleta Electrónica SII"}</span>
+                            </Button>
+                          )}
+                        </>
                       )}
                     </div>
                   )}

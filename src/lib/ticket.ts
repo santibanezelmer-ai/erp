@@ -1,4 +1,30 @@
+import { QRCodeWriter, BarcodeFormat } from "@zxing/library";
 import { formatMoney } from "./format";
+
+/**
+ * Genera un código QR en formato SVG vectorial puro (sin dependencias de canvas ni red externa)
+ */
+export function generarQRCodeSvg(texto: string, size = 110): string {
+  try {
+    if (!texto || !texto.trim()) return "";
+    const writer = new QRCodeWriter();
+    const matrix = writer.encode(texto.trim(), BarcodeFormat.QR_CODE, 0, 0, new Map());
+    const width = matrix.getWidth();
+    const height = matrix.getHeight();
+    let rects = "";
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        if (matrix.get(x, y)) {
+          rects += `<rect x="${x}" y="${y}" width="1" height="1" fill="#000" />`;
+        }
+      }
+    }
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" width="${size}" height="${size}" shape-rendering="crispEdges" style="margin: 0 auto; display: block;">${rects}</svg>`;
+  } catch (err) {
+    console.error("Error al generar código QR para el ticket:", err);
+    return "";
+  }
+}
 
 export interface TicketItem {
   nombre: string;
@@ -55,11 +81,12 @@ export function imprimirTicketTermico(data: TicketData, anchoMm: 58 | 80 = 80) {
       })
     : new Date().toLocaleString("es-CL");
 
-  const esDteOficial = Boolean(data.dteFolio || data.dteEsOficial);
+  const esDteOficial = Boolean(data.dteFolio && Number(data.dteFolio) > 0);
   const tipoDteNum = Number(data.dteTipo || 39);
   const dteNombre = tipoDteNum === 33 ? "FACTURA ELECTRÓNICA" : "BOLETA ELECTRÓNICA";
   const ivaEstimado = Math.round(data.total - data.total / 1.19);
   const rutEmisor = data.negocioRut || "76.000.000-0";
+  const qrSvg = esDteOficial && data.dtePdfUrl ? generarQRCodeSvg(data.dtePdfUrl, 115) : "";
 
   const printWindow = window.open("", "_blank", "width=400,height=600");
   if (!printWindow) {
@@ -155,6 +182,13 @@ export function imprimirTicketTermico(data: TicketData, anchoMm: 58 | 80 = 80) {
             font-size: 15px;
             font-weight: 900;
           }
+          .ticket-interno-box {
+            border: 1px dashed #555;
+            padding: 6px 4px;
+            text-align: center;
+            margin: 6px 0 4px 0;
+            background: #fbfbfb;
+          }
           @media print {
             body { padding: 4px; }
             .no-print { display: none; }
@@ -186,16 +220,14 @@ export function imprimirTicketTermico(data: TicketData, anchoMm: 58 | 80 = 80) {
             <div class="sii-folio">N° ${data.dteFolio}</div>
           </div>
           <div class="text-center" style="font-size: 9px; font-weight: bold; margin-bottom: 6px;">
-            S.I.I. - ${data.negocioComuna ? data.negocioComuna.toUpperCase() : "SANTIAGO ORIENTE"}
+            S.I.I. - ${data.negocioComuna ? data.negocioComuna.toUpperCase() : "SANTIAGO"}
           </div>
         `
             : `
-          <div class="divider"></div>
-          <div>
-            <div style="display: flex; justify-content: space-between;">
-              <span class="font-bold">COMPROBANTE: #${data.folio}</span>
-              <span>${fechaStr}</span>
-            </div>
+          <div class="ticket-interno-box">
+            <div style="font-size: 11px; font-weight: 800; letter-spacing: 0.5px;">COMPROBANTE DE VENTA INTERNO</div>
+            <div style="font-size: 8px; color: #555; margin-top: 1px;">DOCUMENTO NO VÁLIDO COMO BOLETA NI FACTURA</div>
+            <div style="font-size: 10px; font-weight: 700; margin-top: 3px;">TICKET N° #${data.folio}</div>
           </div>
         `
         }
@@ -204,6 +236,7 @@ export function imprimirTicketTermico(data: TicketData, anchoMm: 58 | 80 = 80) {
 
         <div>
           ${esDteOficial ? `<div style="display: flex; justify-content: space-between; margin-bottom: 2px;"><span>Fecha Emisión:</span><span class="font-bold">${fechaStr}</span></div>` : ""}
+          ${!esDteOficial ? `<div style="display: flex; justify-content: space-between; margin-bottom: 2px;"><span>Fecha:</span><span>${fechaStr}</span></div>` : ""}
           ${data.mesa ? `<div class="font-bold" style="font-size: 12px; margin-top: 2px;">MESA / COMANDA: ${data.mesa}</div>` : ""}
           ${data.cajero ? `<div>Atendido por: ${data.cajero}</div>` : ""}
           ${data.clienteNombre ? `<div>Cliente: ${data.clienteNombre}</div>` : ""}
@@ -272,22 +305,35 @@ export function imprimirTicketTermico(data: TicketData, anchoMm: 58 | 80 = 80) {
         ${
           esDteOficial
             ? `
-          <div style="border: 1px solid #000; padding: 6px 4px; text-align: center; margin-top: 8px; font-size: 9px; line-height: 1.3;">
-            <div style="font-weight: 800; text-transform: uppercase;">Timbre Electrónico SII</div>
-            <div style="font-size: 8px; margin-top: 1px;">Res. N° 80 de 2014 - Verifique documento en www.sii.cl</div>
+          ${
+            qrSvg
+              ? `
+            <div style="text-align: center; margin: 8px 0;">
+              ${qrSvg}
+              <div style="font-size: 8px; font-weight: bold; margin-top: 3px;">
+                Escanee el código QR para ver / validar documento oficial en el SII
+              </div>
+            </div>
+            `
+              : ""
+          }
+          <div style="border: 1px solid #000; padding: 5px 4px; text-align: center; margin-top: 6px; font-size: 8.5px; line-height: 1.3;">
+            <div style="font-weight: 800; text-transform: uppercase;">Documento Tributario Electrónico</div>
+            <div style="font-size: 8px; margin-top: 1px;">Emitido vía Portal eBoleta SII · Res. N° 80 de 2014</div>
+            <div style="font-size: 8px; font-weight: 700;">Folio Autorizado N° ${data.dteFolio} · Verifique en www.sii.cl</div>
           </div>
           <div class="text-center" style="margin-top: 6px; font-size: 10px; font-weight: 600;">
             ${data.mensajePie || "¡Gracias por su compra!"}
           </div>
           <div class="text-center" style="font-size: 8px; color: #666; margin-top: 2px;">
-            Operix ERP - Facturación eBoleta SII
+            Operix ERP · Facturación eBoleta SII
           </div>
         `
             : `
           <div class="text-center" style="margin-top: 8px; font-size: 10px; color: #333;">
             <div>${data.mensajePie || "¡Gracias por su preferencia!"}</div>
-            <div style="font-size: 9px; margin-top: 4px; color: #666;">Documento no válido como factura tributaria</div>
-            <div style="font-size: 8px; margin-top: 2px; color: #888;">Operix ERP - Potenciado por IA</div>
+            <div style="font-size: 9px; margin-top: 4px; color: #666; font-weight: 600;">Comprobante de uso interno — no válido como boleta ni factura</div>
+            <div style="font-size: 8px; margin-top: 2px; color: #888;">Operix ERP · Sistema de Punto de Venta</div>
           </div>
         `
         }
@@ -315,7 +361,7 @@ export function imprimirTicketTermico(data: TicketData, anchoMm: 58 | 80 = 80) {
 export async function descargarTicketPDF(data: TicketData) {
   const { jsPDF } = await import("jspdf");
 
-  const esDteOficial = Boolean(data.dteFolio || data.dteEsOficial);
+  const esDteOficial = Boolean(data.dteFolio && Number(data.dteFolio) > 0);
   const tipoDteNum = Number(data.dteTipo || 39);
   const dteNombre = tipoDteNum === 33 ? "FACTURA ELECTRÓNICA" : "BOLETA ELECTRÓNICA";
   const ivaEstimado = Math.round(data.total - data.total / 1.19);
@@ -379,7 +425,16 @@ export async function descargarTicketPDF(data: TicketData) {
   } else {
     doc.line(5, y, 75, y);
     y += 4;
-    doc.text(`Ticket: #${data.folio}`, 5, y);
+    doc.setFont("courier", "bold");
+    doc.setFontSize(8);
+    doc.text("COMPROBANTE DE VENTA INTERNO", 40, y, { align: "center" });
+    y += 3;
+    doc.setFont("courier", "normal");
+    doc.setFontSize(6);
+    doc.text("DOCUMENTO NO VÁLIDO COMO BOLETA NI FACTURA", 40, y, { align: "center" });
+    y += 3.5;
+    doc.setFontSize(7.5);
+    doc.text(`TICKET N° #${data.folio}`, 5, y);
     y += 3.5;
   }
 
@@ -490,9 +545,9 @@ export async function descargarTicketPDF(data: TicketData) {
     doc.text(data.mensajePie || "¡Gracias por su preferencia!", 40, y, { align: "center" });
     y += 3.5;
     doc.setFontSize(6);
-    doc.text("Documento no válido como factura", 40, y, { align: "center" });
+    doc.text("Comprobante de uso interno — no válido tributariamente", 40, y, { align: "center" });
     y += 3;
-    doc.text("Operix ERP", 40, y, { align: "center" });
-    doc.save(`Ticket-${data.folio}.pdf`);
+    doc.text("Operix ERP · Sistema de Punto de Venta", 40, y, { align: "center" });
+    doc.save(`Ticket-Interno-${data.folio}.pdf`);
   }
 }

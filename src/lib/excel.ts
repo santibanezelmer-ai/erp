@@ -71,21 +71,75 @@ export async function parsearProductosDesdeArchivo(file: File): Promise<Producto
   const productos: ProductoImportRow[] = [];
 
   for (const row of rawRows) {
-    // Detectar campos buscando variaciones comunes de encabezados
-    const nombre = (row["Nombre Producto *"] || row["Nombre"] || row["nombre"] || row["Producto"] || "").toString().trim();
+    // Detectar campos buscando variaciones comunes de encabezados (incluyendo formato estándar CSV de tienda / Shopify)
+    const nombre = (
+      row["Nombre Producto *"] ||
+      row["Nombre"] ||
+      row["nombre"] ||
+      row["Producto"] ||
+      row["Title"] ||
+      row["title"] ||
+      row["Handle"] ||
+      ""
+    ).toString().trim();
     if (!nombre) continue; // Si no tiene nombre se salta
 
-    const codigo = (row["Código de Barras"] || row["Codigo"] || row["codigo"] || row["Barcode"] || "").toString().trim() || null;
-    const categoria = (row["Categoría"] || row["Categoria"] || row["categoria"] || "").toString().trim() || null;
-    const descripcion = (row["Descripción"] || row["Descripcion"] || row["descripcion"] || "").toString().trim() || null;
+    const codigo = (
+      row["Código de Barras"] ||
+      row["Codigo"] ||
+      row["codigo"] ||
+      row["Barcode"] ||
+      row["SKU"] ||
+      row["sku"] ||
+      ""
+    ).toString().trim() || null;
 
-    const rawPrecioVenta = row["Precio Venta *"] ?? row["Precio"] ?? row["precio_venta"] ?? row["precio"] ?? 0;
+    const categoria = (
+      row["Categoría"] ||
+      row["Categoria"] ||
+      row["categoria"] ||
+      row["Category"] ||
+      ""
+    ).toString().trim() || null;
+
+    // Detectar opciones de variantes si proviene de CSV de inventario
+    const optDesc = [
+      row["Option1 Value"] && row["Option1 Value"] !== "Default Title"
+        ? `${row["Option1 Name"] || "Opción"}: ${row["Option1 Value"]}`
+        : null,
+      row["Option2 Value"]
+        ? `${row["Option2 Name"] || "Opción"}: ${row["Option2 Value"]}`
+        : null,
+      row["Option3 Value"]
+        ? `${row["Option3 Name"] || "Opción"}: ${row["Option3 Value"]}`
+        : null,
+    ].filter(Boolean).join(", ");
+
+    const descripcion = (
+      row["Descripción"] ||
+      row["Descripcion"] ||
+      row["descripcion"] ||
+      optDesc ||
+      ""
+    ).toString().trim() || null;
+
+    const rawPrecioVenta = row["Precio Venta *"] ?? row["Precio"] ?? row["precio_venta"] ?? row["precio"] ?? row["Price"] ?? 0;
     const precio_venta = Math.max(0, Number(rawPrecioVenta) || 0);
 
-    const rawPrecioCosto = row["Precio Costo"] ?? row["Costo"] ?? row["precio_costo"] ?? row["costo"] ?? 0;
+    const rawPrecioCosto = row["Precio Costo"] ?? row["Costo"] ?? row["precio_costo"] ?? row["costo"] ?? row["Cost price"] ?? 0;
     const precio_costo = Math.max(0, Number(rawPrecioCosto) || 0);
 
-    const rawStock = row["Stock Inicial"] ?? row["Stock"] ?? row["stock"] ?? 0;
+    const rawStock = (
+      row["Stock Inicial"] ??
+      row["Stock"] ??
+      row["stock"] ??
+      row["Available (not editable)"] ??
+      row["On hand (current)"] ??
+      row["On hand (new)"] ??
+      row["Available"] ??
+      row["Inventory"] ??
+      0
+    );
     const stock = Math.max(0, Number(rawStock) || 0);
 
     const rawStockMin = row["Stock Mínimo"] ?? row["Stock Minimo"] ?? row["stock_minimo"] ?? 0;

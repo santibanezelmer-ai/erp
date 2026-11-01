@@ -52,6 +52,10 @@ import {
   parsearProductosDesdeArchivo,
   type ProductoImportRow,
 } from "@/lib/excel";
+import {
+  exportarInventarioCSV,
+  descargarPlantillaInventarioCSV,
+} from "@/lib/inventory-csv";
 import { imprimirHojaEtiquetas } from "@/lib/barcode-labels";
 
 type Producto = Database["public"]["Tables"]["productos"]["Row"];
@@ -521,6 +525,20 @@ export default function ProductosPage() {
     toast.success("Catálogo exportado a Excel exitosamente");
   };
 
+  // Exportación a CSV de inventario (formato estándar para cualquier tienda)
+  const handleExportarCSV = () => {
+    if (productosFiltrados.length === 0) {
+      toast.info("No hay productos para exportar");
+      return;
+    }
+    exportarInventarioCSV(productosFiltrados, variantes, {
+      nombreNegocio: negocio?.nombre || "Tienda",
+      sucursalNombre: sucursalActiva?.nombre,
+      direccion: (negocio as any)?.direccion,
+    });
+    toast.success("Inventario exportado en formato CSV (.csv) exitosamente");
+  };
+
   // Procesar archivo seleccionado para importar
   const handleArchivoExcelSeleccionado = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -625,12 +643,24 @@ export default function ProductosPage() {
           <Button
             variant="outline"
             size="sm"
+            onClick={handleExportarCSV}
+            title="Exportar inventario en archivo .csv compatible con cualquier tienda"
+            className="gap-1.5 text-xs font-semibold flex-1 sm:flex-initial justify-center border-emerald-500/30 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-500/10"
+          >
+            <Download className="h-4 w-4 text-emerald-600" />
+            <span className="hidden sm:inline">Exportar CSV</span>
+            <span className="sm:hidden">CSV</span>
+          </Button>
+
+          <Button
+            variant="outline"
+            size="sm"
             onClick={handleExportarExcel}
             className="gap-1.5 text-xs font-semibold flex-1 sm:flex-initial justify-center"
           >
             <FileSpreadsheet className="h-4 w-4 text-emerald-600" />
             <span className="hidden sm:inline">Exportar Excel</span>
-            <span className="sm:hidden">Exportar</span>
+            <span className="sm:hidden">Excel</span>
           </Button>
 
           <Button
@@ -1614,21 +1644,34 @@ export default function ProductosPage() {
 
           <div className="space-y-4 py-2">
             {/* Paso 1: Descargar plantilla */}
-            <div className="flex items-center justify-between p-3 rounded-xl border border-dashed border-border bg-muted/20">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 rounded-xl border border-dashed border-border bg-muted/20">
               <div className="text-xs space-y-0.5">
                 <span className="font-bold text-foreground">¿No tienes el formato?</span>
                 <p className="text-muted-foreground">Descarga nuestra plantilla oficial con columnas listas.</p>
               </div>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={descargarPlantillaProductos}
-                className="gap-1.5 text-xs font-semibold"
-              >
-                <Download className="h-3.5 w-3.5 text-emerald-600" />
-                Plantilla Excel
-              </Button>
+              <div className="flex items-center gap-1.5 shrink-0">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={descargarPlantillaInventarioCSV}
+                  title="Plantilla CSV estándar compatible con cualquier tienda"
+                  className="gap-1.5 text-xs font-semibold"
+                >
+                  <Download className="h-3.5 w-3.5 text-emerald-600" />
+                  Plantilla CSV
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={descargarPlantillaProductos}
+                  className="gap-1.5 text-xs font-semibold"
+                >
+                  <Download className="h-3.5 w-3.5 text-blue-600" />
+                  Excel
+                </Button>
+              </div>
             </div>
 
             {/* Paso 2: Subir archivo */}

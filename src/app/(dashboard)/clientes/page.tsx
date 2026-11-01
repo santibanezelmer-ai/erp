@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import { useTenant } from "@/contexts/tenant-context";
 import { createClient } from "@/lib/supabase/client";
 import { formatMoney } from "@/lib/format";
@@ -30,7 +29,6 @@ import {
   Printer,
   FileText,
   CheckCheck,
-  BadgeDollarSign,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { imprimirTicketTermico } from "@/lib/ticket";
@@ -71,89 +69,6 @@ export default function ClientesPage() {
   const [itemsFiadosPendientes, setItemsFiadosPendientes] = useState<ProductoFiadoItem[]>([]);
   const [totalCalculadoPendiente, setTotalCalculadoPendiente] = useState(0);
 
-  // Mapa de productos fiados activos por cliente para visualización directa en la tabla
-  const [fiadosResumenMap, setFiadosResumenMap] = useState<Record<string, ProductoFiadoItem[]>>({});
-  const [cargandoFiadosResumen, setCargandoFiadosResumen] = useState(false);
-
-  // Carga en segundo plano de los productos fiados específicos de cada cliente con deuda activa
-  const cargarResumenFiadosParaClientes = async (clientesConDeuda: Cliente[]) => {
-    if (!negocio?.id || clientesConDeuda.length === 0) return;
-    setCargandoFiadosResumen(true);
-    const supabase = createClient();
-
-    try {
-      const clientIds = clientesConDeuda.map((c) => c.id);
-
-      const [deudasRes, ventasRes] = await Promise.all([
-        supabase
-          .from("deudas")
-          .select("id, cliente_id, venta_id, monto, tipo, notas, created_at")
-          .eq("negocio_id", negocio.id)
-          .in("cliente_id", clientIds)
-          .order("created_at", { ascending: true }),
-        supabase
-          .from("ventas")
-          .select("id, cliente_id, total, created_at, estado, pago")
-          .eq("negocio_id", negocio.id)
-          .in("cliente_id", clientIds)
-          .eq("pago", "fiado")
-          .neq("estado", "cancelada")
-          .order("created_at", { ascending: true }),
-      ]);
-
-      const deudasData = deudasRes.data || [];
-      const ventasData = ventasRes.data || [];
-
-      // Buscar IDs de ventas para cargar detalles de venta
-      const ventaIdsSet = new Set<string>();
-      ventasData.forEach((v) => ventaIdsSet.add(v.id));
-      deudasData.forEach((d) => {
-        if (d.venta_id) ventaIdsSet.add(d.venta_id);
-      });
-
-      const ventaIds = Array.from(ventaIdsSet);
-      const detallesPorVenta = new Map<string, any[]>();
-
-      if (ventaIds.length > 0) {
-        const { data: detsData } = await supabase
-          .from("detalle_ventas")
-          .select("id, venta_id, nombre, qty, precio, subtotal, created_at")
-          .in("venta_id", ventaIds);
-
-        if (detsData) {
-          detsData.forEach((d) => {
-            const arr = detallesPorVenta.get(d.venta_id) || [];
-            arr.push(d);
-            detallesPorVenta.set(d.venta_id, arr);
-          });
-        }
-      }
-
-      const nuevoMapa: Record<string, ProductoFiadoItem[]> = {};
-
-      for (const c of clientesConDeuda) {
-        const deudaActual = Number(c.deuda_total || 0);
-        const cliDeudas = deudasData.filter((d) => d.cliente_id === c.id);
-        const cliVentas = ventasData.filter((v) => v.cliente_id === c.id);
-
-        const { productos } = conciliarFiadosClienteFIFO(
-          deudaActual,
-          cliDeudas,
-          cliVentas,
-          detallesPorVenta
-        );
-
-        nuevoMapa[c.id] = productos;
-      }
-
-      setFiadosResumenMap(nuevoMapa);
-    } catch (err) {
-      console.error("Error al cargar resumen de fiados en clientes:", err);
-    } finally {
-      setCargandoFiadosResumen(false);
-    }
-  };
-
   const fetchClientes = async () => {
     if (!negocio?.id) return;
     setLoading(true);
@@ -167,14 +82,7 @@ export default function ClientesPage() {
         .order("nombre", { ascending: true });
 
       if (error) throw error;
-      const listaClientes = data || [];
-      setClientes(listaClientes);
-
-      // Cargar productos adeudados para clientes con deuda
-      const conDeuda = listaClientes.filter((c) => Number(c.deuda_total || 0) > 0);
-      if (conDeuda.length > 0) {
-        cargarResumenFiadosParaClientes(conDeuda);
-      }
+      setClientes(data || []);
     } catch (err: any) {
       toast.error(err.message || "Error al cargar clientes");
     } finally {
@@ -409,7 +317,6 @@ export default function ClientesPage() {
 
       setItemsFiadosPendientes(productos);
       setTotalCalculadoPendiente(deudaActual);
-      setFiadosResumenMap((prev) => ({ ...prev, [c.id]: productos }));
     } catch (err: any) {
       console.error("Error al obtener detalle de fiados:", err);
       toast.error(err.message || "Error al cargar productos de fiados");
@@ -536,9 +443,9 @@ export default function ClientesPage() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Clientes y Fiados</h1>
+          <h1 className="text-2xl font-bold tracking-tight">Clientes</h1>
           <p className="text-sm text-muted-foreground">
-            Control de cuentas corrientes, libreta de fiados y pagos ({clientes.length} clientes)
+            Directorio de clientes, cuentas corrientes y fiados ({clientes.length} clientes)
           </p>
         </div>
 
@@ -547,17 +454,6 @@ export default function ClientesPage() {
             <span className="text-muted-foreground mr-1.5">Deuda por Cobrar:</span>
             <span className="text-amber-600 font-bold text-sm sm:text-base">{formatMoney(deudaTotalGlobal)}</span>
           </div>
-
-          <Link href="/fiados" className="flex-1 sm:flex-initial">
-            <Button
-              variant="outline"
-              className="gap-2 shadow-xs border-amber-500/40 text-amber-600 hover:bg-amber-500/10 font-bold w-full justify-center"
-            >
-              <BadgeDollarSign className="h-4 w-4" />
-              <span className="hidden sm:inline">Módulo de Fiados</span>
-              <span className="sm:hidden">Fiados</span>
-            </Button>
-          </Link>
 
           <Button onClick={abrirCrear} className="gap-2 shadow-sm font-bold w-full sm:w-auto justify-center">
             <Plus className="h-4 w-4" />
@@ -665,50 +561,11 @@ export default function ClientesPage() {
                             "—"
                           )}
                         </td>
-                        <td className="py-2.5 sm:py-3 px-3 sm:px-4 text-right align-top">
+                        <td className="py-2.5 sm:py-3 px-3 sm:px-4 text-right">
                           {deuda > 0 ? (
-                            <div className="flex flex-col items-end">
-                              <span className="font-bold text-xs sm:text-sm text-amber-600 dark:text-amber-500">
-                                {formatMoney(deuda)}
-                              </span>
-
-                              {/* Desglose directo de productos fiados ahí mismo */}
-                              {fiadosResumenMap[c.id] && fiadosResumenMap[c.id].length > 0 ? (
-                                <div className="mt-1.5 flex flex-col items-end gap-1 max-w-[280px]">
-                                  {fiadosResumenMap[c.id].slice(0, 3).map((item, idx) => (
-                                    <div
-                                      key={idx}
-                                      className="inline-flex items-center gap-1.5 text-[11px] bg-amber-500/10 text-amber-950 dark:text-amber-200 border border-amber-500/20 px-2 py-0.5 rounded-md text-left w-full justify-between"
-                                      title={`${item.nombre} - ${formatMoney(item.subtotal)}`}
-                                    >
-                                      <div className="flex items-center gap-1 truncate mr-1">
-                                        <Package className="h-3 w-3 text-amber-600 shrink-0" />
-                                        <span className="font-semibold text-foreground truncate">
-                                          {item.qty}× {item.nombre}
-                                        </span>
-                                      </div>
-                                      {item.folio && (
-                                        <span className="font-mono text-[9px] text-muted-foreground bg-background/80 px-1 py-0.5 rounded shrink-0 border border-border/50">
-                                          Venta #{item.folio}
-                                        </span>
-                                      )}
-                                    </div>
-                                  ))}
-                                  {fiadosResumenMap[c.id].length > 3 && (
-                                    <button
-                                      onClick={() => abrirDetalleProductosFiados(c)}
-                                      className="text-[10px] text-primary hover:underline font-semibold mt-0.5"
-                                    >
-                                      +{fiadosResumenMap[c.id].length - 3} producto(s) más...
-                                    </button>
-                                  )}
-                                </div>
-                              ) : cargandoFiadosResumen ? (
-                                <span className="text-[10px] text-muted-foreground animate-pulse mt-1">
-                                  Cargando productos...
-                                </span>
-                              ) : null}
-                            </div>
+                            <span className="font-bold text-xs sm:text-sm text-amber-600 dark:text-amber-500">
+                              {formatMoney(deuda)}
+                            </span>
                           ) : (
                             <span className="text-[11px] sm:text-xs text-emerald-600 dark:text-emerald-500 font-semibold">
                               Al día ($0)
@@ -727,7 +584,7 @@ export default function ClientesPage() {
                                   className="h-7 text-xs px-2 gap-1 border-primary/40 text-primary hover:bg-primary/10"
                                 >
                                   <Package className="h-3.5 w-3.5" />
-                                  <span className="hidden sm:inline">Ver Productos</span>
+                                  <span>Ver Productos</span>
                                 </Button>
                                 <Button
                                   size="sm"

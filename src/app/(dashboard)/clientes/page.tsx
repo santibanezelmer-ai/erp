@@ -34,6 +34,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { imprimirTicketTermico } from "@/lib/ticket";
+import { conciliarFiadosClienteFIFO, type ProductoFiadoItem } from "@/lib/fiados";
 
 type Cliente = Database["public"]["Tables"]["clientes"]["Row"];
 
@@ -67,19 +68,91 @@ export default function ClientesPage() {
   const [clienteProductos, setClienteProductos] = useState<Cliente | null>(null);
   const [loadingProductos, setLoadingProductos] = useState(false);
   const [saldandoTotal, setSaldandoTotal] = useState(false);
-  const [itemsFiadosPendientes, setItemsFiadosPendientes] = useState<{
-    id: string;
-    ventaId?: string;
-    folio?: string;
-    fecha: string;
-    nombre: string;
-    qty: number;
-    precio: number;
-    subtotal: number;
-    esParcial?: boolean;
-    montoPendiente?: number;
-  }[]>([]);
+  const [itemsFiadosPendientes, setItemsFiadosPendientes] = useState<ProductoFiadoItem[]>([]);
   const [totalCalculadoPendiente, setTotalCalculadoPendiente] = useState(0);
+
+  // Mapa de productos fiados activos por cliente para visualización directa en la tabla
+  const [fiadosResumenMap, setFiadosResumenMap] = useState<Record<string, ProductoFiadoItem[]>>({});
+  const [cargandoFiadosResumen, setCargandoFiadosResumen] = useState(false);
+
+  // Carga en segundo plano de los productos fiados específicos de cada cliente con deuda activa
+  const cargarResumenFiadosParaClientes = async (clientesConDeuda: Cliente[]) => {
+    if (!negocio?.id || clientesConDeuda.length === 0) return;
+    setCargandoFiadosResumen(true);
+    const supabase = createClient();
+
+    try {
+      const clientIds = clientesConDeuda.map((c) => c.id);
+
+      const [deudasRes, ventasRes] = await Promise.all([
+        supabase
+          .from("deudas")
+          .select("id, cliente_id, venta_id, monto, tipo, notas, created_at")
+          .eq("negocio_id", negocio.id)
+          .in("cliente_id", clientIds)
+          .order("created_at", { ascending: true }),
+        supabase
+          .from("ventas")
+          .select("id, cliente_id, total, created_at, estado, pago")
+          .eq("negocio_id", negocio.id)
+          .in("cliente_id", clientIds)
+          .eq("pago", "fiado")
+          .neq("estado", "cancelada")
+          .order("created_at", { ascending: true }),
+      ]);
+
+      const deudasData = deudasRes.data || [];
+      const ventasData = ventasRes.data || [];
+
+      // Buscar IDs de ventas para cargar detalles de venta
+      const ventaIdsSet = new Set<string>();
+      ventasData.forEach((v) => ventaIdsSet.add(v.id));
+      deudasData.forEach((d) => {
+        if (d.venta_id) ventaIdsSet.add(d.venta_id);
+      });
+
+      const ventaIds = Array.from(ventaIdsSet);
+      const detallesPorVenta = new Map<string, any[]>();
+
+      if (ventaIds.length > 0) {
+        const { data: detsData } = await supabase
+          .from("detalle_ventas")
+          .select("id, venta_id, nombre, qty, precio, subtotal, created_at")
+          .in("venta_id", ventaIds);
+
+        if (detsData) {
+          detsData.forEach((d) => {
+            const arr = detallesPorVenta.get(d.venta_id) || [];
+            arr.push(d);
+            detallesPorVenta.set(d.venta_id, arr);
+          });
+        }
+      }
+
+      const nuevoMapa: Record<string, ProductoFiadoItem[]> = {};
+
+      for (const c of clientesConDeuda) {
+        const deudaActual = Number(c.deuda_total || 0);
+        const cliDeudas = deudasData.filter((d) => d.cliente_id === c.id);
+        const cliVentas = ventasData.filter((v) => v.cliente_id === c.id);
+
+        const { productos } = conciliarFiadosClienteFIFO(
+          deudaActual,
+          cliDeudas,
+          cliVentas,
+          detallesPorVenta
+        );
+
+        nuevoMapa[c.id] = productos;
+      }
+
+      setFiadosResumenMap(nuevoMapa);
+    } catch (err) {
+      console.error("Error al cargar resumen de fiados en clientes:", err);
+    } finally {
+      setCargandoFiadosResumen(false);
+    }
+  };
 
   const fetchClientes = async () => {
     if (!negocio?.id) return;
@@ -94,7 +167,14 @@ export default function ClientesPage() {
         .order("nombre", { ascending: true });
 
       if (error) throw error;
-      setClientes(data || []);
+      const listaClientes = data || [];
+      setClientes(listaClientes);
+
+      // Cargar productos adeudados para clientes con deuda
+      const conDeuda = listaClientes.filter((c) => Number(c.deuda_total || 0) > 0);
+      if (conDeuda.length > 0) {
+        cargarResumenFiadosParaClientes(conDeuda);
+      }
     } catch (err: any) {
       toast.error(err.message || "Error al cargar clientes");
     } finally {
@@ -278,144 +358,41 @@ export default function ClientesPage() {
     try {
       const supabase = createClient();
 
-      // 1. Obtener todas las filas de la tabla deudas del cliente en orden cronológico
-      const { data: deudasData, error: errDeudas } = await supabase
-        .from("deudas")
-        .select("*")
-        .eq("cliente_id", c.id)
-        .order("created_at", { ascending: true });
+      const [deudasRes, ventasRes] = await Promise.all([
+        supabase
+          .from("deudas")
+          .select("id, cliente_id, venta_id, monto, tipo, notas, created_at")
+          .eq("cliente_id", c.id)
+          .order("created_at", { ascending: true }),
+        supabase
+          .from("ventas")
+          .select("id, cliente_id, total, created_at, estado, pago")
+          .eq("cliente_id", c.id)
+          .eq("pago", "fiado")
+          .neq("estado", "cancelada")
+          .order("created_at", { ascending: true }),
+      ]);
 
-      if (errDeudas) throw errDeudas;
+      const deudasData = deudasRes.data || [];
+      const ventasData = ventasRes.data || [];
 
-      // 2. Obtener todas las ventas fiadas del cliente en orden cronológico
-      const { data: ventasData, error: errVentas } = await supabase
-        .from("ventas")
-        .select("id, total, created_at, estado, pago")
-        .eq("cliente_id", c.id)
-        .eq("pago", "fiado")
-        .neq("estado", "cancelada")
-        .order("created_at", { ascending: true });
-
-      if (errVentas) throw errVentas;
-
-      // Unificar todos los cargos (ventas y cargos manuales de deudas)
-      type Cargo = {
-        id: string;
-        venta_id: string | null;
-        monto: number;
-        fecha: string;
-        notas: string | null;
-      };
-
-      const cargosMap = new Map<string, Cargo>();
-
-      // Primero las ventas directas con pago fiado
-      (ventasData || []).forEach((v) => {
-        cargosMap.set(`v-${v.id}`, {
-          id: `v-${v.id}`,
-          venta_id: v.id,
-          monto: Number(v.total || 0),
-          fecha: v.created_at,
-          notas: `Venta Fiada #${v.id.slice(0, 8)}`,
-        });
+      const ventaIdsSet = new Set<string>();
+      ventasData.forEach((v) => ventaIdsSet.add(v.id));
+      deudasData.forEach((d) => {
+        if (d.venta_id) ventaIdsSet.add(d.venta_id);
       });
 
-      // Luego las filas de deudas
-      let totalAbonos = 0;
-      (deudasData || []).forEach((d) => {
-        const m = Number(d.monto || 0);
-        if (d.tipo === "pago") {
-          totalAbonos += m;
-        } else {
-          // Tipo cargo / deuda
-          const key = d.venta_id ? `v-${d.venta_id}` : `d-${d.id}`;
-          if (!cargosMap.has(key)) {
-            cargosMap.set(key, {
-              id: d.id,
-              venta_id: d.venta_id,
-              monto: m,
-              fecha: d.created_at,
-              notas: d.notas,
-            });
-          }
-        }
-      });
+      const ventaIds = Array.from(ventaIdsSet);
+      const detallesPorVenta = new Map<string, any[]>();
 
-      // Ordenar todos los cargos por fecha ascendente (FIFO)
-      const listaCargos = Array.from(cargosMap.values()).sort(
-        (a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime()
-      );
-
-      // Calcular el monto histórico que ya fue saldado/consolidado
-      const totalCargosHistoricos = listaCargos.reduce((acc, crg) => acc + crg.monto, 0);
-      let saldoPagado = Math.max(0, totalCargosHistoricos - deudaActual);
-      if (totalAbonos > saldoPagado) {
-        saldoPagado = totalAbonos;
-      }
-
-      // Aplicar filtro FIFO:
-      // Cualquier compra/cargo anterior que ya haya sido cubierta por pagos SE OMITE ("lo consolidado se borra")
-      const cargosPendientes: {
-        cargo: Cargo;
-        montoPendiente: number;
-        esParcial: boolean;
-      }[] = [];
-
-      for (const crg of listaCargos) {
-        if (saldoPagado >= crg.monto) {
-          // Totalmente saldado -> CONSOLIDADO (se omite del detalle)
-          saldoPagado -= crg.monto;
-        } else if (saldoPagado > 0) {
-          // Parcialmente saldado
-          const rem = crg.monto - saldoPagado;
-          saldoPagado = 0;
-          cargosPendientes.push({
-            cargo: crg,
-            montoPendiente: rem,
-            esParcial: true,
-          });
-        } else {
-          // Totalmente pendiente de pago
-          cargosPendientes.push({
-            cargo: crg,
-            montoPendiente: crg.monto,
-            esParcial: false,
-          });
-        }
-      }
-
-      // Si no hay cargos estructurados pero hay deuda_total > 0 (ej. carga directa de saldo)
-      if (cargosPendientes.length === 0 && deudaActual > 0) {
-        setItemsFiadosPendientes([
-          {
-            id: `saldo-${c.id}`,
-            fecha: new Date().toISOString(),
-            nombre: "Saldo adeudado registrado en cuenta",
-            qty: 1,
-            precio: deudaActual,
-            subtotal: deudaActual,
-            esParcial: false,
-            montoPendiente: deudaActual,
-          },
-        ]);
-        setTotalCalculadoPendiente(deudaActual);
-        return;
-      }
-
-      // Buscar detalles de ventas para los cargos pendientes
-      const ventaIds = cargosPendientes
-        .map((cp) => cp.cargo.venta_id)
-        .filter(Boolean) as string[];
-
-      let detallesPorVenta = new Map<string, any[]>();
       if (ventaIds.length > 0) {
-        const { data: dets } = await supabase
+        const { data: detsData } = await supabase
           .from("detalle_ventas")
           .select("id, venta_id, nombre, qty, precio, subtotal, created_at")
           .in("venta_id", ventaIds);
 
-        if (dets) {
-          dets.forEach((d) => {
+        if (detsData) {
+          detsData.forEach((d) => {
             const arr = detallesPorVenta.get(d.venta_id) || [];
             arr.push(d);
             detallesPorVenta.set(d.venta_id, arr);
@@ -423,44 +400,16 @@ export default function ClientesPage() {
         }
       }
 
-      // Ensamblar productos pendientes
-      const itemsFinales: typeof itemsFiadosPendientes = [];
+      const { productos } = conciliarFiadosClienteFIFO(
+        deudaActual,
+        deudasData,
+        ventasData,
+        detallesPorVenta
+      );
 
-      for (const cp of cargosPendientes) {
-        const crg = cp.cargo;
-        if (crg.venta_id && detallesPorVenta.has(crg.venta_id)) {
-          const prods = detallesPorVenta.get(crg.venta_id)!;
-          prods.forEach((p, idx) => {
-            itemsFinales.push({
-              id: `${p.id || idx}-${crg.id}`,
-              ventaId: crg.venta_id || undefined,
-              folio: crg.venta_id?.slice(0, 8).toUpperCase(),
-              fecha: crg.fecha,
-              nombre: p.nombre || "Artículo sin nombre",
-              qty: Number(p.qty || 1),
-              precio: Number(p.precio || 0),
-              subtotal: Number(p.subtotal || (Number(p.qty || 1) * Number(p.precio || 0))),
-              esParcial: cp.esParcial,
-              montoPendiente: cp.esParcial ? cp.montoPendiente : undefined,
-            });
-          });
-        } else {
-          // Cargo manual sin detalle desglosado
-          itemsFinales.push({
-            id: crg.id,
-            fecha: crg.fecha,
-            nombre: crg.notas || "Cargo manual fiado en cuenta",
-            qty: 1,
-            precio: cp.montoPendiente,
-            subtotal: cp.montoPendiente,
-            esParcial: cp.esParcial,
-            montoPendiente: cp.montoPendiente,
-          });
-        }
-      }
-
-      setItemsFiadosPendientes(itemsFinales);
+      setItemsFiadosPendientes(productos);
       setTotalCalculadoPendiente(deudaActual);
+      setFiadosResumenMap((prev) => ({ ...prev, [c.id]: productos }));
     } catch (err: any) {
       console.error("Error al obtener detalle de fiados:", err);
       toast.error(err.message || "Error al cargar productos de fiados");
@@ -488,7 +437,10 @@ export default function ClientesPage() {
 
     const nombreNegocio = negocio?.nombre || "nuestro local";
     const lineas = itemsFiadosPendientes
-      .map((it) => `• ${it.qty}× ${it.nombre} — ${formatMoney(it.precio)}${it.qty > 1 ? ` (${formatMoney(it.subtotal)})` : ""}`)
+      .map(
+        (it) =>
+          `• ${it.qty}× ${it.nombre}${it.folio ? ` (Ref. Venta #${it.folio})` : ""} — ${formatMoney(it.subtotal)}${it.esParcial ? " [Abono parcial]" : ""}`
+      )
       .join("\n");
 
     const mensaje = `Hola ${clienteProductos.nombre}, te saludamos de ${nombreNegocio}. Te compartimos el detalle de los productos pendientes de pago que componen tu saldo actual:\n\n${lineas}\n\nTotal saldo adeudado: ${formatMoney(clienteProductos.deuda_total)}\n\nQuedamos a tu disposición para coordinar tu pago. ¡Muchas gracias!`;
@@ -510,7 +462,7 @@ export default function ClientesPage() {
       clienteNombre: clienteProductos.nombre,
       clienteRut: (clienteProductos as any).rut || null,
       items: itemsFiadosPendientes.map((it) => ({
-        nombre: it.nombre,
+        nombre: it.folio ? `${it.nombre} (Venta #${it.folio})` : it.nombre,
         qty: it.qty,
         precio: it.precio,
         subtotal: it.subtotal,
@@ -713,11 +665,50 @@ export default function ClientesPage() {
                             "—"
                           )}
                         </td>
-                        <td className="py-2.5 sm:py-3 px-3 sm:px-4 text-right">
+                        <td className="py-2.5 sm:py-3 px-3 sm:px-4 text-right align-top">
                           {deuda > 0 ? (
-                            <span className="font-bold text-xs sm:text-sm text-amber-600 dark:text-amber-500">
-                              {formatMoney(deuda)}
-                            </span>
+                            <div className="flex flex-col items-end">
+                              <span className="font-bold text-xs sm:text-sm text-amber-600 dark:text-amber-500">
+                                {formatMoney(deuda)}
+                              </span>
+
+                              {/* Desglose directo de productos fiados ahí mismo */}
+                              {fiadosResumenMap[c.id] && fiadosResumenMap[c.id].length > 0 ? (
+                                <div className="mt-1.5 flex flex-col items-end gap-1 max-w-[280px]">
+                                  {fiadosResumenMap[c.id].slice(0, 3).map((item, idx) => (
+                                    <div
+                                      key={idx}
+                                      className="inline-flex items-center gap-1.5 text-[11px] bg-amber-500/10 text-amber-950 dark:text-amber-200 border border-amber-500/20 px-2 py-0.5 rounded-md text-left w-full justify-between"
+                                      title={`${item.nombre} - ${formatMoney(item.subtotal)}`}
+                                    >
+                                      <div className="flex items-center gap-1 truncate mr-1">
+                                        <Package className="h-3 w-3 text-amber-600 shrink-0" />
+                                        <span className="font-semibold text-foreground truncate">
+                                          {item.qty}× {item.nombre}
+                                        </span>
+                                      </div>
+                                      {item.folio && (
+                                        <span className="font-mono text-[9px] text-muted-foreground bg-background/80 px-1 py-0.5 rounded shrink-0 border border-border/50">
+                                          Venta #{item.folio}
+                                        </span>
+                                      )}
+                                    </div>
+                                  ))}
+                                  {fiadosResumenMap[c.id].length > 3 && (
+                                    <button
+                                      onClick={() => abrirDetalleProductosFiados(c)}
+                                      className="text-[10px] text-primary hover:underline font-semibold mt-0.5"
+                                    >
+                                      +{fiadosResumenMap[c.id].length - 3} producto(s) más...
+                                    </button>
+                                  )}
+                                </div>
+                              ) : cargandoFiadosResumen ? (
+                                <span className="text-[10px] text-muted-foreground animate-pulse mt-1">
+                                  Cargando productos...
+                                </span>
+                              ) : null}
+                            </div>
                           ) : (
                             <span className="text-[11px] sm:text-xs text-emerald-600 dark:text-emerald-500 font-semibold">
                               Al día ($0)
@@ -953,8 +944,9 @@ export default function ClientesPage() {
                   <table className="w-full text-left text-xs">
                     <thead className="bg-muted/70 border-b border-border text-muted-foreground font-semibold sticky top-0 bg-background/95 backdrop-blur-xs">
                       <tr>
-                        <th className="py-2.5 px-3">Fecha / Venta</th>
                         <th className="py-2.5 px-3">Producto / Detalle</th>
+                        <th className="py-2.5 px-3">Ref. Venta</th>
+                        <th className="py-2.5 px-3">Fecha</th>
                         <th className="py-2.5 px-3 text-right">Cant.</th>
                         <th className="py-2.5 px-3 text-right">Precio</th>
                         <th className="py-2.5 px-3 text-right">Subtotal</th>
@@ -963,28 +955,32 @@ export default function ClientesPage() {
                     <tbody className="divide-y divide-border">
                       {itemsFiadosPendientes.map((item) => (
                         <tr key={item.id} className="hover:bg-muted/30 transition-colors">
+                          <td className="py-2.5 px-3 font-semibold text-foreground">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span>{item.nombre}</span>
+                              {item.esParcial && (
+                                <span className="inline-block text-[10px] text-amber-700 dark:text-amber-400 bg-amber-500/15 px-1.5 py-0.5 rounded font-normal">
+                                  Saldo remanente
+                                </span>
+                              )}
+                            </div>
+                          </td>
                           <td className="py-2.5 px-3 text-muted-foreground whitespace-nowrap">
-                            <span>
-                              {new Date(item.fecha).toLocaleDateString("es-CL", {
-                                day: "2-digit",
-                                month: "short",
-                              })}
-                            </span>
-                            {item.folio && (
-                              <span className="ml-1.5 font-mono text-[10px] text-primary/80">
-                                #{item.folio}
+                            {item.folio ? (
+                              <span className="font-mono text-[10px] bg-muted px-1.5 py-0.5 rounded font-bold text-foreground border border-border/60">
+                                Venta #{item.folio}
                               </span>
+                            ) : (
+                              <span className="text-muted-foreground text-[10px]">—</span>
                             )}
                           </td>
-                          <td className="py-2.5 px-3 font-medium text-foreground">
-                            {item.nombre}
-                            {item.esParcial && (
-                              <span className="ml-1.5 inline-block text-[10px] text-amber-700 dark:text-amber-400 bg-amber-500/15 px-1.5 py-0.5 rounded font-normal">
-                                Saldo remanente
-                              </span>
-                            )}
+                          <td className="py-2.5 px-3 text-muted-foreground whitespace-nowrap">
+                            {new Date(item.fecha).toLocaleDateString("es-CL", {
+                              day: "2-digit",
+                              month: "short",
+                            })}
                           </td>
-                          <td className="py-2.5 px-3 text-right text-muted-foreground">{item.qty}</td>
+                          <td className="py-2.5 px-3 text-right text-muted-foreground font-medium">{item.qty}</td>
                           <td className="py-2.5 px-3 text-right text-muted-foreground">
                             {formatMoney(item.precio)}
                           </td>
@@ -996,7 +992,7 @@ export default function ClientesPage() {
                     </tbody>
                     <tfoot className="bg-muted/40 border-t border-border font-semibold">
                       <tr>
-                        <td colSpan={4} className="py-2.5 px-3 text-right text-muted-foreground">
+                        <td colSpan={5} className="py-2.5 px-3 text-right text-muted-foreground">
                           Total Saldo Pendiente:
                         </td>
                         <td className="py-2.5 px-3 text-right text-amber-600 font-bold text-sm">

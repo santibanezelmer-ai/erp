@@ -40,19 +40,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-
-interface ProductoFiadoItem {
-  id: string;
-  ventaId?: string;
-  folio?: string;
-  fecha: string;
-  nombre: string;
-  qty: number;
-  precio: number;
-  subtotal: number;
-  esParcial?: boolean;
-  montoPendiente?: number;
-}
+import { conciliarFiadosClienteFIFO, type ProductoFiadoItem } from "@/lib/fiados";
 
 interface ClienteConFiado {
   id: string;
@@ -63,94 +51,6 @@ interface ClienteConFiado {
   ultimaFechaFiado?: string | null;
   productos: ProductoFiadoItem[];
   cargandoDetalle?: boolean;
-}
-
-// Extrae los nombres limpios de los productos desde las notas del fiado
-function parsearItemsDesdeNotas(
-  notas: string | null | undefined,
-  montoTotal: number,
-  fecha: string,
-  ventaId?: string | null,
-  cargoId?: string
-): ProductoFiadoItem[] {
-  const folio = ventaId ? ventaId.slice(0, 8).toUpperCase() : undefined;
-
-  if (!notas) {
-    return [
-      {
-        id: cargoId || `cargo-${Date.now()}`,
-        ventaId: ventaId || undefined,
-        folio,
-        fecha,
-        nombre: "Artículo / Consumo a crédito",
-        qty: 1,
-        precio: montoTotal,
-        subtotal: montoTotal,
-      },
-    ];
-  }
-
-  // Quitar prefijo "Venta fiada: ", "Venta Fiada: ", "Venta fiada #09023186: ", etc.
-  let limpio = notas
-    .replace(/^venta\s+fiada\s*(#[a-f0-9]+)?\s*[:\-–—]?\s*/i, "")
-    .trim();
-
-  // Si quedó vacío o solo era un identificador tipo #09023186
-  if (!limpio || /^#[a-f0-9]+$/i.test(limpio) || /^venta\s+fiada/i.test(limpio)) {
-    return [
-      {
-        id: cargoId || `cargo-${Date.now()}`,
-        ventaId: ventaId || undefined,
-        folio,
-        fecha,
-        nombre: "Artículo / Consumo a crédito",
-        qty: 1,
-        precio: montoTotal,
-        subtotal: montoTotal,
-      },
-    ];
-  }
-
-  // Si contiene múltiples productos separados por coma seguido de número y 'x'
-  // Ej: "1x Labial Superstay Vinyl Ink — Punchy, 1x Iluminador En Barra Baby Got Holo Glow"
-  const partes = limpio.split(/,\s*(?=\d+\s*x\s+)/i);
-
-  if (partes.length > 1) {
-    const subPorItem = montoTotal / partes.length;
-    return partes.map((p, idx) => {
-      const match = p.match(/^(\d+)\s*x\s+(.+)$/i);
-      const qty = match ? Number(match[1]) : 1;
-      const nombreProd = match ? match[2].trim() : p.trim();
-      return {
-        id: `${cargoId || "c"}-${idx}`,
-        ventaId: ventaId || undefined,
-        folio,
-        fecha,
-        nombre: nombreProd,
-        qty: qty,
-        precio: subPorItem / qty,
-        subtotal: subPorItem,
-      };
-    });
-  }
-
-  // Un solo producto
-  const match = limpio.match(/^(\d+)\s*x\s+(.+)$/i);
-  const qty = match ? Number(match[1]) : 1;
-  const nombreProd = match ? match[2].trim() : limpio;
-
-  return [
-    {
-      id: cargoId || `cargo-${Date.now()}`,
-      ventaId: ventaId || undefined,
-      folio,
-      fecha,
-      nombre: nombreProd,
-      qty: qty,
-      precio: montoTotal / qty,
-      subtotal: montoTotal,
-    },
-  ];
 }
 
 export default function FiadosPage() {
@@ -246,155 +146,15 @@ export default function FiadosPage() {
       // 4. Conciliar FIFO por cada cliente para saber exactamente qué productos componen su saldo actual
       const clientesProcesados: ClienteConFiado[] = clientsData.map((c) => {
         const deudaActual = Number(c.deuda_total || 0);
-
-        // Deudas y ventas de este cliente
         const cliDeudas = deudasData.filter((d) => d.cliente_id === c.id);
         const cliVentas = ventasData.filter((v) => v.cliente_id === c.id);
 
-        type Cargo = {
-          id: string;
-          venta_id: string | null;
-          monto: number;
-          fecha: string;
-          notas: string | null;
-        };
-
-        const cargosMap = new Map<string, Cargo>();
-
-        // Mapa de deudas por venta_id para recuperar las notas con los nombres de productos
-        const deudasPorVenta = new Map<string, any>();
-        cliDeudas.forEach((d) => {
-          if (d.venta_id && d.tipo !== "pago") {
-            deudasPorVenta.set(d.venta_id, d);
-          }
-        });
-
-        cliVentas.forEach((v) => {
-          const dAsociada = deudasPorVenta.get(v.id);
-          cargosMap.set(`v-${v.id}`, {
-            id: `v-${v.id}`,
-            venta_id: v.id,
-            monto: Number(v.total || 0),
-            fecha: v.created_at,
-            notas: dAsociada?.notas || null,
-          });
-        });
-
-        let totalAbonos = 0;
-        cliDeudas.forEach((d) => {
-          const m = Number(d.monto || 0);
-          if (d.tipo === "pago") {
-            totalAbonos += m;
-          } else {
-            const key = d.venta_id ? `v-${d.venta_id}` : `d-${d.id}`;
-            const existing = cargosMap.get(key);
-            if (existing) {
-              if (d.notas) {
-                existing.notas = d.notas;
-              }
-            } else {
-              cargosMap.set(key, {
-                id: d.id,
-                venta_id: d.venta_id,
-                monto: m,
-                fecha: d.created_at,
-                notas: d.notas,
-              });
-            }
-          }
-        });
-
-        const listaCargos = Array.from(cargosMap.values()).sort(
-          (a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime()
+        const { productos, ultimaFecha } = conciliarFiadosClienteFIFO(
+          deudaActual,
+          cliDeudas,
+          cliVentas,
+          detallesPorVenta
         );
-
-        const totalCargosHistoricos = listaCargos.reduce((acc, crg) => acc + crg.monto, 0);
-        let saldoPagado = Math.max(0, totalCargosHistoricos - deudaActual);
-        if (totalAbonos > saldoPagado) {
-          saldoPagado = totalAbonos;
-        }
-
-        const cargosPendientes: {
-          cargo: Cargo;
-          montoPendiente: number;
-          esParcial: boolean;
-        }[] = [];
-
-        for (const crg of listaCargos) {
-          if (saldoPagado >= crg.monto) {
-            saldoPagado -= crg.monto;
-          } else if (saldoPagado > 0) {
-            const rem = crg.monto - saldoPagado;
-            saldoPagado = 0;
-            cargosPendientes.push({
-              cargo: crg,
-              montoPendiente: rem,
-              esParcial: true,
-            });
-          } else {
-            cargosPendientes.push({
-              cargo: crg,
-              montoPendiente: crg.monto,
-              esParcial: false,
-            });
-          }
-        }
-
-        const itemsFinales: ProductoFiadoItem[] = [];
-        let ultimaFecha: string | null = null;
-
-        for (const cp of cargosPendientes) {
-          const crg = cp.cargo;
-          ultimaFecha = crg.fecha;
-
-          if (crg.venta_id && detallesPorVenta.has(crg.venta_id)) {
-            const prods = detallesPorVenta.get(crg.venta_id)!;
-            prods.forEach((p, idx) => {
-              itemsFinales.push({
-                id: `${p.id || idx}-${crg.id}`,
-                ventaId: crg.venta_id || undefined,
-                folio: crg.venta_id?.slice(0, 8).toUpperCase(),
-                fecha: crg.fecha,
-                nombre: p.nombre || "Artículo sin nombre",
-                qty: Number(p.qty || 1),
-                precio: Number(p.precio || 0),
-                subtotal: Number(p.subtotal || Number(p.qty || 1) * Number(p.precio || 0)),
-                esParcial: cp.esParcial,
-                montoPendiente: cp.esParcial ? cp.montoPendiente : undefined,
-              });
-            });
-          } else {
-            // Extraer nombres reales de los productos desde las notas de la deuda/venta
-            const itemsParseados = parsearItemsDesdeNotas(
-              crg.notas,
-              cp.montoPendiente,
-              crg.fecha,
-              crg.venta_id,
-              crg.id
-            );
-            itemsParseados.forEach((it) => {
-              itemsFinales.push({
-                ...it,
-                esParcial: cp.esParcial,
-                montoPendiente: cp.esParcial ? cp.montoPendiente : undefined,
-              });
-            });
-          }
-        }
-
-        // Si no hay detalles específicos pero sí saldo deudor
-        if (itemsFinales.length === 0 && deudaActual > 0) {
-          itemsFinales.push({
-            id: `saldo-${c.id}`,
-            fecha: new Date().toISOString(),
-            nombre: "Saldo adeudado pendiente en cuenta",
-            qty: 1,
-            precio: deudaActual,
-            subtotal: deudaActual,
-            esParcial: false,
-            montoPendiente: deudaActual,
-          });
-        }
 
         return {
           id: c.id,
@@ -403,7 +163,7 @@ export default function FiadosPage() {
           email: c.email,
           deuda_total: deudaActual,
           ultimaFechaFiado: ultimaFecha,
-          productos: itemsFinales,
+          productos,
         };
       });
 
@@ -505,9 +265,7 @@ export default function FiadosPage() {
     const lineas = c.productos
       .map(
         (it) =>
-          `• ${it.qty}× ${it.nombre} — ${formatMoney(it.precio)}${
-            it.qty > 1 ? ` (${formatMoney(it.subtotal)})` : ""
-          }${it.folio ? ` [Ticket #${it.folio}]` : ""}`
+          `• ${it.qty}× ${it.nombre}${it.folio ? ` (Ref. Venta #${it.folio})` : ""} — ${formatMoney(it.subtotal)}${it.esParcial ? " [Abono parcial]" : ""}`
       )
       .join("\n");
 
@@ -532,7 +290,7 @@ export default function FiadosPage() {
       clienteNombre: c.nombre,
       clienteRut: (c as any).rut || null,
       items: c.productos.map((it) => ({
-        nombre: it.nombre,
+        nombre: it.folio ? `${it.nombre} (Venta #${it.folio})` : it.nombre,
         qty: it.qty,
         precio: it.precio,
         subtotal: it.subtotal,
@@ -734,6 +492,32 @@ export default function FiadosPage() {
                           </span>
                         )}
                       </div>
+
+                      {/* Chips de productos adeudados visibles de inmediato ahí mismo */}
+                      {cliente.productos && cliente.productos.length > 0 && (
+                        <div className="mt-2.5 flex flex-wrap gap-1.5 items-center">
+                          {cliente.productos.slice(0, 4).map((item, idx) => (
+                            <span
+                              key={idx}
+                              className="inline-flex items-center gap-1.5 text-xs bg-amber-500/10 text-amber-950 dark:text-amber-200 border border-amber-500/25 px-2 py-0.5 rounded-md font-medium"
+                              title={`${item.nombre} - ${formatMoney(item.subtotal)}`}
+                            >
+                              <Package className="h-3 w-3 text-amber-600 shrink-0" />
+                              <span className="font-semibold">{item.qty}× {item.nombre}</span>
+                              {item.folio && (
+                                <span className="font-mono text-[9px] bg-background/90 px-1 py-0.5 rounded text-muted-foreground border border-border/50">
+                                  Venta #{item.folio}
+                                </span>
+                              )}
+                            </span>
+                          ))}
+                          {cliente.productos.length > 4 && (
+                            <span className="text-[11px] text-amber-700 dark:text-amber-400 font-semibold">
+                              +{cliente.productos.length - 4} más...
+                            </span>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
 
@@ -801,8 +585,9 @@ export default function FiadosPage() {
                         <table className="w-full text-left text-xs">
                           <thead className="bg-muted/60 border-b border-border text-muted-foreground font-semibold">
                             <tr>
-                              <th className="py-2.5 px-3 whitespace-nowrap">Fecha / Ticket</th>
                               <th className="py-2.5 px-3">Producto Adeudado</th>
+                              <th className="py-2.5 px-3 whitespace-nowrap">Ref. Venta</th>
+                              <th className="py-2.5 px-3 whitespace-nowrap">Fecha</th>
                               <th className="py-2.5 px-3 text-right">Cant.</th>
                               <th className="py-2.5 px-3 text-right hidden sm:table-cell">Precio Unitario</th>
                               <th className="py-2.5 px-3 text-right">Subtotal</th>
@@ -811,6 +596,28 @@ export default function FiadosPage() {
                           <tbody className="divide-y divide-border">
                             {cliente.productos.map((item) => (
                               <tr key={item.id} className="hover:bg-muted/20 transition-colors">
+                                <td className="py-2.5 px-3 font-semibold text-foreground">
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <span>{item.nombre}</span>
+                                    {item.esParcial && (
+                                      <Badge
+                                        variant="outline"
+                                        className="text-[9px] px-1.5 py-0 border-amber-500/40 text-amber-600 bg-amber-500/5 font-semibold"
+                                      >
+                                        Parcialmente abonado
+                                      </Badge>
+                                    )}
+                                  </div>
+                                </td>
+                                <td className="py-2.5 px-3 text-muted-foreground whitespace-nowrap">
+                                  {item.folio ? (
+                                    <Badge variant="outline" className="text-[10px] px-1.5 py-0.5 font-mono bg-muted text-foreground font-bold">
+                                      Venta #{item.folio}
+                                    </Badge>
+                                  ) : (
+                                    <span className="text-[10px] text-muted-foreground">—</span>
+                                  )}
+                                </td>
                                 <td className="py-2.5 px-3 text-muted-foreground whitespace-nowrap">
                                   <div>
                                     {new Date(item.fecha).toLocaleDateString("es-CL", {
@@ -824,24 +631,6 @@ export default function FiadosPage() {
                                         minute: "2-digit",
                                       })}
                                     </span>
-                                  </div>
-                                  {item.folio && (
-                                    <Badge variant="outline" className="text-[9px] px-1 py-0 mt-0.5 font-mono">
-                                      #{item.folio}
-                                    </Badge>
-                                  )}
-                                </td>
-                                <td className="py-2.5 px-3 font-medium text-foreground">
-                                  <div className="flex items-center gap-2">
-                                    <span>{item.nombre}</span>
-                                    {item.esParcial && (
-                                      <Badge
-                                        variant="outline"
-                                        className="text-[9px] px-1.5 py-0 border-amber-500/40 text-amber-600 bg-amber-500/5 font-semibold"
-                                      >
-                                        Parcialmente abonado
-                                      </Badge>
-                                    )}
                                   </div>
                                 </td>
                                 <td className="py-2.5 px-3 text-right font-semibold text-foreground">

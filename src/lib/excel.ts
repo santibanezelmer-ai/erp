@@ -209,3 +209,136 @@ export function exportarVentasAExcel(ventas: any[], nombreNegocio: string = "Ope
   const fecha = new Date().toISOString().slice(0, 10);
   XLSX.writeFile(wb, `Ventas_${nombreNegocio.replace(/\s+/g, "_")}_${fecha}.xlsx`);
 }
+
+export interface DteVentaReporte {
+  folio: number;
+  tipoDte: number; // 39: Boleta Afecta, 41: Boleta Exenta, 33: Factura Electrónica
+  fecha: string;
+  cliente?: string | null;
+  medioPago: string;
+  montoExento: number;
+  montoNeto: number;
+  iva: number;
+  montoTotal: number;
+  estado: string;
+  pdfUrl?: string | null;
+}
+
+export interface LibroVentasResumen {
+  periodo: string; // ej: "Noviembre 2026"
+  rutEmisor: string;
+  razonSocial: string;
+  // DTE 39 (Boleta Afecta)
+  boletasAfectasCount: number;
+  boletasAfectasFolioMin: number | null;
+  boletasAfectasFolioMax: number | null;
+  boletasAfectasNeto: number;
+  boletasAfectasIva: number;
+  boletasAfectasTotal: number;
+  // DTE 41 (Boleta Exenta)
+  boletasExentasCount: number;
+  boletasExentasFolioMin: number | null;
+  boletasExentasFolioMax: number | null;
+  boletasExentasTotal: number;
+  // DTE 33 (Factura Electrónica)
+  facturasCount: number;
+  facturasFolioMin: number | null;
+  facturasFolioMax: number | null;
+  facturasNeto: number;
+  facturasIva: number;
+  facturasTotal: number;
+  // Totales Generales
+  totalDocumentos: number;
+  totalNeto: number;
+  totalIvaDebito: number;
+  totalExento: number;
+  totalFacturadoBruto: number;
+}
+
+/**
+ * Exporta el Libro de Ventas mensual con resumen F29 y detalle DTEs a Excel
+ */
+export function exportarLibroVentasAExcel(
+  resumen: LibroVentasResumen,
+  dtes: DteVentaReporte[]
+) {
+  const wb = XLSX.utils.book_new();
+
+  // 1. Hoja Resumen F29
+  const resumenData = [
+    { "CONCEPTO": "Razón Social", "DETALLE / MONTO": resumen.razonSocial },
+    { "CONCEPTO": "RUT Empresa", "DETALLE / MONTO": resumen.rutEmisor },
+    { "CONCEPTO": "Periodo Tributario", "DETALLE / MONTO": resumen.periodo },
+    { "CONCEPTO": "Fecha Emisión Reporte", "DETALLE / MONTO": new Date().toLocaleString("es-CL") },
+    { "CONCEPTO": "Software Generador", "DETALLE / MONTO": "Operix ERP · operixerp.cloud" },
+    {},
+    { "CONCEPTO": "─── CUADRATURA TRIBUTARIA F29 ───", "DETALLE / MONTO": "" },
+    {},
+    {
+      "CONCEPTO": "Boletas Electrónicas Afectas (DTE 39)",
+      "CANTIDAD": resumen.boletasAfectasCount,
+      "FOLIO DESDE": resumen.boletasAfectasFolioMin ?? "N/A",
+      "FOLIO HASTA": resumen.boletasAfectasFolioMax ?? "N/A",
+      "EXENTO ($)": 0,
+      "NETO ($)": resumen.boletasAfectasNeto,
+      "IVA DÉBITO 19% ($)": resumen.boletasAfectasIva,
+      "TOTAL BRUTO ($)": resumen.boletasAfectasTotal,
+    },
+    {
+      "CONCEPTO": "Boletas Electrónicas Exentas (DTE 41)",
+      "CANTIDAD": resumen.boletasExentasCount,
+      "FOLIO DESDE": resumen.boletasExentasFolioMin ?? "N/A",
+      "FOLIO HASTA": resumen.boletasExentasFolioMax ?? "N/A",
+      "EXENTO ($)": resumen.boletasExentasTotal,
+      "NETO ($)": 0,
+      "IVA DÉBITO 19% ($)": 0,
+      "TOTAL BRUTO ($)": resumen.boletasExentasTotal,
+    },
+    {
+      "CONCEPTO": "Facturas Electrónicas (DTE 33)",
+      "CANTIDAD": resumen.facturasCount,
+      "FOLIO DESDE": resumen.facturasFolioMin ?? "N/A",
+      "FOLIO HASTA": resumen.facturasFolioMax ?? "N/A",
+      "EXENTO ($)": 0,
+      "NETO ($)": resumen.facturasNeto,
+      "IVA DÉBITO 19% ($)": resumen.facturasIva,
+      "TOTAL BRUTO ($)": resumen.facturasTotal,
+    },
+    {},
+    {
+      "CONCEPTO": "TOTALES DECLARACIÓN F29",
+      "CANTIDAD": resumen.totalDocumentos,
+      "FOLIO DESDE": "-",
+      "FOLIO HASTA": "-",
+      "EXENTO ($)": resumen.totalExento,
+      "NETO ($)": resumen.totalNeto,
+      "IVA DÉBITO 19% ($)": resumen.totalIvaDebito,
+      "TOTAL BRUTO ($)": resumen.totalFacturadoBruto,
+    },
+  ];
+
+  const wsResumen = XLSX.utils.json_to_sheet(resumenData);
+  XLSX.utils.book_append_sheet(wb, wsResumen, "Resumen F29");
+
+  // 2. Hoja Detalle DTEs
+  const detalleData = dtes.map((d) => ({
+    "Folio": d.folio,
+    "Tipo DTE": d.tipoDte === 39 ? "Boleta Afecta (39)" : d.tipoDte === 41 ? "Boleta Exenta (41)" : "Factura Electrónica (33)",
+    "Fecha Emisión": d.fecha,
+    "Cliente / Receptor": d.cliente || "Consumidor Final",
+    "Medio de Pago": d.medioPago.toUpperCase(),
+    "Monto Exento": d.montoExento,
+    "Monto Neto": d.montoNeto,
+    "IVA (19%)": d.iva,
+    "Total Bruto": d.montoTotal,
+    "Estado": d.estado.toUpperCase(),
+    "Enlace PDF Oficial": d.pdfUrl || "No disponible",
+  }));
+
+  const wsDetalle = XLSX.utils.json_to_sheet(detalleData);
+  XLSX.utils.book_append_sheet(wb, wsDetalle, "Detalle DTEs");
+
+  const cleanPeriodo = resumen.periodo.toLowerCase().replace(/[^a-z0-9]/g, "_");
+  const cleanRut = (resumen.rutEmisor || "empresa").replace(/[^a-z0-9]/gi, "");
+  XLSX.writeFile(wb, `Libro_Ventas_${cleanRut}_${cleanPeriodo}.xlsx`);
+}

@@ -25,7 +25,9 @@ import {
   Sparkles,
   Tag,
   Package,
+  Share2,
 } from "lucide-react";
+import { toast } from "sonner";
 
 export function ProductDetailModal() {
   const {
@@ -37,6 +39,7 @@ export function ProductDetailModal() {
     getStock,
     isDisponible,
     addToCart,
+    negocio,
   } = useCatalog();
 
   const [images, setImages] = useState<string[]>([]);
@@ -115,6 +118,32 @@ export function ProductDetailModal() {
   const handleAdd = () => {
     addToCart(detailProduct, selectedVariant, qty);
     closeProductDetail();
+  };
+
+  const handleShare = async () => {
+    if (!detailProduct) return;
+    const origin = typeof window !== "undefined" ? window.location.origin : "https://operixerp.cloud";
+    const shareUrl = `${origin}/c/${negocio?.slug || ""}`;
+    const shareText = `¡Mira este producto en ${negocio?.nombre || "la tienda"}!: ${detailProduct.nombre} a ${formatMoney(currentPrice)}`;
+
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: detailProduct.nombre,
+          text: shareText,
+          url: shareUrl,
+        });
+      } catch {
+        // Ignorar si el usuario canceló
+      }
+    } else if (navigator.clipboard) {
+      try {
+        await navigator.clipboard.writeText(`${shareText}\n${shareUrl}`);
+        toast.success("¡Enlace del producto copiado al portapapeles!");
+      } catch {
+        toast.info("Enlace: " + shareUrl);
+      }
+    }
   };
 
   return (
@@ -327,6 +356,15 @@ export function ProductDetailModal() {
                 <ShoppingCart className="h-4 w-4 shrink-0" />
                 <span>Agregar al Carrito • {formatMoney(currentPrice * qty)}</span>
               </Button>
+
+              <button
+                type="button"
+                onClick={handleShare}
+                className="w-full py-1 text-center text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <Share2 className="h-3.5 w-3.5" />
+                <span>Compartir este producto</span>
+              </button>
             </div>
           </div>
         </div>

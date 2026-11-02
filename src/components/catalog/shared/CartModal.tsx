@@ -15,8 +15,22 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ShoppingCart, Plus, Minus, Trash2, MessageCircle, Loader2 } from "lucide-react";
+import {
+  ShoppingCart,
+  Plus,
+  Minus,
+  Trash2,
+  MessageCircle,
+  Loader2,
+  Truck,
+  Store,
+  CreditCard,
+  Banknote,
+  ArrowRightLeft,
+  MapPin,
+} from "lucide-react";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 
 export function CartModal() {
   const {
@@ -31,6 +45,9 @@ export function CartModal() {
 
   const [clienteNombre, setClienteNombre] = useState("");
   const [clienteTelefono, setClienteTelefono] = useState("");
+  const [tipoEntrega, setTipoEntrega] = useState<"despacho" | "retiro">("despacho");
+  const [direccionEntrega, setDireccionEntrega] = useState("");
+  const [metodoPago, setMetodoPago] = useState<"transferencia" | "efectivo" | "tarjeta">("transferencia");
   const [notasPedido, setNotasPedido] = useState("");
   const [enviando, setEnviando] = useState(false);
 
@@ -40,6 +57,11 @@ export function CartModal() {
 
     if (!clienteNombre.trim() || !clienteTelefono.trim()) {
       toast.error("Por favor ingresa tu nombre y teléfono de contacto");
+      return;
+    }
+
+    if (tipoEntrega === "despacho" && !direccionEntrega.trim()) {
+      toast.error("Por favor ingresa tu dirección para el despacho");
       return;
     }
 
@@ -62,33 +84,67 @@ export function CartModal() {
         };
       });
 
+      const pagoEtiqueta =
+        metodoPago === "transferencia"
+          ? "Transferencia Bancaria"
+          : metodoPago === "efectivo"
+          ? "Efectivo al recibir"
+          : "Tarjeta / Débito";
+
+      const entregaEtiqueta =
+        tipoEntrega === "despacho"
+          ? `Despacho a Domicilio (${direccionEntrega.trim()})`
+          : "Retiro en Local";
+
+      const notasConsolidadas = [
+        `Entrega: ${entregaEtiqueta}`,
+        `Pago: ${pagoEtiqueta}`,
+        notasPedido.trim() ? `Nota: ${notasPedido.trim()}` : null,
+      ]
+        .filter(Boolean)
+        .join(" | ");
+
       // 1. Guardar en Supabase
       await supabase.from("pedidos_whatsapp").insert({
         negocio_id: negocio.id,
         cliente_nombre: clienteNombre.trim(),
         cliente_telefono: clienteTelefono.trim(),
-        notas: notasPedido.trim() || null,
+        notas: notasConsolidadas,
         total: cartTotal,
         items: itemsPayload as any,
         estado: "pendiente",
       });
 
-      // 2. Construir mensaje WhatsApp
-      let msg = `*¡Hola! Quiero hacer un pedido en ${negocio.nombre}*\n\n`;
-      msg += `*Cliente:* ${clienteNombre.trim()}\n`;
-      msg += `*Teléfono:* ${clienteTelefono.trim()}\n\n`;
-      msg += `*Detalle del pedido:*\n`;
+      // 2. Construir mensaje estructurado para WhatsApp
+      let msg = `🛍️ *NUEVO PEDIDO - ${negocio.nombre}*\n`;
+      msg += `━━━━━━━━━━━━━━━━━━━━\n`;
+      msg += `👤 *Cliente:* ${clienteNombre.trim()}\n`;
+      msg += `📱 *Teléfono:* ${clienteTelefono.trim()}\n`;
+      msg += `📦 *Modalidad:* ${tipoEntrega === "despacho" ? "🛵 Despacho a Domicilio" : "🏬 Retiro en Tienda / Local"}\n`;
+
+      if (tipoEntrega === "despacho") {
+        msg += `📍 *Dirección de Entrega:* ${direccionEntrega.trim()}\n`;
+      }
+      msg += `💳 *Medio de Pago:* ${pagoEtiqueta}\n\n`;
+
+      msg += `🛒 *DETALLE DEL PEDIDO:*\n`;
       cart.forEach((i) => {
         const nom = i.variante
-          ? `${i.producto.nombre} · ${i.variante.nombre}`
+          ? `${i.producto.nombre} (${i.variante.nombre})`
           : i.producto.nombre;
         const unitPrice = getUnitPrice(i.producto, i.variante);
-        msg += `• ${i.qty}× ${nom} - ${formatMoney(i.qty * unitPrice)}\n`;
+        msg += `• ${i.qty}× ${nom} → *${formatMoney(i.qty * unitPrice)}*\n`;
       });
-      msg += `\n*TOTAL:* ${formatMoney(cartTotal)}\n`;
+
+      msg += `━━━━━━━━━━━━━━━━━━━━\n`;
+      msg += `💰 *TOTAL A PAGAR:* ${formatMoney(cartTotal)}\n`;
+      msg += `━━━━━━━━━━━━━━━━━━━━\n`;
+
       if (notasPedido.trim()) {
-        msg += `\n*Notas:* ${notasPedido.trim()}\n`;
+        msg += `📝 *Observaciones:* ${notasPedido.trim()}\n\n`;
       }
+
+      msg += `_Pedido realizado desde la tienda online oficial (operixerp.cloud/c/${negocio.slug})_`;
 
       const telNegocio = (negocio as any).telefono || "";
       const waUrl = telNegocio
@@ -101,6 +157,7 @@ export function CartModal() {
       closeCart();
       setClienteNombre("");
       setClienteTelefono("");
+      setDireccionEntrega("");
       setNotasPedido("");
     } catch (err: any) {
       toast.error(err.message || "Error al procesar pedido");
@@ -201,13 +258,46 @@ export function CartModal() {
           )}
 
           {cart.length > 0 && (
-            <form id="wa-order-form" onSubmit={handleSubmit} className="pt-4 border-t border-border space-y-3">
-              <div className="text-xs font-bold text-foreground uppercase tracking-wider">
-                Datos para el despacho
+            <form id="wa-order-form" onSubmit={handleSubmit} className="pt-4 border-t border-border space-y-4">
+              <div className="space-y-2">
+                <span className="text-xs font-bold text-foreground uppercase tracking-wider block">
+                  Modalidad de Entrega
+                </span>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setTipoEntrega("despacho")}
+                    className={cn(
+                      "flex items-center justify-center gap-2 p-2.5 rounded-xl border text-xs font-bold transition-all cursor-pointer",
+                      tipoEntrega === "despacho"
+                        ? "border-primary bg-primary/10 text-primary shadow-xs"
+                        : "border-border bg-card/60 text-muted-foreground hover:bg-muted/40"
+                    )}
+                  >
+                    <Truck className="h-4 w-4" />
+                    <span>Despacho a Domicilio</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setTipoEntrega("retiro")}
+                    className={cn(
+                      "flex items-center justify-center gap-2 p-2.5 rounded-xl border text-xs font-bold transition-all cursor-pointer",
+                      tipoEntrega === "retiro"
+                        ? "border-primary bg-primary/10 text-primary shadow-xs"
+                        : "border-border bg-card/60 text-muted-foreground hover:bg-muted/40"
+                    )}
+                  >
+                    <Store className="h-4 w-4" />
+                    <span>Retiro en Tienda</span>
+                  </button>
+                </div>
               </div>
+
+              {/* Datos del Cliente */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1">
-                  <Label htmlFor="clienteNombre" className="text-xs">
+                  <Label htmlFor="clienteNombre" className="text-xs font-semibold">
                     Tu Nombre *
                   </Label>
                   <Input
@@ -220,7 +310,7 @@ export function CartModal() {
                   />
                 </div>
                 <div className="space-y-1">
-                  <Label htmlFor="clienteTelefono" className="text-xs">
+                  <Label htmlFor="clienteTelefono" className="text-xs font-semibold">
                     Tu Teléfono WhatsApp *
                   </Label>
                   <Input
@@ -233,13 +323,76 @@ export function CartModal() {
                   />
                 </div>
               </div>
+
+              {/* Dirección si es despacho o aviso si es retiro */}
+              {tipoEntrega === "despacho" ? (
+                <div className="space-y-1">
+                  <Label htmlFor="direccionEntrega" className="text-xs font-semibold flex items-center gap-1.5">
+                    <MapPin className="h-3.5 w-3.5 text-primary" />
+                    <span>Dirección de Entrega *</span>
+                  </Label>
+                  <Input
+                    id="direccionEntrega"
+                    placeholder="Calle, Número, Depto / Casa, Comuna"
+                    value={direccionEntrega}
+                    onChange={(e) => setDireccionEntrega(e.target.value)}
+                    required={tipoEntrega === "despacho"}
+                    className="h-9 text-xs"
+                  />
+                </div>
+              ) : (
+                <div className="p-3 rounded-xl border border-border bg-muted/30 text-xs flex items-start gap-2.5">
+                  <Store className="h-4 w-4 text-primary shrink-0 mt-0.5" />
+                  <div>
+                    <span className="font-bold text-foreground block">Punto de Retiro:</span>
+                    <span className="text-muted-foreground text-[11px]">
+                      {(negocio as any).direccion || "Local comercial del negocio"}. Coordinaremos la entrega contigo por WhatsApp.
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* Medio de Pago Preferido */}
+              <div className="space-y-2 pt-1">
+                <span className="text-xs font-bold text-foreground uppercase tracking-wider block">
+                  Medio de Pago Preferido
+                </span>
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    { id: "transferencia", label: "Transferencia", icon: ArrowRightLeft },
+                    { id: "efectivo", label: "Efectivo", icon: Banknote },
+                    { id: "tarjeta", label: "Tarjeta", icon: CreditCard },
+                  ].map((p) => {
+                    const Icon = p.icon;
+                    const isSelected = metodoPago === p.id;
+                    return (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => setMetodoPago(p.id as any)}
+                        className={cn(
+                          "flex items-center justify-center gap-1.5 p-2 rounded-xl border text-xs font-semibold transition-all cursor-pointer",
+                          isSelected
+                            ? "border-primary bg-primary text-primary-foreground shadow-xs"
+                            : "border-border bg-card/60 text-muted-foreground hover:bg-muted/40"
+                        )}
+                      >
+                        <Icon className="h-3.5 w-3.5 shrink-0" />
+                        <span className="truncate">{p.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Notas opcionales */}
               <div className="space-y-1">
-                <Label htmlFor="notasPedido" className="text-xs">
-                  Dirección o Notas de entrega (opcional)
+                <Label htmlFor="notasPedido" className="text-xs text-muted-foreground">
+                  Notas u observaciones adicionales (opcional)
                 </Label>
                 <Input
                   id="notasPedido"
-                  placeholder="Ej: Casa 12, portón negro. Pagaré con transferencia."
+                  placeholder="Ej: Tocar timbre 202, dejar en conserjería..."
                   value={notasPedido}
                   onChange={(e) => setNotasPedido(e.target.value)}
                   className="h-9 text-xs"

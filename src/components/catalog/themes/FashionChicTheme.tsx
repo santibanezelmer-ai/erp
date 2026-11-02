@@ -327,7 +327,18 @@ export function FashionChicTheme() {
           <div>
             <strong className="text-white">{negocio.nombre}</strong> • Boutique & Moda
           </div>
-          <div>Plataforma de Catálogo por Operix ERP</div>
+          <div>
+            Plataforma de Catálogo por{" "}
+            <a
+              href="https://operixerp.cloud"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-white hover:underline font-semibold"
+            >
+              Operix ERP
+            </a>{" "}
+            by Comercial Hels SpA
+          </div>
         </div>
       </footer>
     </div>

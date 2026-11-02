@@ -488,9 +488,15 @@ export function BeautyGlowTheme() {
           </p>
           <p className="text-[11px]">
             Catálogo y pedidos en línea impulsado por{" "}
-            <a href="https://operixerp.cloud" target="_blank" className="text-rose-600 hover:underline">
+            <a
+              href="https://operixerp.cloud"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-rose-600 hover:underline font-semibold"
+            >
               Operix ERP
-            </a>
+            </a>{" "}
+            by Comercial Hels SpA
           </p>
         </div>
       </footer>

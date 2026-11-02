@@ -469,9 +469,15 @@ export function FerreMaxTheme() {
           </p>
           <p className="text-[11px]">
             Plataforma de catálogo ferretero y pedidos en línea por{" "}
-            <a href="https://operixerp.cloud" target="_blank" className="text-blue-600 hover:underline">
+            <a
+              href="https://operixerp.cloud"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-blue-600 hover:underline font-semibold"
+            >
               Operix ERP
-            </a>
+            </a>{" "}
+            by Comercial Hels SpA
           </p>
         </div>
       </footer>

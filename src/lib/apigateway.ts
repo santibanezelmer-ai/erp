@@ -31,6 +31,225 @@ export interface ReceptorBoleta {
   correo?: string;
 }
 
+export interface DetalleDTEItem {
+  NmbItem: string;
+  QtyItem: number;
+  PrcItem: number;
+}
+
+/**
+ * Reconcilia y prorratea el detalle de ítems para que la suma exacta
+ * de (QtyItem * PrcItem) coincida con el total tributario de la venta en pesos chilenos (CLP).
+ * Contempla:
+ * - Ventas sin descuento (suma exacta de ítems)
+ * - Ventas con descuento global (prorrateo proporcional y ajuste de redondeo de centavos/pesos)
+ * - Descuentos por producto / promocionales
+ * - Cantidades decimales (ej: granel / kg)
+ * - Mantiene precios enteros y cantidades válidas según estándar SII eBoleta
+ */
+export function reconciliarDetalleFiscal(
+  items: ItemBoleta[],
+  totalVenta: number
+): DetalleDTEItem[] {
+  const totalObjetivo = Math.round(Number(totalVenta || 0));
+  if (totalObjetivo <= 0) {
+    throw new Error("El monto total de la venta debe ser mayor a $0 para emitir documento tributario.");
+  }
+
+  if (!items || items.length === 0) {
+    return [
+      {
+        NmbItem: "Venta General",
+        QtyItem: 1,
+        PrcItem: totalObjetivo,
+      },
+    ];
+  }
+
+  // 1. Validar y normalizar líneas de entrada
+  const lineas = items.map((it) => {
+    const qty = Math.max(0.0001, Number(it.cantidad || 1));
+    const precio = Math.max(0, Number(it.precioUnitario || 0));
+    return {
+      nombre: it.nombre?.trim() || "Producto",
+      qty,
+      precioOriginal: precio,
+      subtotalBruto: Math.round(qty * precio),
+    };
+  });
+
+  // Regla tributaria estricta: si el total a pagar es menor que la cantidad de ítems,
+  // es imposible asignar al menos $1 a cada ítem sin generar precios $0 o negativos
+  if (totalObjetivo < lineas.length) {
+    throw new Error(
+      `No es posible emitir la boleta electrónica: el monto total ($${totalObjetivo}) es inferior a la cantidad de ítems (${lineas.length}), lo que generaría líneas tributarias con valor $0 o negativo ante el SII.`
+    );
+  }
+
+  const subtotalBrutoTotal = lineas.reduce((acc, l) => acc + l.subtotalBruto, 0);
+
+  // 2. Determinar el target en CLP de cada línea
+  let lineasConTarget: {
+    nombre: string;
+    qty: number;
+    precioOriginal: number;
+    subtotalBruto: number;
+    target: number;
+  }[];
+
+  if (subtotalBrutoTotal === totalObjetivo || subtotalBrutoTotal <= 0) {
+    lineasConTarget = lineas.map((l) => ({
+      ...l,
+      target: l.subtotalBruto,
+    }));
+  } else {
+    // Distribuir totalObjetivo garantizando que cada línea reciba estrictamente al menos $1
+    // Algoritmo Largest Remainder (Hamilton-Hare) sobre el excedente
+    const N = lineas.length;
+    const excedente = totalObjetivo - N;
+
+    const asignaciones = lineas.map((l) => {
+      const fraccion = subtotalBrutoTotal > 0 ? (l.subtotalBruto / subtotalBrutoTotal) : (1 / N);
+      const cuota = excedente * fraccion;
+      const entero = Math.floor(cuota);
+      const residuo = cuota - entero;
+      return {
+        ...l,
+        base: 1 + entero,
+        residuo,
+      };
+    });
+
+    const sumaBase = asignaciones.reduce((acc, a) => acc + a.base, 0);
+    const porDistribuir = totalObjetivo - sumaBase;
+
+    // Ordenar por residuo descendente para repartir los pesos de redondeo
+    const indicesOrdenados = asignaciones
+      .map((a, idx) => ({ idx, residuo: a.residuo }))
+      .sort((a, b) => b.residuo - a.residuo);
+
+    for (let i = 0; i < porDistribuir; i++) {
+      const targetIdx = indicesOrdenados[i % N].idx;
+      asignaciones[targetIdx].base += 1;
+    }
+
+    lineasConTarget = asignaciones.map((a) => ({
+      nombre: a.nombre,
+      qty: a.qty,
+      precioOriginal: a.precioOriginal,
+      subtotalBruto: a.subtotalBruto,
+      target: a.base,
+    }));
+  }
+
+  // 3. Convertir cada línea a ítems DTE con QtyItem y PrcItem válidos según estándar SII eBoleta
+  const detalleFinal: DetalleDTEItem[] = [];
+
+  for (const l of lineasConTarget) {
+    const target = l.target;
+    const qty = l.qty;
+
+    if (target <= 0) {
+      throw new Error(`Error tributario: el ítem '${l.nombre}' recibió un monto asignado de $0 o negativo.`);
+    }
+
+    if (qty === 1) {
+      detalleFinal.push({
+        NmbItem: l.nombre.slice(0, 80),
+        QtyItem: 1,
+        PrcItem: target,
+      });
+    } else if (Number.isInteger(qty) && qty > 1) {
+      // Si la cantidad entera supera el total a cobrar para ese ítem, cada unidad quedaría en menos de $1
+      if (target < qty) {
+        throw new Error(
+          `No es posible emitir la boleta electrónica: el descuento asignado al ítem '${l.nombre}' deja un valor promedio menor a $1 por unidad (${target} pesos para ${qty} unidades).`
+        );
+      }
+
+      const basePrice = Math.floor(target / qty);
+      const resto = target - (basePrice * qty);
+
+      if (resto === 0) {
+        detalleFinal.push({
+          NmbItem: l.nombre.slice(0, 80),
+          QtyItem: qty,
+          PrcItem: basePrice,
+        });
+      } else {
+        // Desglose tributario exacto en unidades enteras
+        if (qty > 1) {
+          detalleFinal.push({
+            NmbItem: l.nombre.slice(0, 80),
+            QtyItem: qty - 1,
+            PrcItem: basePrice,
+          });
+        }
+        detalleFinal.push({
+          NmbItem: l.nombre.slice(0, 80),
+          QtyItem: 1,
+          PrcItem: basePrice + resto,
+        });
+      }
+    } else {
+      // Cantidad fraccionaria / decimal comercial (ej: 1.35 kg):
+      // Preservar la cantidad comercial exacta del producto sin alterar su naturaleza
+      let prcItem = Math.round(target / qty);
+      let lineTotal = Math.round(qty * prcItem);
+
+      if (lineTotal !== target) {
+        // Usar hasta 4 decimales para lograr cuadratura exacta (permitido en schema SII NUM(12,6))
+        prcItem = Number((target / qty).toFixed(4));
+        lineTotal = Math.round(qty * prcItem);
+      }
+
+      if (prcItem <= 0) {
+        throw new Error(`Error tributario: el ítem fraccionario '${l.nombre}' recibió un precio unitario de $0.`);
+      }
+
+      detalleFinal.push({
+        NmbItem: l.nombre.slice(0, 80),
+        QtyItem: qty,
+        PrcItem: prcItem,
+      });
+    }
+  }
+
+  // 4. Verificación final de cuadratura estricta y post-condiciones tributarias
+  const sumaGenerada = detalleFinal.reduce(
+    (acc, it) => acc + Math.round(it.QtyItem * it.PrcItem),
+    0
+  );
+
+  if (sumaGenerada !== totalObjetivo && detalleFinal.length > 0) {
+    const diff = totalObjetivo - sumaGenerada;
+    const singleUnitItem = detalleFinal.find((it) => it.QtyItem === 1 && (it.PrcItem + diff) > 0);
+    if (singleUnitItem) {
+      singleUnitItem.PrcItem += diff;
+    } else {
+      const integerItem = detalleFinal.find((it) => Number.isInteger(it.QtyItem) && it.QtyItem > 1);
+      if (integerItem && (integerItem.PrcItem + diff) > 0) {
+        integerItem.QtyItem -= 1;
+        detalleFinal.push({
+          NmbItem: integerItem.NmbItem,
+          QtyItem: 1,
+          PrcItem: integerItem.PrcItem + diff,
+        });
+      } else {
+        throw new Error(`No es posible cuadrar tributariamente la boleta: diferencia residual de ${diff} pesos.`);
+      }
+    }
+  }
+
+  // Validación final: ningún ítem puede tener QtyItem <= 0 o PrcItem <= 0
+  for (const it of detalleFinal) {
+    if (it.QtyItem <= 0) throw new Error(`QtyItem inválido en ítem '${it.NmbItem}': ${it.QtyItem}`);
+    if (it.PrcItem <= 0) throw new Error(`PrcItem inválido en ítem '${it.NmbItem}': ${it.PrcItem}`);
+  }
+
+  return detalleFinal;
+}
+
 export interface EmitirBoletaRequest {
   items: ItemBoleta[];
   total: number;
@@ -135,25 +354,29 @@ export async function emitirBoletaAPIGateway(
 
   const cleanToken = config.token.trim().replace(/^Token\s+/i, "");
   const rutEmisorLimpio = normalizarRut(config.rutEmisor);
-  const rutVendedorLimpio = normalizarRut(config.rutVendedor || config.rutEmisor);
 
   if (!rutEmisorLimpio) {
-    return { ok: false, error: "El RUT emisor de la empresa es obligatorio y no es válido." };
+    return { ok: false, error: "El RUT emisor de la empresa ante el SII es obligatorio y no es válido." };
   }
+  if (!config.rutVendedor || !config.rutVendedor.trim()) {
+    return { ok: false, error: "El RUT del usuario persona natural autorizado en el SII es obligatorio para emitir eBoleta." };
+  }
+  const rutVendedorLimpio = normalizarRut(config.rutVendedor);
   if (!rutVendedorLimpio) {
-    return { ok: false, error: "El RUT del usuario vendedor/autorizado en el SII es obligatorio." };
+    return { ok: false, error: "El RUT del usuario autorizado en el SII no tiene un formato válido." };
   }
 
   // Receptor
   const rutReceptor = req.receptor?.rut ? normalizarRut(req.receptor.rut) : "66666666-6";
   const rznSocReceptor = req.receptor?.razonSocial || "Cliente Genérico";
 
-  // Detalle de ítems
-  const detalle = req.items.map((it) => ({
-    NmbItem: it.nombre.slice(0, 80),
-    QtyItem: Math.max(1, Number(it.cantidad || 1)),
-    PrcItem: Math.round(Number(it.precioUnitario || 0)),
-  }));
+  // Detalle de ítems con reconciliación y prorrateo exacto a pesos chilenos
+  let detalle: DetalleDTEItem[];
+  try {
+    detalle = reconciliarDetalleFiscal(req.items, req.total);
+  } catch (err: any) {
+    return { ok: false, error: err.message || "Error al calcular el detalle tributario de la boleta." };
+  }
 
   const tipoDteFinal = req.tipoDte === 41 ? 41 : 39;
   const sucursalCodigo = Number(config.cdgSIISucur ?? 0);
@@ -292,7 +515,8 @@ export async function emitirBoletaAPIGateway(
     if (!folio || folio <= 0) {
       return {
         ok: false,
-        error: "API Gateway respondió sin un número de folio asignado por el SII.",
+        error: "API Gateway respondió sin un número de folio asignado por el SII. El resultado de la emisión es incierto.",
+        errorTipo: "resultado_incierto",
         raw: data,
       };
     }

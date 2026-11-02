@@ -418,7 +418,18 @@ export function MarketFreshTheme() {
           <div>
             <strong>{negocio.nombre}</strong> {negocio.direccion ? `• ${negocio.direccion}` : ""}
           </div>
-          <div>Almacén Online impulsado por Operix ERP</div>
+          <div>
+            Almacén Online impulsado por{" "}
+            <a
+              href="https://operixerp.cloud"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-emerald-400 hover:underline font-semibold"
+            >
+              Operix ERP
+            </a>{" "}
+            by Comercial Hels SpA
+          </div>
         </div>
       </footer>
     </div>

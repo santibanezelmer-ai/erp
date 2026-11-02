@@ -507,9 +507,15 @@ export function AutoPartsProTheme() {
           </p>
           <p className="text-[11px] text-neutral-500">
             Plataforma de ventas y catálogos en línea por{" "}
-            <a href="https://operixerp.cloud" target="_blank" className="text-amber-400 hover:underline">
+            <a
+              href="https://operixerp.cloud"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-amber-400 hover:underline font-semibold"
+            >
               Operix ERP
-            </a>
+            </a>{" "}
+            by Comercial Hels SpA
           </p>
         </div>
       </footer>

@@ -547,7 +547,16 @@ export function FoodBistroTheme() {
           </div>
 
           <div className="text-[11px] text-stone-500">
-            Catálogo y Menú Digital impulsado por <strong className="text-stone-300">Operix ERP</strong>
+            Catálogo y Menú Digital impulsado por{" "}
+            <a
+              href="https://operixerp.cloud"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-stone-300 hover:underline font-semibold"
+            >
+              Operix ERP
+            </a>{" "}
+            by Comercial Hels SpA
           </div>
         </div>
       </footer>

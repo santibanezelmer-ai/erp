@@ -293,7 +293,7 @@ export default function ConfiguracionPage() {
       setDteProveedor(c.proveedor || (c.token ? "apigateway" : "apigateway"));
       setDteHash(c.token || c.hash || "");
       setDteRutEmisor(c.rutEmisor || data?.rut || (negocio as any).rut || "");
-      setDteRutVendedor(c.rutVendedor || c.rutEmisor || data?.rut || (negocio as any).rut || "");
+      setDteRutVendedor(c.rutVendedor || "");
       setDteClaveSII(c.claveSII || "");
       setDteCdgSIISucur(String(c.cdgSIISucur ?? "0"));
       setDteRazonSocial(c.razonSocial || data?.business_name || negocio.nombre || "");
@@ -355,9 +355,15 @@ export default function ConfiguracionPage() {
       return;
     }
 
-    if (dteActivo && dteProveedor === "apigateway" && !dteClaveSII.trim()) {
-      toast.error("Debes ingresar la clave tributaria del SII para emitir en eBoleta");
-      return;
+    if (dteActivo && dteProveedor === "apigateway") {
+      if (!dteRutVendedor.trim()) {
+        toast.error("Para emitir con eBoleta debes ingresar el RUT del usuario persona natural autorizado en el SII");
+        return;
+      }
+      if (!dteClaveSII.trim()) {
+        toast.error("Debes ingresar la clave tributaria del SII para emitir en eBoleta");
+        return;
+      }
     }
 
     setSavingDte(true);
@@ -369,7 +375,7 @@ export default function ConfiguracionPage() {
         token: dteHash.trim(),
         hash: dteHash.trim(),
         rutEmisor: limpiarRut(dteRutEmisor.trim()),
-        rutVendedor: limpiarRut(dteRutVendedor.trim() || dteRutEmisor.trim()),
+        rutVendedor: limpiarRut(dteRutVendedor.trim()),
         claveSII: dteClaveSII.trim(),
         cdgSIISucur: Number(dteCdgSIISucur) || 0,
         razonSocial: dteRazonSocial.trim(),

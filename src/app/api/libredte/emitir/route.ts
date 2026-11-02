@@ -127,11 +127,22 @@ export async function POST(req: Request) {
     }
 
     if (proveedor === "apigateway") {
+      const rutVendedor = rawCfg.rutVendedor?.trim();
+      if (!rutVendedor) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error: "Falta configurar el RUT del usuario autorizado en el SII (RUT Vendedor) en la configuración del negocio. El portal eBoleta exige el RUT de la persona natural autorizada, no el RUT de la empresa.",
+          },
+          { status: 400 }
+        );
+      }
+
       const apiGatewayConfig: APIGatewayConfig = {
         activo: Boolean(rawCfg.activo),
         token: rawCfg.token || rawCfg.hash || "",
         rutEmisor: rawCfg.rutEmisor || confData?.rut || "",
-        rutVendedor: rawCfg.rutVendedor || rawCfg.rutEmisor || confData?.rut || "",
+        rutVendedor: rutVendedor,
         claveSII: rawCfg.claveSII || "",
         cdgSIISucur: Number(rawCfg.cdgSIISucur ?? 0),
         razonSocial: rawCfg.razonSocial || confData?.business_name || "",

@@ -11,6 +11,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -118,10 +119,17 @@ export function ProductDetailModal() {
 
   return (
     <Dialog open={!!detailProduct} onOpenChange={(open) => !open && closeProductDetail()}>
-      <DialogContent className="max-w-2xl max-h-[92vh] overflow-y-auto p-4 sm:p-6">
+      <DialogContent className="max-w-md sm:max-w-2xl md:max-w-3xl max-h-[92vh] overflow-y-auto p-4 sm:p-6">
+        <DialogHeader className="sr-only">
+          <DialogTitle>{detailProduct.nombre}</DialogTitle>
+          <DialogDescription>
+            {detailProduct.descripcion || `Detalle y compra de ${detailProduct.nombre}`}
+          </DialogDescription>
+        </DialogHeader>
+
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
           {/* Gallery View */}
-          <div className="space-y-3">
+          <div className="space-y-3 min-w-0">
             <div className="relative aspect-square rounded-2xl bg-muted/40 border border-border overflow-hidden flex items-center justify-center">
               {images.length > 0 ? (
                 <img
@@ -185,7 +193,7 @@ export function ProductDetailModal() {
           </div>
 
           {/* Details & Actions */}
-          <div className="space-y-4">
+          <div className="space-y-4 min-w-0">
             <div>
               {brandName && (
                 <span className="text-xs font-semibold text-primary uppercase tracking-wider block mb-1">
@@ -221,7 +229,7 @@ export function ProductDetailModal() {
                   <CheckCircle2 className="h-3.5 w-3.5" />
                   {detailProduct.sin_control_stock
                     ? "Disponible para encargo"
-                    : `Disponible (${currentStock} unidades)`}
+                    : `Disponible (${currentStock} ${currentStock === 1 ? "unidad" : "unidades"})`}
                 </span>
               ) : (
                 <span className="text-rose-500 font-semibold">Agotado temporalmente</span>
@@ -280,39 +288,44 @@ export function ProductDetailModal() {
             )}
 
             {/* Add to Cart Actions */}
-            <div className="pt-4 border-t border-border flex items-center gap-3">
-              <div className="flex items-center gap-1.5 border border-border rounded-lg p-1 bg-muted/30">
-                <Button
-                  type="button"
-                  size="icon"
-                  variant="ghost"
-                  className="h-8 w-8 rounded-md"
-                  disabled={qty <= 1}
-                  onClick={() => setQty((prev) => Math.max(1, prev - 1))}
-                >
-                  <Minus className="h-3.5 w-3.5" />
-                </Button>
-                <span className="w-8 text-center text-xs font-bold">{qty}</span>
-                <Button
-                  type="button"
-                  size="icon"
-                  variant="ghost"
-                  className="h-8 w-8 rounded-md"
-                  disabled={!detailProduct.sin_control_stock && qty >= currentStock}
-                  onClick={() => setQty((prev) => prev + 1)}
-                >
-                  <Plus className="h-3.5 w-3.5" />
-                </Button>
+            <div className="pt-4 border-t border-border space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-xs font-semibold text-muted-foreground">
+                  Cantidad:
+                </span>
+                <div className="flex items-center gap-1 border border-border rounded-lg p-1 bg-muted/30">
+                  <Button
+                    type="button"
+                    size="icon"
+                    variant="ghost"
+                    className="h-8 w-8 rounded-md"
+                    disabled={qty <= 1}
+                    onClick={() => setQty((prev) => Math.max(1, prev - 1))}
+                  >
+                    <Minus className="h-3.5 w-3.5" />
+                  </Button>
+                  <span className="w-8 text-center text-xs font-bold">{qty}</span>
+                  <Button
+                    type="button"
+                    size="icon"
+                    variant="ghost"
+                    className="h-8 w-8 rounded-md"
+                    disabled={!detailProduct.sin_control_stock && qty >= currentStock}
+                    onClick={() => setQty((prev) => prev + 1)}
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
               </div>
 
               <Button
                 type="button"
                 disabled={!inStock}
                 onClick={handleAdd}
-                className="flex-1 h-11 text-xs sm:text-sm font-bold gap-2 shadow-xs"
+                className="w-full h-11 text-xs sm:text-sm font-bold gap-2 shadow-xs justify-center"
               >
-                <ShoppingCart className="h-4 w-4" />
-                Agregar al Carrito • {formatMoney(currentPrice * qty)}
+                <ShoppingCart className="h-4 w-4 shrink-0" />
+                <span>Agregar al Carrito • {formatMoney(currentPrice * qty)}</span>
               </Button>
             </div>
           </div>

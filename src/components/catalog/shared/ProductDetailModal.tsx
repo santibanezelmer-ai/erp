@@ -123,7 +123,7 @@ export function ProductDetailModal() {
   const handleShare = async () => {
     if (!detailProduct) return;
     const origin = typeof window !== "undefined" ? window.location.origin : "https://operixerp.cloud";
-    const shareUrl = `${origin}/c/${negocio?.slug || ""}`;
+    const shareUrl = `${origin}/c/${negocio?.slug || ""}?p=${detailProduct.id}`;
     const shareText = `¡Mira este producto en ${negocio?.nombre || "la tienda"}!: ${detailProduct.nombre} a ${formatMoney(currentPrice)}`;
 
     if (navigator.share) {

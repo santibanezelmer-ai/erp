@@ -36,6 +36,7 @@ interface CatalogProviderProps {
   marcas: Marca[];
   themeId: ThemeId;
   config: ThemeCustomConfig;
+  initialProductId?: string | null;
 }
 
 export function CatalogProvider({
@@ -46,6 +47,7 @@ export function CatalogProvider({
   marcas,
   themeId,
   config,
+  initialProductId,
 }: CatalogProviderProps) {
   // Filtros y Búsqueda
   const [busqueda, setBusqueda] = useState("");
@@ -85,6 +87,44 @@ export function CatalogProvider({
 
   // Ficha de Detalle
   const [detailProduct, setDetailProduct] = useState<Producto | null>(null);
+
+  // Auto-abrir ficha si se solicitó un producto específico por URL (?p=...)
+  useEffect(() => {
+    if (initialProductId && productos.length > 0) {
+      const found = productos.find((p) => p.id === initialProductId);
+      if (found) {
+        setDetailProduct(found);
+      }
+    }
+  }, [initialProductId, productos]);
+
+  const openProductDetail = (p: Producto) => {
+    setDetailProduct(p);
+    if (typeof window !== "undefined") {
+      try {
+        const url = new URL(window.location.href);
+        url.searchParams.set("p", p.id);
+        window.history.replaceState({}, "", url.toString());
+      } catch {
+        // Fallback silencioso si URL no es parseable
+      }
+    }
+  };
+
+  const closeProductDetail = () => {
+    setDetailProduct(null);
+    if (typeof window !== "undefined") {
+      try {
+        const url = new URL(window.location.href);
+        if (url.searchParams.has("p")) {
+          url.searchParams.delete("p");
+          window.history.replaceState({}, "", url.toString());
+        }
+      } catch {
+        // Fallback silencioso
+      }
+    }
+  };
 
   // Selector rápido de variante
   const [pickVariantProduct, setPickVariantProduct] = useState<Producto | null>(null);
@@ -333,9 +373,9 @@ export function CatalogProvider({
     openCart: () => setIsCartOpen(true),
     closeCart: () => setIsCartOpen(false),
     isCartOpen,
-    openProductDetail: (p: Producto) => setDetailProduct(p),
+    openProductDetail,
     detailProduct,
-    closeProductDetail: () => setDetailProduct(null),
+    closeProductDetail,
     pickVariantProduct,
     setPickVariantProduct,
     handleQuickAddClick,

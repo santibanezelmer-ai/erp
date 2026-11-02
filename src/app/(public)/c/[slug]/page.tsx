@@ -1,195 +1,169 @@
-"use client";
+import type { Metadata } from "next";
+import { createClient } from "@supabase/supabase-js";
+import CatalogoPublicoClient from "@/components/catalog/CatalogoPublicoClient";
+import type { ThemeId } from "@/types/theme.types";
 
-import { useEffect, useState, use } from "react";
-import { useSearchParams } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
-import type { Database } from "@/types/database.types";
-import type {
-  ThemeId,
-  ThemeCustomConfig,
-  Marca,
-} from "@/types/theme.types";
-import { getThemeMetadata } from "@/components/catalog/themes/registry";
-import { CatalogProvider } from "@/components/catalog/CatalogContext";
-import { ThemeRenderer } from "@/components/catalog/ThemeRenderer";
-import { Store, Loader2, Package } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import Link from "next/link";
-
-type Negocio = Database["public"]["Tables"]["negocios"]["Row"];
-type Producto = Database["public"]["Tables"]["productos"]["Row"];
-type Variante = Database["public"]["Tables"]["producto_variantes"]["Row"];
-
-export default function CatalogoPublicoPage({
-  params,
-}: {
+interface PageProps {
   params: Promise<{ slug: string }>;
-}) {
-  const resolvedParams = use(params);
-  const slug = resolvedParams.slug;
-  const searchParams = useSearchParams();
+  searchParams: Promise<{ p?: string; theme?: string; preview?: string }>;
+}
 
-  // Permite previsualizar temas en vivo desde el panel administrativo
-  const previewThemeParam = searchParams.get("theme") as ThemeId | null;
-  const isPreview = searchParams.get("preview") === "true";
+function ensureAbsoluteUrl(url: string | null | undefined, fallback: string): string {
+  if (!url) return fallback;
+  if (url.startsWith("http://") || url.startsWith("https://")) return url;
+  if (url.startsWith("/")) return `https://operixerp.cloud${url}`;
+  return `https://operixerp.cloud/${url}`;
+}
 
-  const [negocio, setNegocio] = useState<Negocio | null>(null);
-  const [productos, setProductos] = useState<Producto[]>([]);
-  const [variantes, setVariantes] = useState<Variante[]>([]);
-  const [marcas, setMarcas] = useState<Marca[]>([]);
-  const [themeId, setThemeId] = useState<ThemeId>("beauty");
-  const [themeConfig, setThemeConfig] = useState<ThemeCustomConfig>({});
-  const [loading, setLoading] = useState(true);
-  const [notFound, setNotFound] = useState(false);
+export async function generateMetadata({
+  params,
+  searchParams,
+}: PageProps): Promise<Metadata> {
+  const { slug } = await params;
+  const { p: productId } = await searchParams;
 
-  useEffect(() => {
-    const fetchCatalog = async () => {
-      setLoading(true);
-      const supabase = createClient();
+  const supabaseUrl =
+    process.env.NEXT_PUBLIC_SUPABASE_URL || "https://rgyqtxoagsmkleebrmza.supabase.co";
+  const supabaseKey =
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+    "";
 
-      try {
-        // 1. Obtener negocio por slug
-        const { data: neg, error: negErr } = await supabase
-          .from("negocios")
-          .select("*")
-          .eq("slug", slug)
-          .maybeSingle();
+  const defaultLogo = "https://operixerp.cloud/icons/icon-512x512.png";
+  const baseUrl = `https://operixerp.cloud/c/${slug}`;
 
-        if (negErr || !neg) {
-          console.warn(`[Catalogo] Negocio no encontrado para slug '${slug}':`, negErr);
-          setNotFound(true);
-          return;
-        }
+  try {
+    const supabase = createClient(supabaseUrl, supabaseKey);
 
-        // 2. Obtener configuración de plantilla y datos en paralelo
-        const [configRes, prodsRes, varsRes, marcasRes] = await Promise.all([
-          supabase
-            .from("configuracion")
-            .select("plantilla_id, plantilla_config, plantilla_draft, telefono, logo_url")
-            .eq("negocio_id", neg.id)
-            .maybeSingle(),
-          supabase
-            .from("productos")
-            .select("*")
-            .eq("negocio_id", neg.id)
-            .eq("activo", true)
-            .order("nombre", { ascending: true }),
-          supabase
-            .from("producto_variantes")
-            .select("*")
-            .eq("negocio_id", neg.id)
-            .eq("activo", true)
-            .order("nombre", { ascending: true }),
-          supabase
-            .from("marcas_public" as any)
-            .select("id, nombre, logo_url")
-            .eq("negocio_id", neg.id)
-            .order("nombre", { ascending: true }),
-        ]);
+    // 1. Obtener datos del negocio
+    const { data: neg } = await supabase
+      .from("negocios")
+      .select("id, nombre, slug, logo_url, perfil, direccion")
+      .eq("slug", slug)
+      .maybeSingle();
 
-        const cfgData = configRes.data;
+    if (!neg) {
+      return {
+        title: "Tienda no encontrada | Operix ERP",
+        description: "El catálogo que buscas no existe o ha cambiado su dirección.",
+      };
+    }
 
-        // Combinar datos del negocio con configuración (teléfono, logo)
-        const fullNegocio: Negocio = {
-          ...neg,
-          logo_url:
-            cfgData?.logo_url ||
-            neg.logo_url ||
-            (neg.perfil?.startsWith("http") || neg.perfil?.startsWith("data:") ? neg.perfil : null),
-          // Inyectamos teléfono de configuracion si existe
-          ...((cfgData?.telefono ? { telefono: cfgData.telefono } : {}) as any),
+    const storeName = neg.nombre || "Catálogo y Pedidos Online";
+    const rawLogo =
+      neg.logo_url ||
+      (neg.perfil?.startsWith("http") ? neg.perfil : null);
+    const storeLogo = ensureAbsoluteUrl(rawLogo, defaultLogo);
+
+    // 2. Si viene un producto específico (?p=...)
+    if (productId) {
+      const { data: prod } = await supabase
+        .from("productos")
+        .select("id, nombre, descripcion, precio, precio_promocional, imagen_url, categoria")
+        .eq("id", productId)
+        .eq("negocio_id", neg.id)
+        .maybeSingle();
+
+      if (prod) {
+        const precio =
+          prod.precio_promocional != null && prod.precio_promocional > 0
+            ? prod.precio_promocional
+            : prod.precio;
+
+        const precioStr = new Intl.NumberFormat("es-CL", {
+          style: "currency",
+          currency: "CLP",
+          maximumFractionDigits: 0,
+        }).format(precio);
+
+        const pageTitle = `${prod.nombre} (${precioStr}) · ${storeName}`;
+        const prodDesc =
+          prod.descripcion?.trim() ||
+          `¡Disponible en ${storeName} por ${precioStr}! Revisa los detalles de ${prod.nombre} y haz tu pedido directamente por WhatsApp.`;
+
+        const prodImg = ensureAbsoluteUrl(prod.imagen_url, storeLogo);
+        const productUrl = `${baseUrl}?p=${prod.id}`;
+
+        return {
+          title: pageTitle,
+          description: prodDesc,
+          openGraph: {
+            title: pageTitle,
+            description: prodDesc,
+            url: productUrl,
+            siteName: `${storeName} en Operix ERP`,
+            images: [
+              {
+                url: prodImg,
+                width: 800,
+                height: 800,
+                alt: prod.nombre,
+              },
+            ],
+            locale: "es_CL",
+            type: "website",
+          },
+          twitter: {
+            card: "summary_large_image",
+            title: pageTitle,
+            description: prodDesc,
+            images: [prodImg],
+          },
         };
-        setNegocio(fullNegocio);
-
-        // Determinar plantilla por defecto según rubro si no tiene una guardada
-        let defaultThemeByRubro: ThemeId = "beauty";
-        const tipoNorm = (neg.tipo_negocio || "").toLowerCase();
-        if (tipoNorm.includes("auto") || tipoNorm.includes("repuesto") || tipoNorm.includes("mecanic")) {
-          defaultThemeByRubro = "autoparts";
-        } else if (tipoNorm.includes("ferreter") || tipoNorm.includes("construc") || tipoNorm.includes("herramient")) {
-          defaultThemeByRubro = "ferremax";
-        }
-
-        let activeTheme: ThemeId = (cfgData?.plantilla_id as ThemeId) || defaultThemeByRubro;
-        let activeConfig: ThemeCustomConfig =
-          (cfgData?.plantilla_config as ThemeCustomConfig) || {};
-
-        // Si es preview y hay borrador
-        if (isPreview && cfgData?.plantilla_draft) {
-          activeConfig = {
-            ...activeConfig,
-            ...(cfgData.plantilla_draft as ThemeCustomConfig),
-          };
-        }
-
-        // Si se fuerza tema por URL para vista previa
-        if (previewThemeParam) {
-          activeTheme = previewThemeParam;
-        }
-
-        // Fallback a defaults de la plantilla si falta configuración
-        const themeMeta = getThemeMetadata(activeTheme);
-        const mergedConfig: ThemeCustomConfig = {
-          ...themeMeta.defaultConfig,
-          ...activeConfig,
-        };
-
-        setThemeId(activeTheme);
-        setThemeConfig(mergedConfig);
-        setProductos(prodsRes.data || []);
-        setVariantes(varsRes.data || []);
-        setMarcas((marcasRes.data as unknown as Marca[]) || []);
-      } catch (err) {
-        console.error("Error al cargar catálogo:", err);
-        setNotFound(true);
-      } finally {
-        setLoading(false);
       }
+    }
+
+    // 3. Metadata por defecto de la tienda (cuando no se especifica producto)
+    const storeDescription = `Catálogo digital oficial de ${storeName}. Revisa nuestros productos disponibles, precios y haz tu pedido directamente por WhatsApp.`;
+
+    return {
+      title: `${storeName} | Catálogo y Pedidos Online`,
+      description: storeDescription,
+      openGraph: {
+        title: `${storeName} · Catálogo y Pedidos Online`,
+        description: storeDescription,
+        url: baseUrl,
+        siteName: `${storeName} en Operix ERP`,
+        images: [
+          {
+            url: storeLogo,
+            width: 800,
+            height: 800,
+            alt: `Logo de ${storeName}`,
+          },
+        ],
+        locale: "es_CL",
+        type: "website",
+      },
+      twitter: {
+        card: "summary",
+        title: `${storeName} · Catálogo y Pedidos Online`,
+        description: storeDescription,
+        images: [storeLogo],
+      },
     };
-
-    fetchCatalog();
-  }, [slug, previewThemeParam, isPreview]);
-
-  if (loading) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center gap-3 bg-background text-foreground">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-          Cargando catálogo en línea...
-        </p>
-      </div>
-    );
+  } catch (err) {
+    console.error("Error al generar metadata de catálogo:", err);
+    return {
+      title: "Catálogo y Pedidos Online | Operix ERP",
+      description: "Conoce nuestro catálogo oficial de productos y realiza tus pedidos en línea.",
+    };
   }
+}
 
-  if (notFound || !negocio) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center p-6 text-center bg-background text-foreground">
-        <div className="h-16 w-16 rounded-full bg-muted flex items-center justify-center mb-4">
-          <Store className="h-8 w-8 text-muted-foreground" />
-        </div>
-        <h1 className="text-2xl font-bold tracking-tight">Tienda no encontrada</h1>
-        <p className="text-sm text-muted-foreground mt-2 max-w-sm">
-          El catálogo que buscas no existe o ha cambiado su dirección.
-        </p>
-        <Link href="/" className="mt-6">
-          <Button variant="outline" size="sm">
-            Ir al Inicio de Operix ERP
-          </Button>
-        </Link>
-      </div>
-    );
-  }
+export default async function CatalogoPublicoPage({
+  params,
+  searchParams,
+}: PageProps) {
+  const { slug } = await params;
+  const { p: productId, theme, preview } = await searchParams;
 
   return (
-    <CatalogProvider
-      negocio={negocio}
-      productos={productos}
-      variantes={variantes}
-      marcas={marcas}
-      themeId={themeId}
-      config={themeConfig}
-    >
-      <ThemeRenderer />
-    </CatalogProvider>
+    <CatalogoPublicoClient
+      slug={slug}
+      initialProductId={productId}
+      previewTheme={(theme as ThemeId) || null}
+      isPreview={preview === "true"}
+    />
   );
 }

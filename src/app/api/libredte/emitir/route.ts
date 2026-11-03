@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { emitirBoletaAPIGateway, type APIGatewayConfig } from "@/lib/apigateway";
 import { emitirDTELibreDTE, type LibreDTEConfig, type ItemDTE, type ReceptorDTE } from "@/lib/libredte";
+import { emitirDteVentaSimpleAPI } from "@/lib/simpleapi-service";
 
 export async function POST(req: Request) {
   try {
@@ -102,8 +103,19 @@ export async function POST(req: Request) {
 
     let resultado: any = null;
 
-    // 3. Determinar proveedor: API Gateway (eBoleta) o LibreDTE
+    // 3. Determinar proveedor: SimpleAPI, API Gateway (eBoleta) o LibreDTE
     const proveedor = rawCfg.proveedor || (rawCfg.token ? "apigateway" : "libredte");
+
+    if (proveedor === "simpleapi") {
+      const resSimple = await emitirDteVentaSimpleAPI({
+        ventaId: ventaId || "",
+        negocioId,
+        tipoDte: Number(tipoDte) === 41 ? 41 : 39,
+        medioPago,
+        receptor,
+      });
+      return NextResponse.json(resSimple);
+    }
 
     // Validación estricta de compatibilidad de tipos de DTE
     if (proveedor === "apigateway" && Number(tipoDte) !== 39 && Number(tipoDte) !== 41) {

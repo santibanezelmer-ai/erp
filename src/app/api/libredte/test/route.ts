@@ -1,18 +1,24 @@
 import { NextResponse } from "next/server";
 import { probarConexionAPIGateway } from "@/lib/apigateway";
 import { probarConexionLibreDTE } from "@/lib/libredte";
+import { probarConexionSimpleAPI } from "@/lib/simpleapi";
 
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { token, hash, proveedor = "apigateway" } = body;
-    const credencial = token || hash;
+    const { token, hash, apiKey, proveedor = "apigateway" } = body;
+    const credencial = token || hash || apiKey;
 
     if (!credencial || typeof credencial !== "string") {
       return NextResponse.json(
-        { ok: false, mensaje: "Se requiere el Token de API Gateway" },
+        { ok: false, mensaje: "Se requiere la credencial o API Key para probar conexión" },
         { status: 400 }
       );
+    }
+
+    if (proveedor === "simpleapi") {
+      const resultado = await probarConexionSimpleAPI(credencial);
+      return NextResponse.json(resultado);
     }
 
     if (proveedor === "libredte") {

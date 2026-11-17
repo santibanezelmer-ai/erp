@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useTenant } from "@/contexts/tenant-context";
 import { createClient } from "@/lib/supabase/client";
 import { formatMoney } from "@/lib/format";
@@ -29,6 +29,8 @@ import {
   User,
   ShoppingBag,
   Flame,
+  Bell,
+  CheckCheck,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { imprimirTicketTermico } from "@/lib/ticket";
@@ -80,8 +82,58 @@ export default function ComandasPage() {
 
   // Modal Cobrar / Cerrar
   const [cerrarModalOpen, setCerrarModalOpen] = useState(false);
-  const [metodoPagoCierre, setMetodoPagoCierre] = useState("efectivo");
+  const [metodoPagoCierre, setMetodoPagoCierre] = useState<"efectivo" | "debito" | "credito" | "transferencia">("efectivo");
+  const [efectivoRecibido, setEfectivoRecibido] = useState("");
   const [cerrandoComanda, setCerrandoComanda] = useState(false);
+
+  // Estados de entrega e interactividad en tiempo real
+  const [actualizandoItemId, setActualizandoItemId] = useState<string | null>(null);
+  const comandaActivaRef = useRef<Comanda | null>(null);
+  const mesaSeleccionadaRef = useRef<Mesa | null>(null);
+  const itemsNotificadosRef = useRef<Set<string>>(new Set());
+
+  // Mantener refs sincronizadas para el listener de Realtime
+  useEffect(() => {
+    comandaActivaRef.current = comandaActiva;
+  }, [comandaActiva]);
+
+  useEffect(() => {
+    mesaSeleccionadaRef.current = mesaSeleccionada;
+  }, [mesaSeleccionada]);
+
+  // Síntesis de sonido de timbre para avisar al garzón de platos listos
+  const reproducirChimeListo = () => {
+    try {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioCtx) return;
+      const ctx = new AudioCtx();
+      const now = ctx.currentTime;
+
+      const osc1 = ctx.createOscillator();
+      const gain1 = ctx.createGain();
+      osc1.type = "sine";
+      osc1.frequency.setValueAtTime(880, now); // A5
+      gain1.gain.setValueAtTime(0.25, now);
+      gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+      osc1.connect(gain1);
+      gain1.connect(ctx.destination);
+      osc1.start(now);
+      osc1.stop(now + 0.35);
+
+      const osc2 = ctx.createOscillator();
+      const gain2 = ctx.createGain();
+      osc2.type = "sine";
+      osc2.frequency.setValueAtTime(1174.66, now + 0.12); // D6
+      gain2.gain.setValueAtTime(0.3, now + 0.12);
+      gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.7);
+      osc2.connect(gain2);
+      gain2.connect(ctx.destination);
+      osc2.start(now + 0.12);
+      osc2.stop(now + 0.7);
+    } catch (e) {
+      console.warn("Audio chime no disponible:", e);
+    }
+  };
 
   const fetchData = async () => {
     if (!negocio?.id) return;
@@ -114,6 +166,88 @@ export default function ComandasPage() {
 
   useEffect(() => {
     fetchData();
+
+    if (!negocio?.id) return;
+    const supabase = createClient();
+
+    // Suscripción Realtime a cambios en productos de comanda para este negocio
+    const itemsChannel = supabase
+      .channel(`comandas-items-live-${negocio.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "comanda_items",
+          filter: `negocio_id=eq.${negocio.id}`,
+        },
+        (payload) => {
+          const activeCom = comandaActivaRef.current;
+
+          if (payload.eventType === "UPDATE") {
+            const updated = payload.new as ComandaItem;
+            // Si el ítem pertenece a la comanda activa actual
+            if (activeCom && updated.comanda_id === activeCom.id) {
+              setItemsEnviados((prev) =>
+                prev.map((item) => (item.id === updated.id ? updated : item))
+              );
+            }
+
+            // Notificación al garzón si un plato pasa a 'listo'
+            if (updated.estado === "listo") {
+              if (!itemsNotificadosRef.current.has(updated.id)) {
+                itemsNotificadosRef.current.add(updated.id);
+                reproducirChimeListo();
+                const mesaTxt =
+                  activeCom && updated.comanda_id === activeCom.id
+                    ? `Mesa #${mesaSeleccionadaRef.current?.numero || "activa"}`
+                    : "Pedido de cocina";
+                toast.success(`🛎️ ¡Plato listo!: ${updated.nombre}`, {
+                  description: `${mesaTxt} está listo para ser servido`,
+                  duration: 6000,
+                });
+              }
+            } else if (updated.estado !== "listo") {
+              itemsNotificadosRef.current.delete(updated.id);
+            }
+          } else if (payload.eventType === "INSERT") {
+            const inserted = payload.new as ComandaItem;
+            if (activeCom && inserted.comanda_id === activeCom.id) {
+              setItemsEnviados((prev) => {
+                if (prev.some((it) => it.id === inserted.id)) return prev;
+                return [...prev, inserted];
+              });
+            }
+          } else if (payload.eventType === "DELETE") {
+            const deleted = payload.old as { id: string };
+            if (deleted?.id && activeCom) {
+              setItemsEnviados((prev) => prev.filter((it) => it.id !== deleted.id));
+            }
+          }
+        }
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "mesas",
+          filter: `negocio_id=eq.${negocio.id}`,
+        },
+        (payload) => {
+          if (payload.eventType === "UPDATE") {
+            const updatedMesa = payload.new as Mesa;
+            setMesas((prev) =>
+              prev.map((m) => (m.id === updatedMesa.id ? updatedMesa : m))
+            );
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(itemsChannel);
+    };
   }, [negocio?.id]);
 
   // Cuando se selecciona una mesa, cargar su comanda activa si existe
@@ -314,76 +448,141 @@ export default function ComandasPage() {
     }
   };
 
-  // Cobrar y cerrar comanda
+  // Confirmar entrega de un plato a la mesa por parte del garzón (atómico y condicional)
+  const confirmarEntregaItem = async (itemId: string) => {
+    if (!negocio?.id || !comandaActiva?.id) return;
+    setActualizandoItemId(itemId);
+    const supabase = createClient();
+    try {
+      // Condición atómica: solo si efectivamente sigue en estado 'listo'
+      const { data, error } = await supabase
+        .from("comanda_items")
+        .update({
+          estado: "entregado",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", itemId)
+        .eq("negocio_id", negocio.id)
+        .eq("estado", "listo")
+        .select("id, estado");
+
+      if (error) throw error;
+
+      if (!data || data.length === 0) {
+        toast.warning("El plato ya no está pendiente de entrega o fue modificado por otro usuario.");
+        // Refrescar lista de ítems para mostrar estado real
+        const { data: its } = await supabase
+          .from("comanda_items")
+          .select("*")
+          .eq("comanda_id", comandaActiva.id)
+          .order("created_at", { ascending: true });
+        setItemsEnviados(its || []);
+        return;
+      }
+
+      setItemsEnviados((prev) =>
+        prev.map((it) => (it.id === itemId ? { ...it, estado: "entregado" } : it))
+      );
+      toast.success("✓ Plato confirmado como entregado a la mesa");
+    } catch (err: any) {
+      toast.error(err.message || "Error al confirmar entrega");
+    } finally {
+      setActualizandoItemId(null);
+    }
+  };
+
+  // Confirmar entrega de todos los platos listos en la comanda (atómico y condicional)
+  const confirmarEntregaTodosListos = async () => {
+    if (!negocio?.id || !comandaActiva?.id) return;
+    const listos = itemsEnviados.filter((i) => i.estado === "listo");
+    if (listos.length === 0) return;
+
+    setActualizandoItemId("all");
+    const supabase = createClient();
+    try {
+      const listosIds = listos.map((i) => i.id);
+
+      // Actualizar condicionalmente solo aquellos ítems que sigan en 'listo'
+      const { data, error } = await supabase
+        .from("comanda_items")
+        .update({
+          estado: "entregado",
+          updated_at: new Date().toISOString(),
+        })
+        .in("id", listosIds)
+        .eq("negocio_id", negocio.id)
+        .eq("estado", "listo")
+        .select("id, estado");
+
+      if (error) throw error;
+
+      const afectados = data?.length || 0;
+      if (afectados === 0) {
+        toast.warning("Los platos ya habían sido entregados o modificados previamente.");
+      } else {
+        toast.success(`✓ Se confirmaron ${afectados} plato(s) entregados`);
+      }
+
+      // Sincronizar comanda con el estado real de la base de datos
+      const { data: its } = await supabase
+        .from("comanda_items")
+        .select("*")
+        .eq("comanda_id", comandaActiva.id)
+        .order("created_at", { ascending: true });
+      setItemsEnviados(its || []);
+    } catch (err: any) {
+      toast.error(err.message || "Error al entregar platos");
+    } finally {
+      setActualizandoItemId(null);
+    }
+  };
+
+  // Cobrar y cerrar comanda mediante RPC atómico e idempotente
   const cerrarComanda = async () => {
     if (!comandaActiva || !negocio?.id) return;
+
+    const totalComanda = itemsEnviados.reduce(
+      (acc, i) => acc + i.qty * Number(i.precio),
+      0
+    );
+
+    // Validación preventiva de efectivo
+    if (metodoPagoCierre === "efectivo") {
+      const rec = Number(efectivoRecibido);
+      if (!efectivoRecibido || isNaN(rec) || rec < totalComanda) {
+        toast.error(`El monto recibido en efectivo debe ser igual o superior a ${formatMoney(totalComanda)}`);
+        return;
+      }
+    }
+
     setCerrandoComanda(true);
     const supabase = createClient();
 
     try {
-      const totalComanda = itemsEnviados.reduce(
-        (acc, i) => acc + i.qty * Number(i.precio),
-        0
-      );
+      // Invocación transaccional al coordinador de PostgreSQL
+      const { data, error } = await (supabase.rpc as any)("cerrar_comanda_restaurante", {
+        _comanda_id: comandaActiva.id,
+        _pago: metodoPagoCierre,
+        _efectivo_rec: metodoPagoCierre === "efectivo" && efectivoRecibido ? Number(efectivoRecibido) : null,
+        _sucursal_id: null,
+      });
 
-      // 1. Crear venta correspondiente
-      const { data: venta, error: vErr } = await supabase
-        .from("ventas")
-        .insert({
-          negocio_id: negocio.id,
-          subtotal: totalComanda,
-          total: totalComanda,
-          pago: metodoPagoCierre,
-          estado: "completada",
-        })
-        .select("id")
-        .single();
+      if (error) throw error;
 
-      if (vErr) throw vErr;
-
-      // 2. Registrar detalle de venta
-      const detalles = itemsEnviados.map((i) => ({
-        venta_id: venta.id,
-        negocio_id: negocio.id,
-        producto_id: i.producto_id,
-        nombre: i.nombre,
-        qty: i.qty,
-        precio: Number(i.precio),
-        subtotal: i.qty * Number(i.precio),
-      }));
-      await supabase.from("detalle_ventas").insert(detalles);
-
-      // 3. Cerrar comanda
-      await supabase
-        .from("comandas")
-        .update({
-          estado: "cerrada",
-          closed_at: new Date().toISOString(),
-          venta_id: venta.id,
-        })
-        .eq("id", comandaActiva.id);
-
-      // 4. Liberar mesa
-      if (mesaSeleccionada?.id) {
-        await supabase
-          .from("mesas")
-          .update({ estado: "libre" })
-          .eq("id", mesaSeleccionada.id);
-
-        setMesas((prev) =>
-          prev.map((m) =>
-            m.id === mesaSeleccionada.id ? { ...m, estado: "libre" } : m
-          )
-        );
+      if (data?.ya_cobrada) {
+        toast.info(data.mensaje || "La comanda ya había sido cobrada exitosamente.");
+      } else {
+        toast.success("¡Comanda cobrada y cerrada exitosamente!");
       }
 
-      toast.success("¡Comanda cobrada y cerrada exitosamente!");
       setCerrarModalOpen(false);
+      setEfectivoRecibido("");
       setComandaActiva(null);
       setItemsEnviados([]);
       setDraftItems([]);
+      await fetchData();
     } catch (err: any) {
-      toast.error(err.message || "Error al cerrar la comanda");
+      toast.error(err.message || "Error al cobrar la comanda");
     } finally {
       setCerrandoComanda(false);
     }
@@ -606,45 +805,99 @@ export default function ComandasPage() {
               {/* Ítems ya marchados a cocina */}
               {itemsEnviados.length > 0 && (
                 <div className="space-y-1.5">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1">
-                    <Clock className="h-3 w-3" /> Marchados en Cocina ({itemsEnviados.length})
-                  </span>
-                  <div className="space-y-1.5">
-                    {itemsEnviados.map((it) => (
-                      <div
-                        key={it.id}
-                        className="p-2 rounded-lg border border-border/80 bg-muted/20 flex items-center justify-between text-xs"
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1">
+                      <Clock className="h-3 w-3" /> Marchados en Cocina ({itemsEnviados.length})
+                    </span>
+                    {itemsEnviados.filter((i) => i.estado === "listo").length > 1 && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={confirmarEntregaTodosListos}
+                        disabled={actualizandoItemId === "all"}
+                        className="h-5 text-[9px] px-2 text-emerald-600 border-emerald-500/40 hover:bg-emerald-500/10 gap-1 font-bold shadow-2xs"
                       >
-                        <div className="flex-1 pr-2">
-                          <div className="font-semibold text-foreground flex items-center gap-1.5">
-                            <span>{it.qty}x</span>
-                            <span>{it.nombre}</span>
-                          </div>
-                          {it.notas && (
-                            <p className="text-[10px] text-amber-600 dark:text-amber-400 font-medium italic">
-                              "{it.notas}"
-                            </p>
+                        <CheckCheck className="h-2.5 w-2.5" />
+                        Entregar todos los listos
+                      </Button>
+                    )}
+                  </div>
+                  <div className="space-y-1.5">
+                    {itemsEnviados.map((it) => {
+                      const isListo = it.estado === "listo";
+                      const isEntregado = it.estado === "entregado";
+                      const isPreparando = it.estado === "preparando";
+
+                      return (
+                        <div
+                          key={it.id}
+                          className={cn(
+                            "p-2.5 rounded-lg border transition-all flex items-center justify-between text-xs",
+                            isListo
+                              ? "border-emerald-500/80 bg-emerald-500/10 shadow-xs ring-1 ring-emerald-500/30"
+                              : isEntregado
+                              ? "border-border/60 bg-muted/30 opacity-75"
+                              : isPreparando
+                              ? "border-amber-500/40 bg-amber-500/5"
+                              : "border-border/80 bg-muted/20"
                           )}
-                          <div className="flex items-center gap-2 mt-0.5">
-                            <span
-                              className={cn(
-                                "text-[9px] px-1.5 py-0.5 rounded-md font-bold uppercase",
-                                it.estado === "pendiente"
-                                  ? "bg-amber-500/20 text-amber-600"
-                                  : it.estado === "preparando"
-                                  ? "bg-orange-500/20 text-orange-600"
-                                  : "bg-emerald-500/20 text-emerald-600"
+                        >
+                          <div className="flex-1 pr-2">
+                            <div className="font-semibold text-foreground flex items-center gap-1.5">
+                              <span className="font-bold text-primary">{it.qty}x</span>
+                              <span className={cn(isEntregado && "line-through text-muted-foreground")}>{it.nombre}</span>
+                            </div>
+                            {it.notas && (
+                              <p className="text-[10px] text-amber-600 dark:text-amber-400 font-medium italic">
+                                "{it.notas}"
+                              </p>
+                            )}
+                            <div className="flex items-center gap-2 mt-1">
+                              <span
+                                className={cn(
+                                  "text-[9px] px-1.5 py-0.5 rounded-md font-bold uppercase flex items-center gap-1",
+                                  it.estado === "pendiente"
+                                    ? "bg-amber-500/20 text-amber-600"
+                                    : isPreparando
+                                    ? "bg-orange-500/20 text-orange-600"
+                                    : isListo
+                                    ? "bg-emerald-600 text-white animate-pulse"
+                                    : "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400"
+                                )}
+                              >
+                                {isListo && <Bell className="h-2.5 w-2.5" />}
+                                {isListo
+                                  ? "¡Listo para Servir!"
+                                  : isEntregado
+                                  ? "✓ Entregado"
+                                  : isPreparando
+                                  ? "🍳 En Cocina"
+                                  : "⏳ Pendiente"}
+                              </span>
+
+                              {isListo && (
+                                <Button
+                                  size="sm"
+                                  onClick={() => confirmarEntregaItem(it.id)}
+                                  disabled={actualizandoItemId === it.id}
+                                  className="h-6 text-[10px] px-2 font-bold bg-emerald-600 hover:bg-emerald-700 text-white gap-1 shadow-xs"
+                                >
+                                  {actualizandoItemId === it.id ? (
+                                    <Loader2 className="h-3 w-3 animate-spin" />
+                                  ) : (
+                                    <CheckCircle2 className="h-3 w-3" />
+                                  )}
+                                  Confirmar Entrega
+                                </Button>
                               )}
-                            >
-                              {it.estado}
-                            </span>
+                            </div>
                           </div>
+                          <span className="font-bold text-foreground shrink-0">
+                            {formatMoney(it.qty * Number(it.precio))}
+                          </span>
                         </div>
-                        <span className="font-bold text-foreground">
-                          {formatMoney(it.qty * Number(it.precio))}
-                        </span>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               )}
@@ -754,7 +1007,11 @@ export default function ComandasPage() {
             {comandaActiva && (
               <Button
                 variant="outline"
-                onClick={() => setCerrarModalOpen(true)}
+                onClick={() => {
+                  setMetodoPagoCierre("efectivo");
+                  setEfectivoRecibido(totalEnviado.toString());
+                  setCerrarModalOpen(true);
+                }}
                 disabled={draftItems.length > 0}
                 className="w-full gap-2 font-semibold text-xs border-emerald-600/40 text-emerald-600 hover:bg-emerald-500/10"
               >
@@ -819,41 +1076,107 @@ export default function ComandasPage() {
 
       {/* Modal Cobrar y Cerrar Comanda */}
       <Dialog open={cerrarModalOpen} onOpenChange={setCerrarModalOpen}>
-        <DialogContent className="sm:max-w-sm">
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="text-base font-bold">Cobrar Comanda</DialogTitle>
             <DialogDescription className="text-xs">
               {mesaSeleccionada ? `Mesa #${mesaSeleccionada.numero}` : "Para Llevar"} •{" "}
-              Total a pagar: {formatMoney(totalEnviado)}
+              Total a pagar: <span className="font-bold text-foreground">{formatMoney(totalEnviado)}</span>
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-3 py-2">
-            <Label className="text-xs">Método de Pago</Label>
-            <div className="grid grid-cols-3 gap-2">
-              {[
-                { id: "efectivo", label: "Efectivo" },
-                { id: "tarjeta", label: "Tarjeta" },
-                { id: "transferencia", label: "Transfer." },
-              ].map((m) => (
-                <button
-                  key={m.id}
-                  type="button"
-                  onClick={() => setMetodoPagoCierre(m.id)}
-                  className={cn(
-                    "p-2 rounded-lg border text-xs font-semibold capitalize transition-all",
-                    metodoPagoCierre === m.id
-                      ? "bg-primary text-primary-foreground border-primary"
-                      : "bg-background border-border text-muted-foreground hover:bg-muted"
-                  )}
-                >
-                  {m.label}
-                </button>
-              ))}
+          <div className="space-y-4 py-2">
+            <div>
+              <Label className="text-xs font-medium text-muted-foreground mb-1.5 block">Método de Pago</Label>
+              <div className="grid grid-cols-4 gap-2">
+                {[
+                  { id: "efectivo" as const, label: "Efectivo" },
+                  { id: "debito" as const, label: "Débito" },
+                  { id: "credito" as const, label: "Crédito" },
+                  { id: "transferencia" as const, label: "Transfer." },
+                ].map((m) => (
+                  <button
+                    key={m.id}
+                    type="button"
+                    onClick={() => {
+                      setMetodoPagoCierre(m.id);
+                      if (m.id === "efectivo" && !efectivoRecibido) {
+                        setEfectivoRecibido(totalEnviado.toString());
+                      }
+                    }}
+                    className={cn(
+                      "p-2.5 rounded-lg border text-xs font-semibold capitalize transition-all text-center",
+                      metodoPagoCierre === m.id
+                        ? "bg-primary text-primary-foreground border-primary shadow-sm"
+                        : "bg-background border-border text-muted-foreground hover:bg-muted"
+                    )}
+                  >
+                    {m.label}
+                  </button>
+                ))}
+              </div>
             </div>
+
+            {metodoPagoCierre === "efectivo" && (
+              <div className="space-y-3 rounded-lg border bg-muted/30 p-3">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="efectivoRecibido" className="text-xs font-medium">
+                    Efectivo Recibido
+                  </Label>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 text-[11px] px-2 text-primary hover:text-primary font-medium"
+                    onClick={() => setEfectivoRecibido(totalEnviado.toString())}
+                  >
+                    Monto Exacto ({formatMoney(totalEnviado)})
+                  </Button>
+                </div>
+
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground font-semibold">
+                    $
+                  </span>
+                  <Input
+                    id="efectivoRecibido"
+                    type="number"
+                    min={totalEnviado}
+                    step="1"
+                    placeholder={totalEnviado.toString()}
+                    value={efectivoRecibido}
+                    onChange={(e) => setEfectivoRecibido(e.target.value)}
+                    className="pl-7 font-mono font-bold text-sm"
+                    autoFocus
+                  />
+                </div>
+
+                {/* Cálculo en vivo de Vuelto */}
+                {(() => {
+                  const montoRec = Number(efectivoRecibido);
+                  const vuelto = montoRec >= totalEnviado ? montoRec - totalEnviado : 0;
+                  const faltante = montoRec < totalEnviado && efectivoRecibido !== "" ? totalEnviado - montoRec : 0;
+
+                  return (
+                    <div className="flex items-center justify-between pt-1 text-xs">
+                      <span className="text-muted-foreground font-medium">Vuelto a entregar:</span>
+                      {faltante > 0 ? (
+                        <span className="font-bold text-destructive">
+                          Faltan {formatMoney(faltante)}
+                        </span>
+                      ) : (
+                        <span className={cn("font-bold text-sm", vuelto > 0 ? "text-emerald-600 dark:text-emerald-400" : "text-foreground")}>
+                          {formatMoney(vuelto)}
+                        </span>
+                      )}
+                    </div>
+                  );
+                })()}
+              </div>
+            )}
           </div>
 
-          <DialogFooter>
+          <DialogFooter className="gap-2 sm:gap-0">
             <Button
               variant="outline"
               size="sm"
@@ -865,7 +1188,10 @@ export default function ComandasPage() {
             <Button
               size="sm"
               onClick={cerrarComanda}
-              disabled={cerrandoComanda}
+              disabled={
+                cerrandoComanda ||
+                (metodoPagoCierre === "efectivo" && (!efectivoRecibido || Number(efectivoRecibido) < totalEnviado))
+              }
               className="gap-1.5 font-bold"
             >
               {cerrandoComanda ? (
@@ -876,7 +1202,7 @@ export default function ComandasPage() {
               ) : (
                 <>
                   <CheckCircle2 className="h-4 w-4" />
-                  Confirmar Pago
+                  Confirmar Pago ({formatMoney(totalEnviado)})
                 </>
               )}
             </Button>

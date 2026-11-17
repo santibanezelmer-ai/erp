@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useTenant } from "@/contexts/tenant-context";
 import { createClient } from "@/lib/supabase/client";
 import { formatMoney } from "@/lib/format";
@@ -21,6 +22,9 @@ import {
   Trash2,
   Loader2,
   ShoppingCart,
+  Bell,
+  Flame,
+  ArrowRight,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -28,11 +32,20 @@ type Area = Database["public"]["Tables"]["areas"]["Row"];
 type Mesa = Database["public"]["Tables"]["mesas"]["Row"];
 type Comanda = Database["public"]["Tables"]["comandas"]["Row"];
 
+interface ItemResumen {
+  id: string;
+  comanda_id: string;
+  estado: string;
+  qty: number;
+  nombre: string;
+}
+
 export default function MesasPage() {
   const { negocio } = useTenant();
   const [areas, setAreas] = useState<Area[]>([]);
   const [mesas, setMesas] = useState<Mesa[]>([]);
   const [comandasActivas, setComandasActivas] = useState<Comanda[]>([]);
+  const [comandaItems, setComandaItems] = useState<ItemResumen[]>([]);
   const [loading, setLoading] = useState(true);
   const [areaSeleccionada, setAreaSeleccionada] = useState<string>("todas");
 
@@ -77,8 +90,22 @@ export default function MesasPage() {
       if (loadedAreas.length > 0 && !areaIdMesa) {
         setAreaIdMesa(loadedAreas[0].id);
       }
-      setMesas(mesasRes.data || []);
-      setComandasActivas(comandasRes.data || []);
+      const loadedMesas = mesasRes.data || [];
+      const loadedComandas = comandasRes.data || [];
+      setMesas(loadedMesas);
+      setComandasActivas(loadedComandas);
+
+      // Cargar productos de comandas abiertas para conocer estados de cocina en tiempo real
+      const comandaIds = loadedComandas.map((c) => c.id);
+      if (comandaIds.length > 0) {
+        const { data: its } = await supabase
+          .from("comanda_items")
+          .select("id, comanda_id, estado, qty, nombre")
+          .in("comanda_id", comandaIds);
+        setComandaItems(its || []);
+      } else {
+        setComandaItems([]);
+      }
     } catch (err: any) {
       toast.error(err.message || "Error al cargar las mesas");
     } finally {
@@ -88,6 +115,54 @@ export default function MesasPage() {
 
   useEffect(() => {
     fetchData();
+
+    if (!negocio?.id) return;
+    const supabase = createClient();
+
+    // Sincronización Realtime para cambios de mesas, comandas y productos de cocina
+    const channel = supabase
+      .channel(`mesas-salon-live-${negocio.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "comanda_items",
+          filter: `negocio_id=eq.${negocio.id}`,
+        },
+        () => {
+          fetchData();
+        }
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "comandas",
+          filter: `negocio_id=eq.${negocio.id}`,
+        },
+        () => {
+          fetchData();
+        }
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "mesas",
+          filter: `negocio_id=eq.${negocio.id}`,
+        },
+        () => {
+          fetchData();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [negocio?.id]);
 
   const crearMesa = async (e: React.FormEvent) => {
@@ -256,12 +331,21 @@ export default function MesasPage() {
             const isOcupada = mesa.estado === "ocupada" || !!comanda;
             const isReservada = mesa.estado === "reservada";
 
+            const itemsMesa = comanda ? comandaItems.filter((it) => it.comanda_id === comanda.id) : [];
+            const platosListos = itemsMesa.filter((it) => it.estado === "listo").reduce((acc, it) => acc + (it.qty || 1), 0);
+            const platosEnCocina = itemsMesa.filter((it) => it.estado === "pendiente" || it.estado === "preparando").reduce((acc, it) => acc + (it.qty || 1), 0);
+            const platosEntregados = itemsMesa.filter((it) => it.estado === "entregado").reduce((acc, it) => acc + (it.qty || 1), 0);
+            const totalItems = itemsMesa.reduce((acc, it) => acc + (it.qty || 1), 0);
+            const tienePlatosListos = platosListos > 0;
+
             return (
               <div
                 key={mesa.id}
                 className={cn(
                   "p-4 rounded-xl border flex flex-col justify-between transition-all bg-card shadow-xs hover:shadow-md relative group",
-                  isOcupada
+                  tienePlatosListos
+                    ? "border-emerald-500 bg-emerald-500/10 shadow-md ring-2 ring-emerald-500/40"
+                    : isOcupada
                     ? "border-amber-500/50 bg-amber-500/5"
                     : isReservada
                     ? "border-blue-500/50 bg-blue-500/5"
@@ -275,56 +359,86 @@ export default function MesasPage() {
                   <span
                     className={cn(
                       "text-[10px] uppercase tracking-wider font-extrabold px-2 py-0.5 rounded-full",
-                      isOcupada
+                      tienePlatosListos
+                        ? "bg-emerald-600 text-white animate-pulse"
+                        : isOcupada
                         ? "bg-amber-500 text-white"
                         : isReservada
                         ? "bg-blue-500 text-white"
                         : "bg-emerald-500 text-white"
                     )}
                   >
-                    {isOcupada ? "Ocupada" : isReservada ? "Reservada" : "Libre"}
+                    {tienePlatosListos ? "¡Plato Listo!" : isOcupada ? "Ocupada" : isReservada ? "Reservada" : "Libre"}
                   </span>
                 </div>
 
-                <div className="my-3 space-y-1 text-xs text-muted-foreground">
+                <div className="my-2.5 space-y-1.5 text-xs text-muted-foreground">
                   <div className="flex items-center gap-1.5">
                     <Users className="h-3.5 w-3.5" />
                     <span>{mesa.capacidad} personas</span>
                   </div>
                   {comanda && (
-                    <div className="font-bold text-foreground text-sm pt-1">
+                    <div className="font-bold text-foreground text-sm pt-0.5">
                       Cuenta: {formatMoney(comanda.total)}
                     </div>
                   )}
+
+                  {/* Indicadores de platos y atención requerida */}
+                  {tienePlatosListos ? (
+                    <div className="flex items-center gap-1.5 p-1.5 rounded-md bg-emerald-600 text-white font-extrabold text-[11px] shadow-2xs">
+                      <Bell className="h-3.5 w-3.5 animate-bounce" />
+                      <span>{platosListos} {platosListos === 1 ? "plato listo" : "platos listos"}</span>
+                    </div>
+                  ) : platosEnCocina > 0 ? (
+                    <div className="flex items-center gap-1.5 p-1 rounded-md bg-amber-500/15 text-amber-700 dark:text-amber-400 font-semibold text-[10px]">
+                      <Flame className="h-3 w-3 text-amber-500" />
+                      <span>{platosEnCocina} en cocina</span>
+                    </div>
+                  ) : totalItems > 0 && platosEntregados === totalItems ? (
+                    <div className="flex items-center gap-1.5 p-1 rounded-md bg-muted text-muted-foreground font-medium text-[10px]">
+                      <CheckCircle2 className="h-3 w-3 text-emerald-500" />
+                      <span>{platosEntregados} entregados</span>
+                    </div>
+                  ) : null}
                 </div>
 
-                {/* Acciones de cambio de estado */}
-                <div className="flex items-center gap-1.5 pt-2 border-t border-border/60">
-                  {isOcupada ? (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => cambiarEstadoMesa(mesa, "libre")}
-                      className="w-full h-7 text-[11px] font-semibold text-emerald-600 border-emerald-500/40 hover:bg-emerald-500/10"
+                {/* Acciones de cambio de estado y enlace */}
+                <div className="space-y-1.5 pt-2 border-t border-border/60">
+                  {comanda && (
+                    <Link
+                      href="/comandas"
+                      className="w-full text-center text-[10px] font-bold text-primary hover:underline flex items-center justify-center gap-1 py-0.5"
                     >
-                      Liberar Mesa
-                    </Button>
-                  ) : (
-                    <Button
-                      size="sm"
-                      onClick={() => cambiarEstadoMesa(mesa, "ocupada")}
-                      className="w-full h-7 text-[11px] font-semibold bg-amber-500 hover:bg-amber-600 text-white"
-                    >
-                      Ocupar Mesa
-                    </Button>
+                      Ir a Comanda <ArrowRight className="h-2.5 w-2.5" />
+                    </Link>
                   )}
-                  <button
-                    onClick={() => eliminarMesa(mesa.id)}
-                    className="opacity-0 group-hover:opacity-100 p-1 text-muted-foreground hover:text-destructive transition-opacity"
-                    title="Eliminar mesa"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
+                  <div className="flex items-center gap-1.5">
+                    {isOcupada ? (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => cambiarEstadoMesa(mesa, "libre")}
+                        className="w-full h-7 text-[11px] font-semibold text-emerald-600 border-emerald-500/40 hover:bg-emerald-500/10"
+                      >
+                        Liberar Mesa
+                      </Button>
+                    ) : (
+                      <Button
+                        size="sm"
+                        onClick={() => cambiarEstadoMesa(mesa, "ocupada")}
+                        className="w-full h-7 text-[11px] font-semibold bg-amber-500 hover:bg-amber-600 text-white"
+                      >
+                        Ocupar Mesa
+                      </Button>
+                    )}
+                    <button
+                      onClick={() => eliminarMesa(mesa.id)}
+                      className="opacity-0 group-hover:opacity-100 p-1 text-muted-foreground hover:text-destructive transition-opacity"
+                      title="Eliminar mesa"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
                 </div>
               </div>
             );

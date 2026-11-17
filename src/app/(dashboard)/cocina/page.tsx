@@ -31,6 +31,7 @@ export default function CocinaPage() {
   const { negocio } = useTenant();
   const [items, setItems] = useState<ItemConMesa[]>([]);
   const [loading, setLoading] = useState(true);
+  const [actualizandoItemId, setActualizandoItemId] = useState<string | null>(null);
 
   const fetchCocina = async () => {
     if (!negocio?.id) return;
@@ -122,20 +123,38 @@ export default function CocinaPage() {
   };
 
   useEffect(() => {
+    if (!negocio?.id) return;
     fetchCocina();
 
-    // Supabase Realtime subscription para nuevos pedidos
+    // Supabase Realtime subscription para pedidos de cocina con filtro estricto por negocio
     const supabase = createClient();
     const channel = supabase
-      .channel("cocina-changes")
+      .channel(`cocina-kds-live-${negocio.id}`)
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "comanda_items" },
+        {
+          event: "*",
+          schema: "public",
+          table: "comanda_items",
+          filter: `negocio_id=eq.${negocio.id}`,
+        },
         (payload) => {
           if (payload.eventType === "INSERT") {
             reproducirCampanaCocina();
             toast.info("🛎️ ¡Nuevo pedido marchado a cocina!");
           }
+          fetchCocina();
+        }
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "comandas",
+          filter: `negocio_id=eq.${negocio.id}`,
+        },
+        () => {
           fetchCocina();
         }
       )
@@ -146,19 +165,58 @@ export default function CocinaPage() {
     };
   }, [negocio?.id]);
 
-  const cambiarEstadoItem = async (id: string, nuevoEstado: string) => {
+  const cambiarEstadoItem = async (
+    id: string,
+    nuevoEstado: string,
+    estadoAnteriorEsperado?: string
+  ) => {
+    if (!negocio?.id) return;
+    setActualizandoItemId(id);
     const supabase = createClient();
     try {
-      const { error } = await supabase
+      // Consulta con condición atómica de estado anterior para prevenir concurrencia
+      let query = supabase
         .from("comanda_items")
-        .update({ estado: nuevoEstado, updated_at: new Date().toISOString() })
-        .eq("id", id);
+        .update({
+          estado: nuevoEstado,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", id)
+        .eq("negocio_id", negocio.id);
+
+      if (estadoAnteriorEsperado) {
+        query = query.eq("estado", estadoAnteriorEsperado);
+      }
+
+      const { data, error } = await query.select("id, estado");
 
       if (error) throw error;
-      toast.success(`Plato marcado como ${nuevoEstado}`);
+
+      // Si 0 filas fueron modificadas, otro usuario ya cambió el estado del plato
+      if (!data || data.length === 0) {
+        toast.warning(
+          "El plato ya fue actualizado o cancelado por otro usuario en sala o cocina."
+        );
+        await fetchCocina();
+        return;
+      }
+
+      // Actualizar localmente solo con confirmación de base de datos
+      setItems((prev) =>
+        prev.map((i) => (i.id === id ? { ...i, estado: nuevoEstado } : i))
+      );
+
+      toast.success(
+        nuevoEstado === "listo"
+          ? "¡Plato listo! Se notificó al personal de sala."
+          : `Plato marcado como ${nuevoEstado}`
+      );
       fetchCocina();
     } catch (err: any) {
       toast.error(err.message || "Error al actualizar");
+      fetchCocina();
+    } finally {
+      setActualizandoItemId(null);
     }
   };
 
@@ -257,10 +315,15 @@ export default function CocinaPage() {
                     <div className="mt-3 pt-2 border-t border-border/60">
                       <Button
                         size="sm"
-                        onClick={() => cambiarEstadoItem(item.id, "preparando")}
+                        disabled={actualizandoItemId === item.id}
+                        onClick={() => cambiarEstadoItem(item.id, "preparando", item.estado || "pendiente")}
                         className="w-full h-8 text-xs font-semibold gap-1.5 bg-amber-500 hover:bg-amber-600 text-white"
                       >
-                        <Flame className="h-3.5 w-3.5" />
+                        {actualizandoItemId === item.id ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <Flame className="h-3.5 w-3.5" />
+                        )}
                         Empezar a Cocinar
                       </Button>
                     </div>
@@ -311,10 +374,15 @@ export default function CocinaPage() {
                     <div className="mt-3 pt-2 border-t border-border/60">
                       <Button
                         size="sm"
-                        onClick={() => cambiarEstadoItem(item.id, "listo")}
+                        disabled={actualizandoItemId === item.id}
+                        onClick={() => cambiarEstadoItem(item.id, "listo", "preparando")}
                         className="w-full h-8 text-xs font-semibold gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white"
                       >
-                        <CheckCircle2 className="h-3.5 w-3.5" />
+                        {actualizandoItemId === item.id ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <CheckCircle2 className="h-3.5 w-3.5" />
+                        )}
                         ¡Plato Listo!
                       </Button>
                     </div>
@@ -329,7 +397,7 @@ export default function CocinaPage() {
             <div className="flex items-center justify-between p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 font-bold text-sm text-emerald-700 dark:text-emerald-400">
               <span className="flex items-center gap-2">
                 <CheckCircle2 className="h-4 w-4" />
-                Listos para Servir
+                Listos en Barra / Pase
               </span>
               <span className="bg-emerald-600 text-white px-2 py-0.5 rounded-full text-xs">
                 {listos.length}
@@ -338,27 +406,44 @@ export default function CocinaPage() {
 
             <div className="space-y-3">
               {listos.map((item) => (
-                <Card key={item.id} className="border-l-4 border-l-emerald-500 shadow-sm opacity-90">
+                <Card key={item.id} className="border-l-4 border-l-emerald-500 shadow-sm bg-card">
                   <CardHeader className="p-3 pb-1 flex flex-row items-center justify-between space-y-0">
                     <span className="font-bold text-xs bg-muted px-2 py-0.5 rounded">
                       Mesa: {item.mesa_numero}
                     </span>
-                    <span className="text-[11px] text-emerald-600 font-semibold">Listo</span>
+                    <span className="text-[11px] text-emerald-600 font-bold flex items-center gap-1 animate-pulse">
+                      <Bell className="h-3 w-3" />
+                      Esperando retiro
+                    </span>
                   </CardHeader>
                   <CardContent className="p-3 pt-2">
                     <div className="text-sm font-bold text-foreground">
-                      <span className="mr-1">{item.qty}×</span>
+                      <span className="text-emerald-600 font-black mr-1">{item.qty}×</span>
                       {item.nombre}
                     </div>
+                    {item.notas && (
+                      <p className="text-xs text-amber-600 dark:text-amber-400 mt-1 italic">
+                        ⚠️ &quot;{item.notas}&quot;
+                      </p>
+                    )}
 
-                    <div className="mt-3 pt-2 border-t border-border/60">
+                    <div className="mt-3 pt-2 border-t border-border/60 flex items-center justify-between gap-2">
+                      <span className="text-[10px] text-muted-foreground italic">
+                        El garzón confirmará en salón
+                      </span>
                       <Button
                         size="sm"
-                        variant="outline"
-                        onClick={() => cambiarEstadoItem(item.id, "entregado")}
-                        className="w-full h-8 text-xs"
+                        variant="ghost"
+                        disabled={actualizandoItemId === item.id}
+                        onClick={() => cambiarEstadoItem(item.id, "entregado", "listo")}
+                        className="h-7 text-[11px] px-2 text-muted-foreground hover:text-foreground hover:bg-muted"
+                        title="Despachar manualmente si se entrega directamente"
                       >
-                        Marcar Entregado
+                        {actualizandoItemId === item.id ? (
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                        ) : (
+                          "Despachar"
+                        )}
                       </Button>
                     </div>
                   </CardContent>

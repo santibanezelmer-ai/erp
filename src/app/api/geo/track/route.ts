@@ -155,10 +155,12 @@ export async function POST(req: NextRequest) {
         ? (cfg.modulos_override as Record<string, any>)
         : {};
 
-    // Si ya tiene __geo con ciudad y país de creación, lo conservamos y solo actualizamos lastGeo
+    // Si ya tiene __geo con ciudad y país de creación, lo conservamos y solo actualizamos lastGeo y la última actividad humana
+    const nowIso = new Date().toISOString();
     const existingCreationGeo = currentOverrides.__geo;
     const updatedOverrides = {
       ...currentOverrides,
+      __last_human_activity_at: nowIso,
       __geo: existingCreationGeo?.countryName
         ? existingCreationGeo
         : {

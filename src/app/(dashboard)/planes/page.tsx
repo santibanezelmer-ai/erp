@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { PLANES, formatPrecio, type Ciclo, type PlanId } from "@/lib/mercadopago";
 import { useTenant } from "@/contexts/tenant-context";
 import { createClient } from "@/lib/supabase/client";
@@ -19,6 +20,8 @@ import {
   ArrowRight,
   Zap,
   Tag,
+  Gift,
+  CheckCircle2,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -40,19 +43,75 @@ interface PagoInfo {
   created_at: string;
 }
 
+interface RecoveryOfferState {
+  eligible: boolean;
+  alreadyAccepted: boolean;
+  planBeneficio: string;
+  diasBeneficio: number;
+  promocionVenceAt: string | null;
+}
+
 export default function PlanesPage() {
-  const { negocio } = useTenant();
+  const { negocio, reloadTenant } = useTenant();
+  const searchParams = useSearchParams();
   const [cicloGlobal, setCicloGlobal] = useState<Ciclo>("monthly");
   const [loadingAction, setLoadingAction] = useState<string | null>(null);
   const [suscripcion, setSuscripcion] = useState<SuscripcionInfo | null>(null);
   const [pagos, setPagos] = useState<PagoInfo[]>([]);
   const [loadingData, setLoadingData] = useState(true);
+  const [recoveryOffer, setRecoveryOffer] = useState<RecoveryOfferState | null>(null);
+  const [activatingOffer, setActivatingOffer] = useState(false);
 
   const planActual = negocio?.plan || "free";
+  const urlToken = searchParams.get("token") || "";
+  const urlRequestedFreeMonth = searchParams.get("activar_mes_gratis") === "1";
 
   useEffect(() => {
     cargarEstadoSuscripcion();
+    cargarOfertaRecuperacion();
   }, [negocio?.id]);
+
+  const cargarOfertaRecuperacion = async () => {
+    try {
+      const res = await fetch("/api/recuperacion/activar");
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data?.hasCampaign) {
+        setRecoveryOffer({
+          eligible: Boolean(data.eligible),
+          alreadyAccepted: Boolean(data.alreadyAccepted),
+          planBeneficio: data.planBeneficio || "pro",
+          diasBeneficio: Number(data.diasBeneficio) || 30,
+          promocionVenceAt: data.promocionVenceAt || null,
+        });
+      }
+    } catch {}
+  };
+
+  const handleAceptarPromocionRecuperacion = async () => {
+    setActivatingOffer(true);
+    try {
+      const res = await fetch("/api/recuperacion/activar", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: urlToken || undefined }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "No se pudo activar la promoción");
+      }
+      toast.success(
+        `¡Tu promoción de ${data.dias_otorgados || 30} días gratuitos en Plan ${(
+          data.plan || "pro"
+        ).toUpperCase()} ha sido activada!`
+      );
+      await Promise.all([cargarEstadoSuscripcion(), cargarOfertaRecuperacion(), reloadTenant()]);
+    } catch (err: any) {
+      toast.error(err.message || "Error al activar tu mes gratuito");
+    } finally {
+      setActivatingOffer(false);
+    }
+  };
 
   const cargarEstadoSuscripcion = async () => {
     if (!negocio?.id) return;
@@ -150,6 +209,52 @@ export default function PlanesPage() {
           </button>
         </div>
       </div>
+
+      {/* Banner de Oferta de Recuperación (1 Mes Gratis) — Requiere aceptación expresa del propietario */}
+      {(recoveryOffer?.eligible || (urlRequestedFreeMonth && !recoveryOffer?.alreadyAccepted)) && (
+        <Card className="border-2 border-primary bg-gradient-to-r from-primary/10 via-emerald-500/5 to-primary/5 shadow-md">
+          <CardContent className="p-5 sm:p-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+            <div className="space-y-1.5">
+              <div className="flex items-center gap-2 flex-wrap">
+                <Badge className="bg-emerald-600 hover:bg-emerald-600 text-white font-extrabold text-[10px] uppercase gap-1">
+                  <Gift className="h-3 w-3" /> Oferta Especial de Reactivación
+                </Badge>
+                <span className="text-xs font-bold text-primary">
+                  Uso único por tienda · No acumulable con otras promociones
+                </span>
+              </div>
+              <h2 className="text-lg sm:text-xl font-black text-foreground">
+                ¡Bienvenido de vuelta, {negocio?.nombre}! Activa tu Mes Gratuito (
+                {recoveryOffer?.diasBeneficio ?? 30} días en Plan{" "}
+                {(recoveryOffer?.planBeneficio ?? "pro").toUpperCase()})
+              </h2>
+              <p className="text-xs text-muted-foreground max-w-2xl leading-relaxed">
+                Al hacer clic en el botón aceptas expresamente activar tu período promocional de{" "}
+                <strong>{recoveryOffer?.diasBeneficio ?? 30} días sin costo</strong>. Tu suscripción quedará activa de inmediato con fecha de otorgamiento y vencimiento registrada.
+              </p>
+            </div>
+
+            <Button
+              size="lg"
+              onClick={handleAceptarPromocionRecuperacion}
+              disabled={activatingOffer}
+              className="w-full md:w-auto shrink-0 font-extrabold gap-2 shadow-sm"
+            >
+              {activatingOffer ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Validando y Activando...
+                </>
+              ) : (
+                <>
+                  <CheckCircle2 className="h-4 w-4" />
+                  ACTIVAR MI MES GRATIS
+                </>
+              )}
+            </Button>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Estado Actual de la Suscripción */}
       {suscripcion && suscripcion.estado === "activa" && (

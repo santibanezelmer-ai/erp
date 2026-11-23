@@ -41,8 +41,10 @@ import {
   Globe,
   Copy,
   Send,
+  Sparkles,
 } from "lucide-react";
 import { toast } from "sonner";
+import { RecuperacionClientesSection } from "@/components/super-admin/RecuperacionClientesSection";
 
 interface GlobalKpis {
   total_negocios: number;
@@ -178,7 +180,7 @@ export default function SuperAdminPage() {
   const router = useRouter();
   const { isSuperAdmin, loading: tenantLoading } = useTenant();
 
-  const [activeTab, setActiveTab] = useState<"comercios" | "cupones">("comercios");
+  const [activeTab, setActiveTab] = useState<"comercios" | "recuperacion" | "cupones">("comercios");
   const [loading, setLoading] = useState(true);
   const [kpis, setKpis] = useState<GlobalKpis | null>(null);
   const [negocios, setNegocios] = useState<NegocioRow[]>([]);
@@ -799,7 +801,7 @@ export default function SuperAdminPage() {
 
       {/* Selector de pestañas */}
       <div className="flex items-center justify-between border-b border-border pb-3 gap-3 flex-wrap">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <Button
             variant={activeTab === "comercios" ? "default" : "outline"}
             size="sm"
@@ -808,6 +810,15 @@ export default function SuperAdminPage() {
           >
             <Store className="h-4 w-4" />
             Tiendas y Suscripciones ({negocios.length})
+          </Button>
+          <Button
+            variant={activeTab === "recuperacion" ? "default" : "outline"}
+            size="sm"
+            onClick={() => setActiveTab("recuperacion")}
+            className="gap-1.5"
+          >
+            <Sparkles className="h-4 w-4" />
+            Recuperación de clientes
           </Button>
           <Button
             variant={activeTab === "cupones" ? "default" : "outline"}
@@ -827,6 +838,9 @@ export default function SuperAdminPage() {
           </Button>
         )}
       </div>
+
+      {/* TAB: RECUPERACIÓN DE CLIENTES */}
+      {activeTab === "recuperacion" && <RecuperacionClientesSection />}
 
       {/* TAB 1: COMERCIOS Y SUSCRIPCIONES */}
       {activeTab === "comercios" && (

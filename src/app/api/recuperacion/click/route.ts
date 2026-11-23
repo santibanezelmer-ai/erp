@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient as createServerSupabase } from "@/lib/supabase/server";
 import {
   getServiceSupabase,
+  mapCampaignRowToRecord,
   RecuperacionCampaignRecord,
   saveCampaignState,
 } from "@/lib/recuperacion.server";
@@ -34,22 +35,20 @@ export async function GET(req: NextRequest) {
         .maybeSingle();
 
       if (row) {
+        const base = mapCampaignRowToRecord(row);
         const updated: RecuperacionCampaignRecord = {
-          ...row,
-          negocio_nombre: "",
-          negocio_slug: "",
-          dias_inactivo: row.dias_inactivo_al_detectar ?? 12,
-          primer_clic_at: row.primer_clic_at || nowIso,
-          correo_1_abierto_at: row.correo_1_abierto_at || nowIso,
-          primer_abierto_at: row.primer_abierto_at || nowIso,
+          ...base,
+          primer_clic_at: base.primer_clic_at || nowIso,
+          correo_1_abierto_at: base.correo_1_abierto_at || nowIso,
+          primer_abierto_at: base.primer_abierto_at || nowIso,
           ...(step === 2
             ? {
-                correo_2_clic_at: row.correo_2_clic_at || nowIso,
-                correo_2_abierto_at: row.correo_2_abierto_at || nowIso,
+                correo_2_clic_at: base.correo_2_clic_at || nowIso,
+                correo_2_abierto_at: base.correo_2_abierto_at || nowIso,
                 correo_2_estado: "clic",
               }
             : {
-                correo_1_clic_at: row.correo_1_clic_at || nowIso,
+                correo_1_clic_at: base.correo_1_clic_at || nowIso,
                 correo_1_estado: "clic",
               }),
         };

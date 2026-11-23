@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient as createServerSupabase } from "@/lib/supabase/server";
 import {
   getServiceSupabase,
+  mapCampaignRowToRecord,
   RecuperacionCampaignRecord,
   saveCampaignState,
 } from "@/lib/recuperacion.server";
@@ -76,12 +77,7 @@ export async function POST(req: NextRequest) {
         .eq("negocio_id", negocioId)
         .maybeSingle();
       if (row) {
-        campaign = {
-          ...row,
-          negocio_nombre: "",
-          negocio_slug: "",
-          dias_inactivo: row.dias_inactivo_al_detectar ?? 12,
-        };
+        campaign = mapCampaignRowToRecord(row);
       }
     } else if (emailId) {
       const { data: row1 } = await supabase
@@ -92,12 +88,7 @@ export async function POST(req: NextRequest) {
       if (row1) {
         negocioId = row1.negocio_id;
         step = row1.correo_2_resend_id === emailId ? 2 : 1;
-        campaign = {
-          ...row1,
-          negocio_nombre: "",
-          negocio_slug: "",
-          dias_inactivo: row1.dias_inactivo_al_detectar ?? 12,
-        };
+        campaign = mapCampaignRowToRecord(row1);
       }
     }
 

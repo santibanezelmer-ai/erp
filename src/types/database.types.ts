@@ -141,6 +141,7 @@ export type Database = {
           id: string
           negocio_id: string
           nombre: string
+          sucursal_id: string | null
           tipo_impresion: string | null
         }
         Insert: {
@@ -149,6 +150,7 @@ export type Database = {
           id?: string
           negocio_id: string
           nombre: string
+          sucursal_id?: string | null
           tipo_impresion?: string | null
         }
         Update: {
@@ -157,6 +159,7 @@ export type Database = {
           id?: string
           negocio_id?: string
           nombre?: string
+          sucursal_id?: string | null
           tipo_impresion?: string | null
         }
         Relationships: []
@@ -387,6 +390,7 @@ export type Database = {
           area_id: string | null
           comanda_id: string
           created_at: string
+          estacion_id: string | null
           estado: string
           id: string
           modificadores: Json | null
@@ -397,12 +401,14 @@ export type Database = {
           producto_id: string | null
           qty: number
           requiere_preparacion: boolean
+          sucursal_id: string | null
           updated_at: string
         }
         Insert: {
           area_id?: string | null
           comanda_id: string
           created_at?: string
+          estacion_id?: string | null
           estado?: string
           id?: string
           modificadores?: Json | null
@@ -413,12 +419,14 @@ export type Database = {
           producto_id?: string | null
           qty?: number
           requiere_preparacion?: boolean
+          sucursal_id?: string | null
           updated_at?: string
         }
         Update: {
           area_id?: string | null
           comanda_id?: string
           created_at?: string
+          estacion_id?: string | null
           estado?: string
           id?: string
           modificadores?: Json | null
@@ -429,56 +437,84 @@ export type Database = {
           producto_id?: string | null
           qty?: number
           requiere_preparacion?: boolean
+          sucursal_id?: string | null
           updated_at?: string
         }
         Relationships: []
       }
       comandas: {
         Row: {
+          canal_origen: string
           cliente_nombre: string | null
           cliente_telefono: string | null
           closed_at: string | null
+          codigo_seguimiento: string | null
           created_at: string
+          datos_despacho: Json | null
           direccion: string | null
           estado: string
+          estado_pedido: string
+          hora_programada: string | null
           id: string
+          idempotency_key: string | null
           mesa_id: string | null
           mesero_id: string | null
           negocio_id: string
           notas: string | null
+          sucursal_id: string | null
+          tarifa_despacho: number
           tipo: string
+          token_seguimiento: string
           total: number
           venta_id: string | null
         }
         Insert: {
+          canal_origen?: string
           cliente_nombre?: string | null
           cliente_telefono?: string | null
           closed_at?: string | null
+          codigo_seguimiento?: string | null
           created_at?: string
+          datos_despacho?: Json | null
           direccion?: string | null
           estado?: string
+          estado_pedido?: string
+          hora_programada?: string | null
           id?: string
+          idempotency_key?: string | null
           mesa_id?: string | null
           mesero_id?: string | null
           negocio_id: string
           notas?: string | null
+          sucursal_id?: string | null
+          tarifa_despacho?: number
           tipo?: string
+          token_seguimiento?: string
           total?: number
           venta_id?: string | null
         }
         Update: {
+          canal_origen?: string
           cliente_nombre?: string | null
           cliente_telefono?: string | null
           closed_at?: string | null
+          codigo_seguimiento?: string | null
           created_at?: string
+          datos_despacho?: Json | null
           direccion?: string | null
           estado?: string
+          estado_pedido?: string
+          hora_programada?: string | null
           id?: string
+          idempotency_key?: string | null
           mesa_id?: string | null
           mesero_id?: string | null
           negocio_id?: string
           notas?: string | null
+          sucursal_id?: string | null
+          tarifa_despacho?: number
           tipo?: string
+          token_seguimiento?: string
           total?: number
           venta_id?: string | null
         }
@@ -1233,6 +1269,42 @@ export type Database = {
         }
         Relationships: []
       }
+      estaciones_cocina: {
+        Row: {
+          activa: boolean
+          color: string
+          created_at: string
+          id: string
+          negocio_id: string
+          nombre: string
+          orden: number
+          sucursal_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          activa?: boolean
+          color?: string
+          created_at?: string
+          id?: string
+          negocio_id: string
+          nombre: string
+          orden?: number
+          sucursal_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          activa?: boolean
+          color?: string
+          created_at?: string
+          id?: string
+          negocio_id?: string
+          nombre?: string
+          orden?: number
+          sucursal_id?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       flujo_caja: {
         Row: {
           created_at: string
@@ -1471,6 +1543,7 @@ export type Database = {
           negocio_id: string
           notas: string | null
           numero: string
+          sucursal_id: string | null
         }
         Insert: {
           area_id?: string | null
@@ -1481,6 +1554,7 @@ export type Database = {
           negocio_id: string
           notas?: string | null
           numero: string
+          sucursal_id?: string | null
         }
         Update: {
           area_id?: string | null
@@ -1491,6 +1565,7 @@ export type Database = {
           negocio_id?: string
           notas?: string | null
           numero?: string
+          sucursal_id?: string | null
         }
         Relationships: []
       }
@@ -1902,6 +1977,7 @@ export type Database = {
           codigo_interno: string | null
           created_at: string
           descripcion: string | null
+          estacion_cocina_id: string | null
           galeria: Json | null
           id: string
           imagen_url: string | null
@@ -1933,6 +2009,7 @@ export type Database = {
           codigo_interno?: string | null
           created_at?: string
           descripcion?: string | null
+          estacion_cocina_id?: string | null
           galeria?: Json | null
           id?: string
           imagen_url?: string | null
@@ -1964,6 +2041,7 @@ export type Database = {
           codigo_interno?: string | null
           created_at?: string
           descripcion?: string | null
+          estacion_cocina_id?: string | null
           galeria?: Json | null
           id?: string
           imagen_url?: string | null
@@ -2264,45 +2342,416 @@ export type Database = {
           },
         ]
       }
+      recuperacion_campanas: {
+        Row: {
+          baja_comunicaciones: boolean
+          correo_1_abierto_at: string | null
+          correo_1_clic_at: string | null
+          correo_1_entregado_at: string | null
+          correo_1_enviado_at: string | null
+          correo_1_estado: string
+          correo_1_resend_id: string | null
+          correo_2_abierto_at: string | null
+          correo_2_clic_at: string | null
+          correo_2_entregado_at: string | null
+          correo_2_enviado_at: string | null
+          correo_2_estado: string | null
+          correo_2_resend_id: string | null
+          created_at: string
+          destinatario_email: string
+          destinatario_nombre: string | null
+          dias_inactivo_al_detectar: number
+          dias_otorgados: number
+          estado_promocion: string
+          id: string
+          inactividad_detectada_at: string
+          negocio_id: string
+          notas: string | null
+          origen_reactivacion: string | null
+          plan_otorgado: string
+          primer_abierto_at: string | null
+          primer_clic_at: string | null
+          promocion_aceptada_por: string | null
+          promocion_otorgada_at: string | null
+          promocion_vence_at: string | null
+          reactivada_at: string | null
+          tienda_recuperada: boolean
+          token_reactivacion: string
+          ultima_actividad_real_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          baja_comunicaciones?: boolean
+          correo_1_abierto_at?: string | null
+          correo_1_clic_at?: string | null
+          correo_1_entregado_at?: string | null
+          correo_1_enviado_at?: string | null
+          correo_1_estado?: string
+          correo_1_resend_id?: string | null
+          correo_2_abierto_at?: string | null
+          correo_2_clic_at?: string | null
+          correo_2_entregado_at?: string | null
+          correo_2_enviado_at?: string | null
+          correo_2_estado?: string | null
+          correo_2_resend_id?: string | null
+          created_at?: string
+          destinatario_email: string
+          destinatario_nombre?: string | null
+          dias_inactivo_al_detectar?: number
+          dias_otorgados?: number
+          estado_promocion?: string
+          id?: string
+          inactividad_detectada_at?: string
+          negocio_id: string
+          notas?: string | null
+          origen_reactivacion?: string | null
+          plan_otorgado?: string
+          primer_abierto_at?: string | null
+          primer_clic_at?: string | null
+          promocion_aceptada_por?: string | null
+          promocion_otorgada_at?: string | null
+          promocion_vence_at?: string | null
+          reactivada_at?: string | null
+          tienda_recuperada?: boolean
+          token_reactivacion?: string
+          ultima_actividad_real_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          baja_comunicaciones?: boolean
+          correo_1_abierto_at?: string | null
+          correo_1_clic_at?: string | null
+          correo_1_entregado_at?: string | null
+          correo_1_enviado_at?: string | null
+          correo_1_estado?: string
+          correo_1_resend_id?: string | null
+          correo_2_abierto_at?: string | null
+          correo_2_clic_at?: string | null
+          correo_2_entregado_at?: string | null
+          correo_2_enviado_at?: string | null
+          correo_2_estado?: string | null
+          correo_2_resend_id?: string | null
+          created_at?: string
+          destinatario_email?: string
+          destinatario_nombre?: string | null
+          dias_inactivo_al_detectar?: number
+          dias_otorgados?: number
+          estado_promocion?: string
+          id?: string
+          inactividad_detectada_at?: string
+          negocio_id?: string
+          notas?: string | null
+          origen_reactivacion?: string | null
+          plan_otorgado?: string
+          primer_abierto_at?: string | null
+          primer_clic_at?: string | null
+          promocion_aceptada_por?: string | null
+          promocion_otorgada_at?: string | null
+          promocion_vence_at?: string | null
+          reactivada_at?: string | null
+          tienda_recuperada?: boolean
+          token_reactivacion?: string
+          ultima_actividad_real_at?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "recuperacion_campanas_negocio_id_fkey"
+            columns: ["negocio_id"]
+            isOneToOne: true
+            referencedRelation: "negocios"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      recuperacion_config: {
+        Row: {
+          asunto_correo_1: string
+          asunto_correo_2: string
+          automatizacion_activa: boolean
+          cuerpo_correo_1: string
+          cuerpo_correo_2: string
+          dias_beneficio: number
+          dias_inactividad: number
+          dias_segundo_seguimiento: number
+          id: number
+          plan_beneficio: string
+          promocion_activa: boolean
+          remitente_email: string
+          remitente_nombre: string
+          segundo_seguimiento_activo: boolean
+          texto_boton: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          asunto_correo_1?: string
+          asunto_correo_2?: string
+          automatizacion_activa?: boolean
+          cuerpo_correo_1?: string
+          cuerpo_correo_2?: string
+          dias_beneficio?: number
+          dias_inactividad?: number
+          dias_segundo_seguimiento?: number
+          id?: number
+          plan_beneficio?: string
+          promocion_activa?: boolean
+          remitente_email?: string
+          remitente_nombre?: string
+          segundo_seguimiento_activo?: boolean
+          texto_boton?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          asunto_correo_1?: string
+          asunto_correo_2?: string
+          automatizacion_activa?: boolean
+          cuerpo_correo_1?: string
+          cuerpo_correo_2?: string
+          dias_beneficio?: number
+          dias_inactividad?: number
+          dias_segundo_seguimiento?: number
+          id?: number
+          plan_beneficio?: string
+          promocion_activa?: boolean
+          remitente_email?: string
+          remitente_nombre?: string
+          segundo_seguimiento_activo?: boolean
+          texto_boton?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
       reservas: {
         Row: {
+          area_id: string | null
+          cliente_email: string | null
           cliente_nombre: string
           cliente_telefono: string | null
           created_at: string
+          duracion_minutos: number
           estado: string
           fecha: string
+          fecha_hora_fin: string | null
+          fecha_hora_inicio: string | null
           hora: string
+          hora_fin: string | null
           id: string
           mesa_id: string | null
+          modalidad: string
+          motivo_cancelacion: string | null
           negocio_id: string
           notas: string | null
+          origen: string
           personas: number
+          sucursal_id: string | null
+          updated_at: string
         }
         Insert: {
+          area_id?: string | null
+          cliente_email?: string | null
           cliente_nombre: string
           cliente_telefono?: string | null
           created_at?: string
+          duracion_minutos?: number
           estado?: string
           fecha: string
+          fecha_hora_fin?: string | null
+          fecha_hora_inicio?: string | null
           hora: string
+          hora_fin?: string | null
           id?: string
           mesa_id?: string | null
+          modalidad?: string
+          motivo_cancelacion?: string | null
           negocio_id: string
           notas?: string | null
+          origen?: string
           personas?: number
+          sucursal_id?: string | null
+          updated_at?: string
         }
         Update: {
+          area_id?: string | null
+          cliente_email?: string | null
           cliente_nombre?: string
           cliente_telefono?: string | null
           created_at?: string
+          duracion_minutos?: number
           estado?: string
           fecha?: string
+          fecha_hora_fin?: string | null
+          fecha_hora_inicio?: string | null
           hora?: string
+          hora_fin?: string | null
           id?: string
           mesa_id?: string | null
+          modalidad?: string
+          motivo_cancelacion?: string | null
           negocio_id?: string
           notas?: string | null
+          origen?: string
           personas?: number
+          sucursal_id?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      restaurante_config_reservas: {
+        Row: {
+          anticipacion_maxima_dias: number
+          anticipacion_minima_horas: number
+          capacidad_maxima_personas: number | null
+          created_at: string
+          dias_no_disponibles: Json
+          duracion_default_minutos: number
+          horarios: Json
+          id: string
+          intervalo_minutos: number
+          negocio_id: string
+          permitir_reservas_generales: boolean
+          sucursal_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          anticipacion_maxima_dias?: number
+          anticipacion_minima_horas?: number
+          capacidad_maxima_personas?: number | null
+          created_at?: string
+          dias_no_disponibles?: Json
+          duracion_default_minutos?: number
+          horarios?: Json
+          id?: string
+          intervalo_minutos?: number
+          negocio_id: string
+          permitir_reservas_generales?: boolean
+          sucursal_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          anticipacion_maxima_dias?: number
+          anticipacion_minima_horas?: number
+          capacidad_maxima_personas?: number | null
+          created_at?: string
+          dias_no_disponibles?: Json
+          duracion_default_minutos?: number
+          horarios?: Json
+          id?: string
+          intervalo_minutos?: number
+          negocio_id?: string
+          permitir_reservas_generales?: boolean
+          sucursal_id?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      restaurante_config_canales: {
+        Row: {
+          created_at: string
+          delivery_activo: boolean
+          delivery_despacho_gratis_monto: number
+          delivery_horarios: Json
+          delivery_pedido_minimo: number
+          delivery_tarifa_base: number
+          delivery_tiempo_estimado_minutos: number
+          id: string
+          negocio_id: string
+          retiro_activo: boolean
+          retiro_horarios: Json
+          retiro_instrucciones: string | null
+          retiro_permitir_programados: boolean
+          retiro_tiempo_estimado_minutos: number
+          sucursal_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          delivery_activo?: boolean
+          delivery_despacho_gratis_monto?: number
+          delivery_horarios?: Json
+          delivery_pedido_minimo?: number
+          delivery_tarifa_base?: number
+          delivery_tiempo_estimado_minutos?: number
+          id?: string
+          negocio_id: string
+          retiro_activo?: boolean
+          retiro_horarios?: Json
+          retiro_instrucciones?: string | null
+          retiro_permitir_programados?: boolean
+          retiro_tiempo_estimado_minutos?: number
+          sucursal_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          delivery_activo?: boolean
+          delivery_despacho_gratis_monto?: number
+          delivery_horarios?: Json
+          delivery_pedido_minimo?: number
+          delivery_tarifa_base?: number
+          delivery_tiempo_estimado_minutos?: number
+          id?: string
+          negocio_id?: string
+          retiro_activo?: boolean
+          retiro_horarios?: Json
+          retiro_instrucciones?: string | null
+          retiro_permitir_programados?: boolean
+          retiro_tiempo_estimado_minutos?: number
+          sucursal_id?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      restaurante_zonas_delivery: {
+        Row: {
+          activa: boolean
+          comunas: string[]
+          created_at: string
+          descripcion: string | null
+          id: string
+          negocio_id: string
+          nombre: string
+          orden: number
+          pedido_minimo: number
+          sectores: string[]
+          sucursal_id: string | null
+          tarifa: number
+          tiempo_estimado_minutos: number
+          updated_at: string
+        }
+        Insert: {
+          activa?: boolean
+          comunas?: string[]
+          created_at?: string
+          descripcion?: string | null
+          id?: string
+          negocio_id: string
+          nombre: string
+          orden?: number
+          pedido_minimo?: number
+          sectores?: string[]
+          sucursal_id?: string | null
+          tarifa?: number
+          tiempo_estimado_minutos?: number
+          updated_at?: string
+        }
+        Update: {
+          activa?: boolean
+          comunas?: string[]
+          created_at?: string
+          descripcion?: string | null
+          id?: string
+          negocio_id?: string
+          nombre?: string
+          orden?: number
+          pedido_minimo?: number
+          sectores?: string[]
+          sucursal_id?: string | null
+          tarifa?: number
+          tiempo_estimado_minutos?: number
+          updated_at?: string
         }
         Relationships: []
       }
@@ -2953,6 +3402,14 @@ export type Database = {
     }
     Functions: {
       aceptar_invitacion: { Args: { _codigo: string }; Returns: Json }
+      activar_promocion_recuperacion: {
+        Args: { _token?: string | null }
+        Returns: Json
+      }
+      calcular_ultima_actividad_negocio: {
+        Args: { _negocio_id: string }
+        Returns: string
+      }
       agregar_producto_a_proveedor: {
         Args: {
           _notas?: string
@@ -2971,6 +3428,27 @@ export type Database = {
       compra_recibida_por_email: {
         Args: { _compra_id: string }
         Returns: string
+      }
+      crear_pedido_online: {
+        Args: {
+          p_slug: string
+          p_sucursal_id: string | null
+          p_modalidad: string
+          p_cliente: Json
+          p_despacho: Json
+          p_items: Json
+          p_idempotency_key: string
+          p_hora_programada?: string | null
+        }
+        Returns: Json
+      }
+      consultar_seguimiento_pedido: {
+        Args: {
+          p_token_o_codigo: string
+          p_token_seguridad?: string | null
+          p_telefono_validacion?: string | null
+        }
+        Returns: Json
       }
       crear_pedido_catalogo: {
         Args: {

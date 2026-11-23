@@ -1,4 +1,123 @@
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
+import type { Database, Json } from "@/types/database.types";
+
+export type RecuperacionEmailStatus =
+  | "pendiente"
+  | "enviado"
+  | "entregado"
+  | "abierto"
+  | "clic"
+  | "rebotado"
+  | "fallido"
+  | "suprimido";
+
+export type RecuperacionPromoStatus =
+  | "disponible"
+  | "aceptada"
+  | "expirada"
+  | "rechazada"
+  | "no_elegible";
+
+export type RecuperacionPlanBeneficio = "basico" | "pro" | "enterprise";
+
+const VALID_EMAIL_STATUSES: ReadonlySet<string> = new Set([
+  "pendiente",
+  "enviado",
+  "entregado",
+  "abierto",
+  "clic",
+  "rebotado",
+  "fallido",
+  "suprimido",
+]);
+
+const VALID_PROMO_STATUSES: ReadonlySet<string> = new Set([
+  "disponible",
+  "aceptada",
+  "expirada",
+  "rechazada",
+  "no_elegible",
+]);
+
+export function normalizeEmailStatus(
+  val: string | null | undefined,
+  fallback: RecuperacionEmailStatus = "pendiente"
+): RecuperacionEmailStatus {
+  if (val && VALID_EMAIL_STATUSES.has(val)) {
+    return val as RecuperacionEmailStatus;
+  }
+  return fallback;
+}
+
+export function normalizeNullableEmailStatus(
+  val: string | null | undefined
+): RecuperacionEmailStatus | null {
+  if (!val) return null;
+  if (VALID_EMAIL_STATUSES.has(val)) {
+    return val as RecuperacionEmailStatus;
+  }
+  return null;
+}
+
+export function normalizePromoStatus(
+  val: string | null | undefined
+): RecuperacionPromoStatus {
+  if (val && VALID_PROMO_STATUSES.has(val)) {
+    return val as RecuperacionPromoStatus;
+  }
+  return "disponible";
+}
+
+export function normalizePlanBeneficio(
+  val: string | null | undefined
+): RecuperacionPlanBeneficio {
+  if (val === "basico" || val === "pro" || val === "enterprise") {
+    return val;
+  }
+  return "pro";
+}
+
+export function mapCampaignRowToRecord(
+  row: Database["public"]["Tables"]["recuperacion_campanas"]["Row"],
+  negocioNombre = "",
+  negocioSlug = ""
+): RecuperacionCampaignRecord {
+  return {
+    negocio_id: row.negocio_id,
+    negocio_nombre: negocioNombre,
+    negocio_slug: negocioSlug,
+    destinatario_email: row.destinatario_email,
+    destinatario_nombre: row.destinatario_nombre,
+    token_reactivacion: row.token_reactivacion,
+    ultima_actividad_real_at: row.ultima_actividad_real_at || row.inactividad_detectada_at,
+    inactividad_detectada_at: row.inactividad_detectada_at,
+    dias_inactivo: row.dias_inactivo_al_detectar ?? 12,
+    correo_1_enviado_at: row.correo_1_enviado_at,
+    correo_1_resend_id: row.correo_1_resend_id,
+    correo_1_estado: normalizeEmailStatus(row.correo_1_estado, "pendiente"),
+    correo_1_entregado_at: row.correo_1_entregado_at,
+    correo_1_abierto_at: row.correo_1_abierto_at,
+    correo_1_clic_at: row.correo_1_clic_at,
+    correo_2_enviado_at: row.correo_2_enviado_at,
+    correo_2_resend_id: row.correo_2_resend_id,
+    correo_2_estado: normalizeNullableEmailStatus(row.correo_2_estado),
+    correo_2_entregado_at: row.correo_2_entregado_at,
+    correo_2_abierto_at: row.correo_2_abierto_at,
+    correo_2_clic_at: row.correo_2_clic_at,
+    primer_abierto_at: row.primer_abierto_at,
+    primer_clic_at: row.primer_clic_at,
+    estado_promocion: normalizePromoStatus(row.estado_promocion),
+    plan_otorgado: row.plan_otorgado || "pro",
+    dias_otorgados: row.dias_otorgados ?? 30,
+    promocion_otorgada_at: row.promocion_otorgada_at,
+    promocion_vence_at: row.promocion_vence_at,
+    promocion_aceptada_por: row.promocion_aceptada_por,
+    tienda_recuperada: row.tienda_recuperada,
+    reactivada_at: row.reactivada_at,
+    origen_reactivacion: row.origen_reactivacion,
+    baja_comunicaciones: row.baja_comunicaciones,
+  };
+}
 
 export interface RecuperacionConfig {
   automatizacion_activa: boolean;
@@ -107,11 +226,11 @@ export interface StoreRealActivitySummary {
   campaign: RecuperacionCampaignRecord | null;
 }
 
-export function getServiceSupabase(): SupabaseClient | null {
+export function getServiceSupabase(): SupabaseClient<Database> | null {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !serviceKey) return null;
-  return createClient(url, serviceKey, {
+  return createClient<Database>(url, serviceKey, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
 }
@@ -280,7 +399,7 @@ export function buildRecuperacionEmailHtml(params: {
  * Utiliza `recuperacion_config` si la migración ya fue aplicada; si no, respalda en el perfil del Super Admin o valores por defecto.
  */
 export async function loadRecuperacionConfig(
-  supabase: SupabaseClient
+  supabase: SupabaseClient<Database>
 ): Promise<RecuperacionConfig> {
   try {
     const { data, error } = await supabase
@@ -293,6 +412,7 @@ export async function loadRecuperacionConfig(
       return {
         ...DEFAULT_RECUPERACION_CONFIG,
         ...data,
+        plan_beneficio: normalizePlanBeneficio(data.plan_beneficio),
       };
     }
   } catch {}
@@ -309,7 +429,7 @@ export async function loadRecuperacionConfig(
  * - Sesiones de caja o registros de auditoría administrativos
  */
 export async function computeAllStoresActivityAndCampaigns(
-  supabase: SupabaseClient,
+  supabase: SupabaseClient<Database>,
   config: RecuperacionConfig
 ): Promise<StoreRealActivitySummary[]> {
   const [
@@ -424,14 +544,13 @@ export async function computeAllStoresActivityAndCampaigns(
   const campaignByNegocio: Record<string, RecuperacionCampaignRecord> = {};
 
   if (!campRes.error && Array.isArray(campRes.data)) {
-    for (const row of campRes.data as any[]) {
+    for (const row of campRes.data) {
       const neg = negocios.find((n) => n.id === row.negocio_id);
-      campaignByNegocio[row.negocio_id] = {
-        ...row,
-        negocio_nombre: neg?.nombre || "",
-        negocio_slug: neg?.slug || "",
-        dias_inactivo: row.dias_inactivo_al_detectar ?? 12,
-      };
+      campaignByNegocio[row.negocio_id] = mapCampaignRowToRecord(
+        row,
+        neg?.nombre || "",
+        neg?.slug || ""
+      );
     }
   }
 
@@ -497,7 +616,7 @@ export async function computeAllStoresActivityAndCampaigns(
  * como en `configuracion.modulos_override.__recuperacion_campana` para garantizar funcionamiento inmediato.
  */
 export async function saveCampaignState(
-  supabase: SupabaseClient,
+  supabase: SupabaseClient<Database>,
   campaign: RecuperacionCampaignRecord
 ): Promise<void> {
   // 1. Intentar guardar en tabla dedicada `recuperacion_campanas`
@@ -548,16 +667,52 @@ export async function saveCampaignState(
       .eq("negocio_id", campaign.negocio_id)
       .maybeSingle();
 
-    const currentOverrides =
+    const currentOverrides: { [key: string]: Json | undefined } =
       cfg?.modulos_override &&
       typeof cfg.modulos_override === "object" &&
       !Array.isArray(cfg.modulos_override)
-        ? (cfg.modulos_override as Record<string, any>)
+        ? (cfg.modulos_override as { [key: string]: Json | undefined })
         : {};
 
-    const nextOverrides = {
+    const campaignJson: { [key: string]: Json | undefined } = {
+      negocio_id: campaign.negocio_id,
+      negocio_nombre: campaign.negocio_nombre,
+      negocio_slug: campaign.negocio_slug,
+      destinatario_email: campaign.destinatario_email,
+      destinatario_nombre: campaign.destinatario_nombre,
+      token_reactivacion: campaign.token_reactivacion,
+      ultima_actividad_real_at: campaign.ultima_actividad_real_at,
+      inactividad_detectada_at: campaign.inactividad_detectada_at,
+      dias_inactivo: campaign.dias_inactivo,
+      correo_1_enviado_at: campaign.correo_1_enviado_at,
+      correo_1_resend_id: campaign.correo_1_resend_id,
+      correo_1_estado: campaign.correo_1_estado,
+      correo_1_entregado_at: campaign.correo_1_entregado_at,
+      correo_1_abierto_at: campaign.correo_1_abierto_at,
+      correo_1_clic_at: campaign.correo_1_clic_at,
+      correo_2_enviado_at: campaign.correo_2_enviado_at,
+      correo_2_resend_id: campaign.correo_2_resend_id,
+      correo_2_estado: campaign.correo_2_estado,
+      correo_2_entregado_at: campaign.correo_2_entregado_at,
+      correo_2_abierto_at: campaign.correo_2_abierto_at,
+      correo_2_clic_at: campaign.correo_2_clic_at,
+      primer_abierto_at: campaign.primer_abierto_at,
+      primer_clic_at: campaign.primer_clic_at,
+      estado_promocion: campaign.estado_promocion,
+      plan_otorgado: campaign.plan_otorgado,
+      dias_otorgados: campaign.dias_otorgados,
+      promocion_otorgada_at: campaign.promocion_otorgada_at,
+      promocion_vence_at: campaign.promocion_vence_at,
+      promocion_aceptada_por: campaign.promocion_aceptada_por,
+      tienda_recuperada: campaign.tienda_recuperada,
+      reactivada_at: campaign.reactivada_at,
+      origen_reactivacion: campaign.origen_reactivacion,
+      baja_comunicaciones: campaign.baja_comunicaciones,
+    };
+
+    const nextOverrides: Json = {
       ...currentOverrides,
-      __recuperacion_campana: campaign,
+      __recuperacion_campana: campaignJson,
     };
 
     if (cfg?.id) {
@@ -578,7 +733,7 @@ export async function saveCampaignState(
  * Envía un correo de recuperación (1 o 2) utilizando Resend API y registra el resultado en `email_send_log` y `audit_logs`.
  */
 export async function dispatchRecoveryEmailForStore(params: {
-  supabase: SupabaseClient;
+  supabase: SupabaseClient<Database>;
   store: StoreRealActivitySummary;
   config: RecuperacionConfig;
   step: 1 | 2;

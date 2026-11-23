@@ -3,6 +3,7 @@ import { createClient as createServerSupabase } from "@/lib/supabase/server";
 import {
   getServiceSupabase,
   loadRecuperacionConfig,
+  mapCampaignRowToRecord,
   RecuperacionCampaignRecord,
   saveCampaignState,
 } from "@/lib/recuperacion.server";
@@ -43,12 +44,7 @@ export async function GET() {
         .eq("negocio_id", prof.negocio_id)
         .maybeSingle();
       if (row) {
-        campaign = {
-          ...row,
-          negocio_nombre: "",
-          negocio_slug: "",
-          dias_inactivo: row.dias_inactivo_al_detectar ?? 12,
-        };
+        campaign = mapCampaignRowToRecord(row);
       }
     } catch {}
 

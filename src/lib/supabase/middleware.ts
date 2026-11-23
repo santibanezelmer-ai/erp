@@ -53,6 +53,11 @@ export async function updateSession(request: NextRequest) {
       request.nextUrl.pathname.startsWith("/c/") || // Catálogo público
       request.nextUrl.pathname.startsWith("/kds/") || // Pantalla cocina por token
       request.nextUrl.pathname.startsWith("/api/public") ||
+      request.nextUrl.pathname.startsWith("/api/mercadopago/webhook") ||
+      request.nextUrl.pathname.startsWith("/api/cron/") ||
+      request.nextUrl.pathname.startsWith("/api/recuperacion/webhook-resend") ||
+      request.nextUrl.pathname.startsWith("/api/recuperacion/unsubscribe") ||
+      request.nextUrl.pathname.startsWith("/api/recuperacion/click") ||
       request.nextUrl.pathname === "/" ||
       request.nextUrl.pathname.startsWith("/_next") ||
       request.nextUrl.pathname.includes(".");

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient as createServerSupabase } from "@/lib/supabase/server";
+import type { Database } from "@/types/database.types";
 import {
   getServiceSupabase,
   loadRecuperacionConfig,
@@ -7,6 +8,7 @@ import {
   dispatchRecoveryEmailForStore,
   buildRecuperacionEmailHtml,
   DEFAULT_RECUPERACION_CONFIG,
+  normalizePlanBeneficio,
   RecuperacionConfig,
 } from "@/lib/recuperacion.server";
 
@@ -185,9 +187,7 @@ export async function PUT(req: NextRequest) {
       ),
       promocion_activa: Boolean(body.promocion_activa),
       dias_beneficio: Math.max(1, Math.min(365, Number(body.dias_beneficio) || 30)),
-      plan_beneficio: ["basico", "pro", "enterprise"].includes(body.plan_beneficio)
-        ? body.plan_beneficio
-        : "pro",
+      plan_beneficio: normalizePlanBeneficio(body.plan_beneficio),
       remitente_nombre: String(body.remitente_nombre || "Operix ERP").trim(),
       remitente_email: String(
         body.remitente_email || "notificaciones@operixerp.cloud"
@@ -207,15 +207,16 @@ export async function PUT(req: NextRequest) {
       texto_boton: String(body.texto_boton || "ACTIVAR MI MES GRATIS").trim(),
     };
 
-    const { error } = await auth.client.from("recuperacion_config").upsert(
-      {
-        id: 1,
-        ...nextConfig,
-        updated_at: new Date().toISOString(),
-        updated_by: auth.user.id,
-      },
-      { onConflict: "id" }
-    );
+    const upsertRow: Database["public"]["Tables"]["recuperacion_config"]["Insert"] = {
+      id: 1,
+      ...nextConfig,
+      updated_at: new Date().toISOString(),
+      updated_by: auth.user.id,
+    };
+
+    const { error } = await auth.client
+      .from("recuperacion_config")
+      .upsert(upsertRow, { onConflict: "id" });
 
     if (error) {
       return NextResponse.json(

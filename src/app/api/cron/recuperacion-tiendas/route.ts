@@ -58,6 +58,7 @@ export async function POST(req: NextRequest) {
 }
 
 async function runAutomatedRecoveryJob(req: NextRequest) {
+  const startedAtMs = Date.now();
   try {
     const auth = await isAuthorizedCronOrSuperAdmin(req);
     if (!auth.authorized || !auth.client) {
@@ -144,14 +145,41 @@ async function runAutomatedRecoveryJob(req: NextRequest) {
       }
     }
 
+    const durationMs = Date.now() - startedAtMs;
+    const inactiveStoresCount = stores.filter((s) => s.is_inactive_threshold_met).length;
+
+    // Registrar ejecución del proceso en audit_logs si existe al menos un negocio
+    if (stores.length > 0) {
+      try {
+        await supabase.from("audit_logs").insert({
+          negocio_id: stores[0].negocio_id,
+          action: "system_cron_recovery_run",
+          entity_type: "recuperacion_config",
+          entity_id: "1",
+          after_data: {
+            processedStores: stores.length,
+            inactiveStoresCount,
+            sentStep1,
+            sentStep2,
+            skippedCount,
+            errorsCount: errors.length,
+            errors: errors.slice(0, 5),
+            durationMs,
+            trigger: auth.isCron ? "vercel_cron" : "manual_super_admin",
+          },
+        });
+      } catch {}
+    }
+
     return NextResponse.json({
       ok: true,
       processedStores: stores.length,
-      inactiveStoresCount: stores.filter((s) => s.is_inactive_threshold_met).length,
+      inactiveStoresCount,
       sentStep1,
       sentStep2,
       skippedCount,
       errors,
+      durationMs,
       timestamp: new Date().toISOString(),
     });
   } catch (err: any) {

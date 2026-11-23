@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useState, useMemo, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useTenant } from "@/contexts/tenant-context";
 import { createClient } from "@/lib/supabase/client";
 import { formatMoney } from "@/lib/format";
@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
 import {
   Dialog,
   DialogContent,
@@ -42,9 +43,35 @@ import {
   Copy,
   Send,
   Sparkles,
+  LayoutDashboard,
+  Bot,
+  FileSearch,
+  Sliders,
+  Play,
+  Clock,
+  Activity,
+  Check,
+  XCircle,
+  Calendar,
+  LifeBuoy,
 } from "lucide-react";
 import { toast } from "sonner";
 import { RecuperacionClientesSection } from "@/components/super-admin/RecuperacionClientesSection";
+import { CentroSoporteSection } from "@/components/super-admin/CentroSoporteSection";
+import type { RecuperacionConfig } from "@/lib/recuperacion.server";
+
+export type SuperAdminModuleId =
+  | "resumen"
+  | "comercios"
+  | "usuarios"
+  | "suscripciones"
+  | "recuperacion"
+  | "automatizaciones"
+  | "cupones"
+  | "comunicaciones"
+  | "auditoria"
+  | "configuracion"
+  | "soporte";
 
 interface GlobalKpis {
   total_negocios: number;
@@ -62,6 +89,7 @@ interface NegocioRow {
   slug: string;
   plan: string | null;
   tipo_negocio: string;
+  perfil?: string | null;
   rut?: string | null;
   direccion?: string | null;
   created_at: string;
@@ -72,11 +100,46 @@ interface SuscripcionRow {
   negocio_id: string;
   plan: string;
   estado: string;
+  proveedor?: string;
   ciclo?: string | null;
+  inicio_at?: string;
   vence_at: string | null;
+  proximo_cobro_at?: string | null;
   mp_payer_email?: string | null;
+  mp_preapproval_id?: string | null;
   notas: string | null;
   updated_at: string;
+}
+
+interface MpPagoRow {
+  id: string;
+  negocio_id: string | null;
+  payment_id: string | null;
+  plan: string | null;
+  ciclo: string | null;
+  monto: number | null;
+  moneda: string | null;
+  estado: string;
+  detalle: string | null;
+  created_at: string;
+}
+
+interface ProfileRow {
+  id: string;
+  nombre: string;
+  email: string | null;
+  negocio_id: string | null;
+  sucursal_id: string | null;
+  activo: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+interface UserRoleRow {
+  id: string;
+  user_id: string;
+  negocio_id: string | null;
+  role: string;
 }
 
 interface CuponRow {
@@ -92,14 +155,44 @@ interface CuponRow {
   created_at: string;
 }
 
+interface CuponCanjeRow {
+  id: string;
+  cupon_id: string;
+  negocio_id: string;
+  user_id: string;
+  plan_aplicado: string;
+  dias_aplicados: number;
+  vence_at_nuevo: string;
+  created_at: string;
+}
+
+interface AuditLogRow {
+  id: string;
+  negocio_id: string;
+  usuario_id: string | null;
+  action: string | null;
+  entity_type: string | null;
+  entity_id: string | null;
+  before_data: any;
+  after_data: any;
+  created_at: string;
+}
+
+interface TimeSeriesPoint {
+  date: string;
+  nuevasTiendas: number;
+  nuevosUsuarios: number;
+  ventasCount: number;
+  gmvComercios: number;
+  ingresosOperix: number;
+}
+
 interface GeoMetadata {
   countryCode?: string | null;
   countryName?: string | null;
   region?: string | null;
   city?: string | null;
   timezone?: string | null;
-  source?: string | null;
-  capturedAt?: string | null;
 }
 
 interface StoreContactInfo {
@@ -126,10 +219,6 @@ const COUNTRY_FLAGS: Record<string, string> = {
   US: "🇺🇸",
 };
 
-/**
- * Si una tienda se creó antes de que existiera el tracker de cabeceras IP,
- * infiere país/ciudad de referencia discretamente a partir de su RUT chileno, dirección o teléfono.
- */
 function inferFallbackLocation(
   neg: NegocioRow,
   contact?: StoreContactInfo
@@ -157,39 +246,91 @@ function inferFallbackLocation(
       isInferred: true,
     };
   }
-  if (tel.startsWith("+54")) {
+  if (tel.startsWith("+54"))
     return { country: "Argentina", city: dir || null, flag: "🇦🇷", isInferred: true };
-  }
-  if (tel.startsWith("+51")) {
+  if (tel.startsWith("+51"))
     return { country: "Perú", city: dir || null, flag: "🇵🇪", isInferred: true };
-  }
-  if (tel.startsWith("+57")) {
+  if (tel.startsWith("+57"))
     return { country: "Colombia", city: dir || null, flag: "🇨🇴", isInferred: true };
-  }
-  if (tel.startsWith("+52")) {
+  if (tel.startsWith("+52"))
     return { country: "México", city: dir || null, flag: "🇲🇽", isInferred: true };
-  }
-  if (dir) {
-    return { country: "Dirección local", city: dir, flag: "📍", isInferred: true };
-  }
+  if (dir) return { country: "Dirección local", city: dir, flag: "📍", isInferred: true };
 
   return null;
 }
 
-export default function SuperAdminPage() {
+const MODULES_MENU: {
+  id: SuperAdminModuleId;
+  label: string;
+  shortLabel: string;
+  icon: any;
+}[] = [
+  { id: "resumen", label: "1. Resumen Ejecutivo", shortLabel: "Resumen", icon: LayoutDashboard },
+  { id: "comercios", label: "2. Tiendas y Comercios", shortLabel: "Tiendas", icon: Store },
+  { id: "usuarios", label: "3. Usuarios", shortLabel: "Usuarios", icon: Users },
+  { id: "suscripciones", label: "4. Suscripciones y Planes", shortLabel: "Suscripciones", icon: CreditCard },
+  { id: "recuperacion", label: "5. Recuperación de Clientes", shortLabel: "Recuperación", icon: Sparkles },
+  { id: "automatizaciones", label: "6. Automatizaciones", shortLabel: "Automatizaciones", icon: Bot },
+  { id: "cupones", label: "7. Cupones y Promociones", shortLabel: "Cupones", icon: Ticket },
+  { id: "comunicaciones", label: "8. Comunicaciones y Correos", shortLabel: "Comunicaciones", icon: Mail },
+  { id: "auditoria", label: "9. Auditoría Administrativa", shortLabel: "Auditoría", icon: FileSearch },
+  { id: "configuracion", label: "10. Configuración Global", shortLabel: "Configuración", icon: Sliders },
+  { id: "soporte", label: "11. Centro de Soporte", shortLabel: "Soporte", icon: LifeBuoy },
+];
+
+function SuperAdminConsoleInner() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { isSuperAdmin, loading: tenantLoading } = useTenant();
 
-  const [activeTab, setActiveTab] = useState<"comercios" | "recuperacion" | "cupones">("comercios");
+  const urlMod = (searchParams.get("mod") as SuperAdminModuleId) || "resumen";
+  const activeModule: SuperAdminModuleId = MODULES_MENU.some((m) => m.id === urlMod)
+    ? urlMod
+    : "resumen";
+
+  const setActiveModule = (mod: SuperAdminModuleId) => {
+    router.push(`/super-admin?mod=${mod}`);
+  };
+
   const [loading, setLoading] = useState(true);
+  const [periodDays, setPeriodDays] = useState<7 | 30 | 90>(30);
+
+  // Datos consolidados del servidor
   const [kpis, setKpis] = useState<GlobalKpis | null>(null);
+  const [executive, setExecutive] = useState<any | null>(null);
+  const [timeSeries, setTimeSeries] = useState<TimeSeriesPoint[]>([]);
   const [negocios, setNegocios] = useState<NegocioRow[]>([]);
+  const [suscripciones, setSuscripciones] = useState<SuscripcionRow[]>([]);
   const [suscripcionesMap, setSuscripcionesMap] = useState<Record<string, SuscripcionRow>>({});
-  const [contactsMap, setContactsMap] = useState<Record<string, StoreContactInfo>>({});
+  const [mpPagos, setMpPagos] = useState<MpPagoRow[]>([]);
+  const [profiles, setProfiles] = useState<ProfileRow[]>([]);
+  const [userRoles, setUserRoles] = useState<UserRoleRow[]>([]);
   const [cupones, setCupones] = useState<CuponRow[]>([]);
+  const [cuponCanjes, setCuponCanjes] = useState<CuponCanjeRow[]>([]);
+  const [contactsMap, setContactsMap] = useState<Record<string, StoreContactInfo>>({});
+  const [storesActivityMap, setStoresActivityMap] = useState<Record<string, any>>({});
+  const [communications, setCommunications] = useState<any | null>(null);
+  const [automations, setAutomations] = useState<any | null>(null);
+  const [auditLogs, setAuditLogs] = useState<AuditLogRow[]>([]);
+  const [recConfig, setRecConfig] = useState<RecuperacionConfig | null>(null);
+  const [emailPreviews, setEmailPreviews] = useState<any | null>(null);
+
+  // Filtros en Tiendas
   const [searchQuery, setSearchQuery] = useState("");
   const [planFilter, setPlanFilter] = useState<string>("all");
   const [estadoFilter, setEstadoFilter] = useState<string>("all");
+
+  // Filtros en Usuarios
+  const [userSearch, setUserSearch] = useState("");
+  const [userRoleFilter, setUserRoleFilter] = useState<string>("all");
+  const [togglingUserId, setTogglingUserId] = useState<string | null>(null);
+
+  // Filtros en Auditoría
+  const [auditSearch, setAuditSearch] = useState("");
+
+  // Automatizaciones en ejecución manual
+  const [runningJob, setRunningJob] = useState<string | null>(null);
+  const [lastJobResult, setLastJobResult] = useState<Record<string, any>>({});
 
   // Modal de ajuste de suscripción
   const [editingNegocio, setEditingNegocio] = useState<NegocioRow | null>(null);
@@ -204,12 +345,12 @@ export default function SuperAdminPage() {
   const [detailData, setDetailData] = useState<any | null>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
 
-  // Modal de envío de correo de reactivación
+  // Modal de envío de correo directo
   const [emailNegocio, setEmailNegocio] = useState<NegocioRow | null>(null);
   const [emailTo, setEmailTo] = useState("");
-  const [emailTemplate, setEmailTemplate] = useState<"reactivacion" | "trial_por_vencer" | "cupon_regalo">(
-    "reactivacion"
-  );
+  const [emailTemplate, setEmailTemplate] = useState<
+    "reactivacion" | "trial_por_vencer" | "cupon_regalo"
+  >("reactivacion");
   const [emailCupon, setEmailCupon] = useState("");
   const [emailSubject, setEmailSubject] = useState("");
   const [emailBody, setEmailBody] = useState("");
@@ -232,6 +373,9 @@ export default function SuperAdminPage() {
   const [cuponNotas, setCuponNotas] = useState("");
   const [savingCupon, setSavingCupon] = useState(false);
 
+  // Guardado de configuración global
+  const [savingGlobalCfg, setSavingGlobalCfg] = useState(false);
+
   useEffect(() => {
     if (!tenantLoading && !isSuperAdmin) {
       router.replace("/dashboard");
@@ -240,91 +384,77 @@ export default function SuperAdminPage() {
 
   useEffect(() => {
     if (isSuperAdmin) {
-      loadAllData();
+      loadOverviewData();
     }
   }, [isSuperAdmin]);
 
-  const loadAllData = async () => {
+  const loadOverviewData = async () => {
     setLoading(true);
-    const supabase = createClient();
     try {
-      const [kpisRes, negRes, suscRes, cupRes, profRes, cfgRes] = await Promise.all([
-        supabase.rpc("sa_kpis_globales"),
-        supabase
-          .from("negocios")
-          .select("id, nombre, slug, plan, tipo_negocio, rut, direccion, created_at")
-          .order("created_at", { ascending: false }),
-        supabase.from("suscripciones").select("*"),
-        supabase
-          .from("cupones_internos")
-          .select("*")
-          .order("created_at", { ascending: false }),
-        supabase
-          .from("profiles")
-          .select("id, negocio_id, email, nombre, created_at")
-          .order("created_at", { ascending: true }),
-        supabase
-          .from("configuracion")
-          .select("negocio_id, telefono, direccion, modulos_override"),
-      ]);
+      const res = await fetch("/api/super-admin/overview");
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Error al cargar consola Super Admin");
 
-      if (kpisRes.data) {
-        setKpis(kpisRes.data as unknown as GlobalKpis);
-      }
-
-      if (negRes.data) {
-        setNegocios(negRes.data as NegocioRow[]);
-      }
+      setKpis(data.kpis);
+      setExecutive(data.executive);
+      setTimeSeries(data.timeSeries || []);
+      setNegocios(data.negocios || []);
+      setSuscripciones(data.suscripciones || []);
+      setMpPagos(data.mpPagos || []);
+      setProfiles(data.profiles || []);
+      setUserRoles(data.userRoles || []);
+      setCupones(data.cupones || []);
+      setCuponCanjes(data.cuponCanjes || []);
+      setCommunications(data.communications || null);
+      setAutomations(data.automations || null);
+      setAuditLogs(data.auditLogs || []);
+      setRecConfig(data.recuperacionConfig || null);
+      setEmailPreviews(data.emailPreviews || null);
 
       const sMap: Record<string, SuscripcionRow> = {};
-      if (suscRes.data) {
-        for (const s of suscRes.data as SuscripcionRow[]) {
-          sMap[s.negocio_id] = s;
-        }
-        setSuscripcionesMap(sMap);
+      for (const s of (data.suscripciones || []) as SuscripcionRow[]) {
+        sMap[s.negocio_id] = s;
       }
+      setSuscripcionesMap(sMap);
 
-      // Construir mapa de contacto y geolocalización por negocio
+      const actMap: Record<string, any> = {};
+      for (const st of data.storesActivity || []) {
+        actMap[st.negocio_id] = st;
+      }
+      setStoresActivityMap(actMap);
+
       const cMap: Record<string, StoreContactInfo> = {};
-      if (profRes.data) {
-        for (const p of profRes.data as any[]) {
-          if (p.negocio_id && !cMap[p.negocio_id]) {
-            cMap[p.negocio_id] = {
-              email: p.email || null,
-              nombre: p.nombre || null,
-              telefono: null,
-              direccion: null,
-              geo: null,
-            };
-          }
-        }
-      }
-
-      if (cfgRes.data) {
-        for (const c of cfgRes.data as any[]) {
-          if (!c.negocio_id) continue;
-          const existing = cMap[c.negocio_id] || {
-            email: null,
-            nombre: null,
+      for (const p of (data.profiles || []) as ProfileRow[]) {
+        if (p.negocio_id && !cMap[p.negocio_id]) {
+          cMap[p.negocio_id] = {
+            email: p.email || null,
+            nombre: p.nombre || null,
             telefono: null,
             direccion: null,
             geo: null,
           };
-          const overrides =
-            c.modulos_override && typeof c.modulos_override === "object"
-              ? (c.modulos_override as Record<string, any>)
-              : {};
-          const geo = (overrides.__geo || overrides.__last_geo || null) as GeoMetadata | null;
-          cMap[c.negocio_id] = {
-            ...existing,
-            telefono: c.telefono || existing.telefono,
-            direccion: c.direccion || existing.direccion,
-            geo,
-          };
         }
       }
-
-      // Si algún negocio tiene mp_payer_email en suscripción pero no en profile, usarlo como respaldo
+      for (const c of data.configuraciones || []) {
+        if (!c.negocio_id) continue;
+        const existing = cMap[c.negocio_id] || {
+          email: null,
+          nombre: null,
+          telefono: null,
+          direccion: null,
+          geo: null,
+        };
+        const ov =
+          c.modulos_override && typeof c.modulos_override === "object"
+            ? (c.modulos_override as Record<string, any>)
+            : {};
+        cMap[c.negocio_id] = {
+          ...existing,
+          telefono: c.telefono || existing.telefono,
+          direccion: c.direccion || existing.direccion,
+          geo: (ov.__geo || ov.__last_geo || null) as GeoMetadata | null,
+        };
+      }
       for (const negId of Object.keys(sMap)) {
         if (!cMap[negId]?.email && sMap[negId]?.mp_payer_email) {
           cMap[negId] = {
@@ -333,35 +463,58 @@ export default function SuperAdminPage() {
           };
         }
       }
-
       setContactsMap(cMap);
-
-      if (cupRes.data) {
-        setCupones(cupRes.data as CuponRow[]);
-      }
     } catch (err: any) {
-      console.error("Error cargando datos de Super Admin:", err);
-      toast.error("Error al cargar métricas globales");
+      console.error("Error cargando Super Admin:", err);
+      toast.error(err.message || "Error al cargar métricas globales");
     } finally {
       setLoading(false);
     }
   };
 
-  // Resumen de ubicaciones (Países y Ciudades de referencia)
+  const negocioNameById = useMemo(() => {
+    const map: Record<string, NegocioRow> = {};
+    for (const n of negocios) map[n.id] = n;
+    return map;
+  }, [negocios]);
+
   const geoSummary = useMemo(() => {
     const counts: Record<string, { label: string; flag: string; count: number }> = {};
     for (const n of negocios) {
       const loc = inferFallbackLocation(n, contactsMap[n.id]);
       if (loc) {
         const key = loc.city ? `${loc.country} · ${loc.city}` : loc.country;
-        if (!counts[key]) {
-          counts[key] = { label: key, flag: loc.flag, count: 0 };
-        }
+        if (!counts[key]) counts[key] = { label: key, flag: loc.flag, count: 0 };
         counts[key].count += 1;
       }
     }
     return Object.values(counts).sort((a, b) => b.count - a.count);
   }, [negocios, contactsMap]);
+
+  // Serie temporal filtrada por el período seleccionado (7, 30 o 90 días)
+  const filteredSeries = useMemo(() => {
+    return timeSeries.slice(-periodDays);
+  }, [timeSeries, periodDays]);
+
+  const periodTotals = useMemo(() => {
+    return filteredSeries.reduce(
+      (acc, pt) => {
+        acc.nuevasTiendas += pt.nuevasTiendas;
+        acc.nuevosUsuarios += pt.nuevosUsuarios;
+        acc.ventasCount += pt.ventasCount;
+        acc.gmvComercios += pt.gmvComercios;
+        acc.ingresosOperix += pt.ingresosOperix;
+        return acc;
+      },
+      {
+        nuevasTiendas: 0,
+        nuevosUsuarios: 0,
+        ventasCount: 0,
+        gmvComercios: 0,
+        ingresosOperix: 0,
+      }
+    );
+  }, [filteredSeries]);
 
   const filteredNegocios = useMemo(() => {
     return negocios.filter((n) => {
@@ -397,7 +550,148 @@ export default function SuperAdminPage() {
     });
   }, [negocios, suscripcionesMap, contactsMap, searchQuery, planFilter, estadoFilter]);
 
-  // Construye el texto del correo según la plantilla seleccionada
+  const rolesByUserMap = useMemo(() => {
+    const map: Record<string, string[]> = {};
+    for (const r of userRoles) {
+      if (!map[r.user_id]) map[r.user_id] = [];
+      if (!map[r.user_id].includes(r.role)) map[r.user_id].push(r.role);
+    }
+    return map;
+  }, [userRoles]);
+
+  const filteredProfiles = useMemo(() => {
+    const q = userSearch.trim().toLowerCase();
+    return profiles.filter((p) => {
+      const roles = rolesByUserMap[p.id] || ["admin"];
+      if (userRoleFilter !== "all" && !roles.includes(userRoleFilter)) return false;
+      if (!q) return true;
+      const storeName = p.negocio_id ? negocioNameById[p.negocio_id]?.nombre || "" : "";
+      return (
+        p.nombre?.toLowerCase().includes(q) ||
+        p.email?.toLowerCase().includes(q) ||
+        storeName.toLowerCase().includes(q)
+      );
+    });
+  }, [profiles, rolesByUserMap, userRoleFilter, userSearch, negocioNameById]);
+
+  const filteredAuditLogs = useMemo(() => {
+    const q = auditSearch.trim().toLowerCase();
+    if (!q) return auditLogs;
+    return auditLogs.filter((a) => {
+      const storeName = negocioNameById[a.negocio_id]?.nombre || "";
+      return (
+        a.action?.toLowerCase().includes(q) ||
+        a.entity_type?.toLowerCase().includes(q) ||
+        storeName.toLowerCase().includes(q)
+      );
+    });
+  }, [auditLogs, auditSearch, negocioNameById]);
+
+  // Acciones de Usuarios
+  const handleToggleUserStatus = async (prof: ProfileRow) => {
+    setTogglingUserId(prof.id);
+    try {
+      const res = await fetch("/api/super-admin/overview", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "toggle_user_status",
+          userId: prof.id,
+          activo: !prof.activo,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Error al cambiar estado del usuario");
+      toast.success(
+        `Usuario ${prof.email || prof.nombre} ${!prof.activo ? "activado" : "desactivado"}`
+      );
+      await loadOverviewData();
+    } catch (err: any) {
+      toast.error(err.message || "Error al actualizar usuario");
+    } finally {
+      setTogglingUserId(null);
+    }
+  };
+
+  // Acciones de Automatizaciones
+  const handleRunRecoveryAutomation = async () => {
+    setRunningJob("recovery");
+    try {
+      const res = await fetch("/api/cron/recuperacion-tiendas?force=1", { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Error al ejecutar proceso");
+      setLastJobResult((prev) => ({ ...prev, recovery: data }));
+      toast.success(
+        `Proceso finalizado en ${data.durationMs ?? 0}ms: ${data.sentStep1} Correo 1, ${data.sentStep2} Correo 2 enviados.`
+      );
+      await loadOverviewData();
+    } catch (err: any) {
+      toast.error(err.message || "Error en proceso de recuperación");
+    } finally {
+      setRunningJob(null);
+    }
+  };
+
+  const handleRunExpiredSubscriptionsJob = async () => {
+    setRunningJob("expired_subs");
+    try {
+      const res = await fetch("/api/super-admin/overview", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "run_expired_subscriptions_job" }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Error al ejecutar suspensión de vencidas");
+      setLastJobResult((prev) => ({ ...prev, expired_subs: data }));
+      toast.success(
+        `Proceso completado en ${data.durationMs}ms: ${data.suspendedCount} suscripciones vencidas actualizadas.`
+      );
+      await loadOverviewData();
+    } catch (err: any) {
+      toast.error(err.message || "Error al ejecutar tarea");
+    } finally {
+      setRunningJob(null);
+    }
+  };
+
+  const handleRemoveSuppressedEmail = async (email: string) => {
+    try {
+      const res = await fetch("/api/super-admin/overview", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "remove_suppressed_email", email }),
+      });
+      if (!res.ok) throw new Error("No se pudo rehabilitar el correo");
+      toast.success(`Correo ${email} rehabilitado para recibir comunicaciones`);
+      await loadOverviewData();
+    } catch (err: any) {
+      toast.error(err.message || "Error al eliminar de lista de bajas");
+    }
+  };
+
+  const handleSaveGlobalRecConfig = async (e?: React.FormEvent) => {
+    e?.preventDefault();
+    if (!recConfig) return;
+    setSavingGlobalCfg(true);
+    try {
+      const res = await fetch("/api/super-admin/recuperacion", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(recConfig),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Error al guardar configuración");
+      setRecConfig(data.config);
+      toast.success("Configuración global actualizada correctamente");
+      await loadOverviewData();
+    } catch (err: any) {
+      toast.error(err.message || "Error al guardar configuración global");
+    } finally {
+      setSavingGlobalCfg(false);
+    }
+  };
+
+  // Plantillas de correo manual
   const buildEmailContent = (
     neg: NegocioRow,
     template: "reactivacion" | "trial_por_vencer" | "cupon_regalo",
@@ -413,7 +707,9 @@ export default function SuperAdminPage() {
         `Hola ${ownerName},\n\nNotamos que la suscripción de tu comercio "${neg.nombre}" en Operix ERP se encuentra inactiva o vencida.\n\nToda tu información de productos, inventario, clientes y configuración sigue guardada de forma segura en la nube para que puedas retomar tus ventas y tu catálogo online (/c/${neg.slug}) en cualquier momento.${
           selectedCouponCode
             ? `\n\nPara ayudarte a regresar, hemos activado el cupón promocional ${selectedCouponCode}${
-                cuponObj ? ` (${cuponObj.dias_otorgados} días gratis en Plan ${cuponObj.plan.toUpperCase()})` : ""
+                cuponObj
+                  ? ` (${cuponObj.dias_otorgados} días gratis en Plan ${cuponObj.plan.toUpperCase()})`
+                  : ""
               } que puedes canjear directamente en tu panel.`
             : ""
         }\n\nHaz clic en el botón de abajo para reactivar tu cuenta hoy mismo.`
@@ -424,7 +720,9 @@ export default function SuperAdminPage() {
         `Hola ${ownerName},\n\nEsperamos que estés teniendo una excelente experiencia gestionando "${neg.nombre}" con Operix ERP.\n\nTe escribimos para recordarte que tu período de prueba está próximo a finalizar. Para mantener activo tu Punto de Venta (POS), control de stock y tienda online sin interrupciones, puedes elegir tu plan Mensual o Anual (con 2 meses gratis) desde la sección Planes y Suscripción.`
       );
     } else {
-      setEmailSubject(`🎁 Tienes un beneficio especial para activar ${neg.nombre} en Operix ERP`);
+      setEmailSubject(
+        `🎁 Tienes un beneficio especial para activar ${neg.nombre} en Operix ERP`
+      );
       setEmailBody(
         `Hola ${ownerName},\n\nQueremos impulsar el crecimiento de "${neg.nombre}". Te enviamos un código promocional exclusivo para activar todas las herramientas Pro de Operix ERP (Punto de Venta, Catálogo Web, Reportes y Multi-sucursal) sin costo durante el período promocional.\n\nIngresa a tu cuenta, ve a Planes y Suscripción e introduce el cupón adjunto.`
       );
@@ -447,9 +745,7 @@ export default function SuperAdminPage() {
   ) => {
     setEmailTemplate(newTemplate);
     setEmailCupon(newCoupon);
-    if (emailNegocio) {
-      buildEmailContent(emailNegocio, newTemplate, newCoupon);
-    }
+    if (emailNegocio) buildEmailContent(emailNegocio, newTemplate, newCoupon);
   };
 
   const handleSendReactivationEmail = async (e: React.FormEvent) => {
@@ -478,25 +774,25 @@ export default function SuperAdminPage() {
 
       const data = await res.json();
       if (res.ok && data.sentViaApi) {
-        toast.success(`Correo de reactivación enviado a ${emailTo}`);
+        toast.success(`Correo enviado directamente a ${emailTo} vía Resend`);
         setEmailNegocio(null);
+        await loadOverviewData();
         return;
       }
 
-      // Si no está configurada RESEND_API_KEY, abrir cliente de correo con el mensaje prellenado
       const fullText = `${emailBody}${
         emailCupon ? `\n\nCupón promocional: ${emailCupon}` : ""
       }\n\nReactiva tu tienda aquí: https://operixerp.cloud/planes`;
 
-      const mailtoUrl = `mailto:${encodeURIComponent(emailTo.trim())}?subject=${encodeURIComponent(
-        emailSubject
-      )}&body=${encodeURIComponent(fullText)}`;
+      const mailtoUrl = `mailto:${encodeURIComponent(
+        emailTo.trim()
+      )}?subject=${encodeURIComponent(emailSubject)}&body=${encodeURIComponent(fullText)}`;
 
       window.open(mailtoUrl, "_blank");
-      toast.info("Se abrió tu cliente de correo con el mensaje de reactivación listo para enviar.");
+      toast.info("Se abrió tu cliente de correo con el mensaje prellenado.");
       setEmailNegocio(null);
     } catch (err: any) {
-      toast.error(err.message || "Error al preparar el correo");
+      toast.error(err.message || "Error al enviar el correo");
     } finally {
       setSendingEmail(false);
     }
@@ -505,7 +801,9 @@ export default function SuperAdminPage() {
   const openEditSubscription = (neg: NegocioRow) => {
     const susc = suscripcionesMap[neg.id];
     setEditingNegocio(neg);
-    setSubPlan(susc?.plan && ["free", "pro", "enterprise"].includes(susc.plan) ? susc.plan : "pro");
+    setSubPlan(
+      susc?.plan && ["free", "pro", "enterprise"].includes(susc.plan) ? susc.plan : "pro"
+    );
     setSubEstado(susc?.estado || "activa");
     if (susc?.vence_at) {
       setSubVenceAt(susc.vence_at.slice(0, 10));
@@ -542,7 +840,7 @@ export default function SuperAdminPage() {
         `Suscripción de "${editingNegocio.nombre}" actualizada a ${subPlan.toUpperCase()}`
       );
       setEditingNegocio(null);
-      await loadAllData();
+      await loadOverviewData();
     } catch (err: any) {
       toast.error(err.message || "Error al actualizar la suscripción");
     } finally {
@@ -585,7 +883,7 @@ export default function SuperAdminPage() {
       toast.success(`Comercio "${deletingNegocio.nombre}" eliminado.`);
       setDeletingNegocio(null);
       setConfirmDeleteText("");
-      await loadAllData();
+      await loadOverviewData();
     } catch (err: any) {
       toast.error(err.message || "Error al eliminar comercio");
     } finally {
@@ -646,7 +944,7 @@ export default function SuperAdminPage() {
       if (error) throw error;
       toast.success(editingCuponId ? "Cupón actualizado" : "Cupón creado");
       setCuponModalOpen(false);
-      await loadAllData();
+      await loadOverviewData();
     } catch (err: any) {
       toast.error(err.message || "Error al guardar cupón");
     } finally {
@@ -660,7 +958,7 @@ export default function SuperAdminPage() {
       const { error } = await supabase.rpc("sa_cupon_eliminar", { _id: cupon.id });
       if (error) throw error;
       toast.success(`Cupón ${cupon.codigo} eliminado`);
-      await loadAllData();
+      await loadOverviewData();
     } catch (err: any) {
       toast.error(err.message || "Error al eliminar cupón");
     }
@@ -668,207 +966,455 @@ export default function SuperAdminPage() {
 
   if (tenantLoading || (loading && !kpis)) {
     return (
-      <div className="min-h-[60vh] flex flex-col items-center justify-center gap-3">
+      <div className="min-h-[65vh] flex flex-col items-center justify-center gap-3">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
         <p className="text-sm text-muted-foreground font-medium">
-          Cargando Consola Global de Super Admin...
+          Cargando Consola Central de Super Admin...
         </p>
       </div>
     );
   }
 
+  const currentModuleInfo =
+    MODULES_MENU.find((m) => m.id === activeModule) || MODULES_MENU[0];
+
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+    <div className="space-y-5">
+      {/* Cabecera Ejecutiva Compacta */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-border pb-4">
         <div>
-          <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-primary/10 text-primary text-xs font-bold mb-1">
+          <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-primary/10 text-primary text-[11px] font-bold mb-1">
             <ShieldCheck className="h-3.5 w-3.5" />
-            Super Admin · Operix Cloud
+            Consola Central Super Admin · operixerp.cloud
           </div>
-          <h1 className="text-2xl font-bold tracking-tight">Panel de Control Global</h1>
-          <p className="text-sm text-muted-foreground">
-            Métricas globales, tiendas creadas, ubicación de origen, reactivación por correo y suscripciones.
-          </p>
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground">
+            {currentModuleInfo.label}
+          </h1>
         </div>
 
         <div className="flex items-center gap-2">
           <Button
             variant="outline"
             size="sm"
-            onClick={loadAllData}
+            onClick={loadOverviewData}
             disabled={loading}
-            className="gap-1.5"
+            className="h-8 text-xs gap-1.5"
           >
             <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
-            Actualizar
+            Sincronizar Datos
           </Button>
         </div>
       </div>
 
-      {/* KPIs Globales */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Tiendas / Comercios
-            </CardTitle>
-            <Store className="h-4 w-4 text-primary" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{kpis?.total_negocios ?? negocios.length}</div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Activas: {kpis?.por_estado_susc?.activa ?? 0} · Trial:{" "}
-              {kpis?.por_estado_susc?.trial ?? 0}
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Usuarios Totales
-            </CardTitle>
-            <Users className="h-4 w-4 text-blue-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{kpis?.total_usuarios ?? 0}</div>
-            <p className="text-xs text-muted-foreground mt-1">Cuentas registradas</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Productos Activos
-            </CardTitle>
-            <Package className="h-4 w-4 text-amber-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{kpis?.total_productos ?? 0}</div>
-            <p className="text-xs text-muted-foreground mt-1">En todos los catálogos</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Ventas Procesadas
-            </CardTitle>
-            <TrendingUp className="h-4 w-4 text-emerald-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{kpis?.total_ventas ?? 0}</div>
-            <p className="text-xs text-muted-foreground mt-1">Tickets totales en la nube</p>
-          </CardContent>
-        </Card>
-
-        <Card className="col-span-2 lg:col-span-1">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              GMV / Volumen Ventas
-            </CardTitle>
-            <DollarSign className="h-4 w-4 text-emerald-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{formatMoney(kpis?.ingresos_totales ?? 0)}</div>
-            <p className="text-xs text-muted-foreground mt-1">Transaccionado en comercios</p>
-          </CardContent>
-        </Card>
+      {/* Barra de Navegación Horizontal de los 10 Módulos (sincronizada con la barra lateral) */}
+      <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar">
+        {MODULES_MENU.map((m) => {
+          const Icon = m.icon;
+          const isCurrent = activeModule === m.id;
+          return (
+            <button
+              key={m.id}
+              type="button"
+              onClick={() => setActiveModule(m.id)}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors border ${
+                isCurrent
+                  ? "bg-primary text-primary-foreground border-primary shadow-2xs"
+                  : "bg-card text-muted-foreground border-border hover:bg-muted/60 hover:text-foreground"
+              }`}
+            >
+              <Icon className="h-3.5 w-3.5 shrink-0" />
+              <span>{m.shortLabel}</span>
+            </button>
+          );
+        })}
       </div>
 
-      {/* Distribución geográfica discreta (Países y Ciudades) */}
-      {geoSummary.length > 0 && (
-        <div className="flex items-center gap-2 flex-wrap px-3.5 py-2.5 rounded-xl border border-border bg-card/60 text-xs">
-          <span className="font-semibold text-muted-foreground flex items-center gap-1.5 mr-1">
-            <Globe className="h-3.5 w-3.5 text-primary" />
-            Ubicación de referencia (Red / IP):
-          </span>
-          {geoSummary.slice(0, 8).map((g) => (
-            <Badge
-              key={g.label}
-              variant="secondary"
-              className="text-[11px] font-medium gap-1 px-2 py-0.5 cursor-pointer hover:bg-primary/10"
-              onClick={() => setSearchQuery(g.label.split("·").pop()?.trim() || "")}
-            >
-              <span>{g.flag}</span>
-              <span>{g.label}</span>
-              <span className="font-bold text-primary ml-0.5">({g.count})</span>
-            </Badge>
-          ))}
+      {/* =====================================================================
+          MÓDULO 1: RESUMEN EJECUTIVO
+         ===================================================================== */}
+      {activeModule === "resumen" && (
+        <div className="space-y-5">
+          {/* 10 Indicadores Ejecutivos con separación estricta entre GMV Comercios e Ingresos Operix */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+            <Card className="shadow-2xs">
+              <CardHeader className="p-3.5 pb-1 flex flex-row items-center justify-between space-y-0">
+                <CardTitle className="text-[11px] font-semibold uppercase text-muted-foreground">
+                  Total Tiendas
+                </CardTitle>
+                <Store className="h-4 w-4 text-primary" />
+              </CardHeader>
+              <CardContent className="p-3.5 pt-1">
+                <div className="text-2xl font-bold">
+                  {executive?.totalTiendas ?? negocios.length}
+                </div>
+                <p className="text-[11px] text-muted-foreground mt-0.5">
+                  +{periodTotals.nuevasTiendas} en últimos {periodDays}d
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card className="shadow-2xs">
+              <CardHeader className="p-3.5 pb-1 flex flex-row items-center justify-between space-y-0">
+                <CardTitle className="text-[11px] font-semibold uppercase text-muted-foreground">
+                  Tiendas Activas
+                </CardTitle>
+                <Activity className="h-4 w-4 text-emerald-500" />
+              </CardHeader>
+              <CardContent className="p-3.5 pt-1">
+                <div className="text-2xl font-bold text-emerald-600">
+                  {executive?.tiendasActivas ?? 0}
+                </div>
+                <p className="text-[11px] text-muted-foreground mt-0.5">
+                  Con actividad &lt; {recConfig?.dias_inactividad ?? 12} días
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card className="shadow-2xs">
+              <CardHeader className="p-3.5 pb-1 flex flex-row items-center justify-between space-y-0">
+                <CardTitle className="text-[11px] font-semibold uppercase text-muted-foreground">
+                  Tiendas Inactivas
+                </CardTitle>
+                <Clock className="h-4 w-4 text-amber-500" />
+              </CardHeader>
+              <CardContent className="p-3.5 pt-1">
+                <div className="text-2xl font-bold text-amber-600">
+                  {executive?.tiendasInactivas ?? 0}
+                </div>
+                <p className="text-[11px] text-muted-foreground mt-0.5">
+                  <button
+                    type="button"
+                    onClick={() => setActiveModule("recuperacion")}
+                    className="text-primary hover:underline font-medium"
+                  >
+                    Gestionar recuperación →
+                  </button>
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card className="shadow-2xs">
+              <CardHeader className="p-3.5 pb-1 flex flex-row items-center justify-between space-y-0">
+                <CardTitle className="text-[11px] font-semibold uppercase text-muted-foreground">
+                  En Período Trial
+                </CardTitle>
+                <Sparkles className="h-4 w-4 text-blue-500" />
+              </CardHeader>
+              <CardContent className="p-3.5 pt-1">
+                <div className="text-2xl font-bold">{executive?.tiendasEnTrial ?? 0}</div>
+                <p className="text-[11px] text-muted-foreground mt-0.5">
+                  Por vencer (7d):{" "}
+                  <strong className="text-foreground">
+                    {executive?.suscripcionesPorVencerCount ?? 0}
+                  </strong>
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card className="shadow-2xs">
+              <CardHeader className="p-3.5 pb-1 flex flex-row items-center justify-between space-y-0">
+                <CardTitle className="text-[11px] font-semibold uppercase text-muted-foreground">
+                  Usuarios Registrados
+                </CardTitle>
+                <Users className="h-4 w-4 text-indigo-500" />
+              </CardHeader>
+              <CardContent className="p-3.5 pt-1">
+                <div className="text-2xl font-bold">
+                  {executive?.totalUsuarios ?? profiles.length}
+                </div>
+                <p className="text-[11px] text-muted-foreground mt-0.5">
+                  +{periodTotals.nuevosUsuarios} en últimos {periodDays}d
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card className="shadow-2xs">
+              <CardHeader className="p-3.5 pb-1 flex flex-row items-center justify-between space-y-0">
+                <CardTitle className="text-[11px] font-semibold uppercase text-muted-foreground">
+                  Productos Activos
+                </CardTitle>
+                <Package className="h-4 w-4 text-amber-500" />
+              </CardHeader>
+              <CardContent className="p-3.5 pt-1">
+                <div className="text-2xl font-bold">{kpis?.total_productos ?? 0}</div>
+                <p className="text-[11px] text-muted-foreground mt-0.5">
+                  En catálogos de comercios
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card className="shadow-2xs">
+              <CardHeader className="p-3.5 pb-1 flex flex-row items-center justify-between space-y-0">
+                <CardTitle className="text-[11px] font-semibold uppercase text-muted-foreground">
+                  Ventas Procesadas
+                </CardTitle>
+                <TrendingUp className="h-4 w-4 text-emerald-500" />
+              </CardHeader>
+              <CardContent className="p-3.5 pt-1">
+                <div className="text-2xl font-bold">{kpis?.total_ventas ?? 0}</div>
+                <p className="text-[11px] text-muted-foreground mt-0.5">
+                  {periodTotals.ventasCount} tickets en últimos {periodDays}d
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card className="shadow-2xs">
+              <CardHeader className="p-3.5 pb-1 flex flex-row items-center justify-between space-y-0">
+                <CardTitle className="text-[11px] font-semibold uppercase text-muted-foreground">
+                  Volumen Ventas Comercios (GMV)
+                </CardTitle>
+                <DollarSign className="h-4 w-4 text-sky-600" />
+              </CardHeader>
+              <CardContent className="p-3.5 pt-1">
+                <div className="text-2xl font-bold">
+                  {formatMoney(kpis?.ingresos_totales ?? 0)}
+                </div>
+                <p className="text-[11px] text-muted-foreground mt-0.5">
+                  Transaccionado por las tiendas
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card className="shadow-2xs border-primary/30 bg-primary/5">
+              <CardHeader className="p-3.5 pb-1 flex flex-row items-center justify-between space-y-0">
+                <CardTitle className="text-[11px] font-bold uppercase text-primary">
+                  Ingresos Suscripciones Operix
+                </CardTitle>
+                <CreditCard className="h-4 w-4 text-primary" />
+              </CardHeader>
+              <CardContent className="p-3.5 pt-1">
+                <div className="text-2xl font-bold text-primary">
+                  {formatMoney(executive?.ingresosSuscripcionesTotal ?? 0)}
+                </div>
+                <p className="text-[11px] text-muted-foreground mt-0.5">
+                  {executive?.pagosAprobadosCount ?? 0} cobros Mercado Pago (30d:{" "}
+                  {formatMoney(executive?.ingresosSuscripciones30d ?? 0)})
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card className="shadow-2xs">
+              <CardHeader className="p-3.5 pb-1 flex flex-row items-center justify-between space-y-0">
+                <CardTitle className="text-[11px] font-semibold uppercase text-muted-foreground">
+                  Próximas a Vencer (7d)
+                </CardTitle>
+                <Calendar className="h-4 w-4 text-amber-500" />
+              </CardHeader>
+              <CardContent className="p-3.5 pt-1">
+                <div className="text-2xl font-bold">
+                  {executive?.suscripcionesPorVencerCount ?? 0}
+                </div>
+                <p className="text-[11px] text-muted-foreground mt-0.5">
+                  <button
+                    type="button"
+                    onClick={() => setActiveModule("suscripciones")}
+                    className="text-primary hover:underline font-medium"
+                  >
+                    Ver vencimientos →
+                  </button>
+                </p>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Gráficos de Evolución Temporal con Filtro por Período (7d / 30d / 90d) */}
+          <Card className="shadow-2xs">
+            <CardHeader className="pb-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <div>
+                <CardTitle className="text-base font-bold">
+                  Evolución Temporal de la Plataforma ({periodDays} días)
+                </CardTitle>
+                <CardDescription className="text-xs">
+                  Actividad diaria real de transacciones procesadas en comercios, nuevas tiendas y usuarios registrados.
+                </CardDescription>
+              </div>
+
+              <div className="inline-flex items-center p-1 rounded-lg bg-muted border border-border">
+                {([7, 30, 90] as const).map((d) => (
+                  <button
+                    key={d}
+                    type="button"
+                    onClick={() => setPeriodDays(d)}
+                    className={`px-3 py-1 rounded-md text-xs font-semibold transition-all ${
+                      periodDays === d
+                        ? "bg-background text-foreground shadow-2xs"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    {d} días
+                  </button>
+                ))}
+              </div>
+            </CardHeader>
+
+            <CardContent>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Gráfico 1: Volumen de Ventas (GMV) de Comercios por día */}
+                <div className="p-4 rounded-xl border border-border bg-muted/10 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="text-xs font-bold uppercase text-muted-foreground">
+                        Volumen Diario de Ventas en Comercios (GMV)
+                      </div>
+                      <div className="text-lg font-bold text-foreground">
+                        {formatMoney(periodTotals.gmvComercios)}{" "}
+                        <span className="text-xs font-normal text-muted-foreground">
+                          ({periodTotals.ventasCount} tickets en {periodDays}d)
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="h-36 flex items-end gap-1 pt-4 border-b border-border">
+                    {(() => {
+                      const maxGmv = Math.max(
+                        1,
+                        ...filteredSeries.map((pt) => pt.gmvComercios)
+                      );
+                      return filteredSeries.map((pt) => {
+                        const heightPct = Math.max(
+                          4,
+                          Math.round((pt.gmvComercios / maxGmv) * 100)
+                        );
+                        return (
+                          <div
+                            key={pt.date}
+                            className="flex-1 flex flex-col items-center justify-end h-full group relative"
+                            title={`${pt.date}: ${formatMoney(pt.gmvComercios)} (${pt.ventasCount} ventas)`}
+                          >
+                            <div
+                              style={{ height: `${heightPct}%` }}
+                              className={`w-full rounded-t transition-all ${
+                                pt.gmvComercios > 0
+                                  ? "bg-primary hover:bg-primary/80"
+                                  : "bg-muted-foreground/15"
+                              }`}
+                            />
+                          </div>
+                        );
+                      });
+                    })()}
+                  </div>
+                  <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+                    <span>{filteredSeries[0]?.date}</span>
+                    <span>{filteredSeries[filteredSeries.length - 1]?.date}</span>
+                  </div>
+                </div>
+
+                {/* Gráfico 2: Nuevas Tiendas y Usuarios por día */}
+                <div className="p-4 rounded-xl border border-border bg-muted/10 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="text-xs font-bold uppercase text-muted-foreground">
+                        Crecimiento de Tiendas y Usuarios
+                      </div>
+                      <div className="text-lg font-bold text-foreground">
+                        +{periodTotals.nuevasTiendas} tiendas · +{periodTotals.nuevosUsuarios}{" "}
+                        usuarios
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="h-36 flex items-end gap-1 pt-4 border-b border-border">
+                    {(() => {
+                      const maxCount = Math.max(
+                        1,
+                        ...filteredSeries.map(
+                          (pt) => pt.nuevasTiendas + pt.nuevosUsuarios
+                        )
+                      );
+                      return filteredSeries.map((pt) => {
+                        const totalDay = pt.nuevasTiendas + pt.nuevosUsuarios;
+                        const heightPct = Math.max(
+                          4,
+                          Math.round((totalDay / maxCount) * 100)
+                        );
+                        return (
+                          <div
+                            key={pt.date}
+                            className="flex-1 flex flex-col items-center justify-end h-full"
+                            title={`${pt.date}: ${pt.nuevasTiendas} tiendas, ${pt.nuevosUsuarios} usuarios`}
+                          >
+                            <div
+                              style={{ height: `${heightPct}%` }}
+                              className={`w-full rounded-t transition-all ${
+                                totalDay > 0
+                                  ? "bg-emerald-500 hover:bg-emerald-400"
+                                  : "bg-muted-foreground/15"
+                              }`}
+                            />
+                          </div>
+                        );
+                      });
+                    })()}
+                  </div>
+                  <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+                    <span>{filteredSeries[0]?.date}</span>
+                    <span>{filteredSeries[filteredSeries.length - 1]?.date}</span>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Distribución geográfica y accesos rápidos */}
+          {geoSummary.length > 0 && (
+            <div className="flex items-center gap-2 flex-wrap px-3.5 py-2.5 rounded-xl border border-border bg-card text-xs">
+              <span className="font-semibold text-muted-foreground flex items-center gap-1.5 mr-1">
+                <Globe className="h-3.5 w-3.5 text-primary" />
+                Distribución Geográfica de Comercios:
+              </span>
+              {geoSummary.map((g) => (
+                <Badge
+                  key={g.label}
+                  variant="secondary"
+                  className="text-[11px] font-medium gap-1 px-2 py-0.5 cursor-pointer hover:bg-primary/10"
+                  onClick={() => {
+                    setSearchQuery(g.label.split("·").pop()?.trim() || "");
+                    setActiveModule("comercios");
+                  }}
+                >
+                  <span>{g.flag}</span>
+                  <span>{g.label}</span>
+                  <span className="font-bold text-primary ml-0.5">({g.count})</span>
+                </Badge>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
-      {/* Selector de pestañas */}
-      <div className="flex items-center justify-between border-b border-border pb-3 gap-3 flex-wrap">
-        <div className="flex items-center gap-2 flex-wrap">
-          <Button
-            variant={activeTab === "comercios" ? "default" : "outline"}
-            size="sm"
-            onClick={() => setActiveTab("comercios")}
-            className="gap-1.5"
-          >
-            <Store className="h-4 w-4" />
-            Tiendas y Suscripciones ({negocios.length})
-          </Button>
-          <Button
-            variant={activeTab === "recuperacion" ? "default" : "outline"}
-            size="sm"
-            onClick={() => setActiveTab("recuperacion")}
-            className="gap-1.5"
-          >
-            <Sparkles className="h-4 w-4" />
-            Recuperación de clientes
-          </Button>
-          <Button
-            variant={activeTab === "cupones" ? "default" : "outline"}
-            size="sm"
-            onClick={() => setActiveTab("cupones")}
-            className="gap-1.5"
-          >
-            <Ticket className="h-4 w-4" />
-            Cupones Promocionales ({cupones.length})
-          </Button>
-        </div>
-
-        {activeTab === "cupones" && (
-          <Button size="sm" onClick={() => openNewCuponModal()} className="gap-1.5">
-            <Plus className="h-4 w-4" />
-            Nuevo Cupón
-          </Button>
-        )}
-      </div>
-
-      {/* TAB: RECUPERACIÓN DE CLIENTES */}
-      {activeTab === "recuperacion" && <RecuperacionClientesSection />}
-
-      {/* TAB 1: COMERCIOS Y SUSCRIPCIONES */}
-      {activeTab === "comercios" && (
-        <Card>
+      {/* =====================================================================
+          MÓDULO 2: TIENDAS Y COMERCIOS
+         ===================================================================== */}
+      {activeModule === "comercios" && (
+        <Card className="shadow-2xs">
           <CardHeader className="pb-3">
             <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
               <div>
-                <CardTitle className="text-base font-bold">Comercios Registrados</CardTitle>
-                <CardDescription>
-                  Inspecciona métricas, país/ciudad de origen, envía correos de reactivación o ajusta suscripciones.
+                <CardTitle className="text-base font-bold">
+                  Directorio de Tiendas y Comercios ({filteredNegocios.length})
+                </CardTitle>
+                <CardDescription className="text-xs">
+                  Supervisa cada comercio, su última actividad real, país/ciudad de origen, métricas y estado de suscripción.
                 </CardDescription>
               </div>
 
               <div className="flex flex-wrap items-center gap-2">
                 <div className="relative w-full sm:w-64">
-                  <Search className="h-4 w-4 text-muted-foreground absolute left-2.5 top-2.5" />
+                  <Search className="h-3.5 w-3.5 text-muted-foreground absolute left-2.5 top-2.5" />
                   <Input
-                    placeholder="Buscar tienda, email, ciudad, país..."
+                    placeholder="Buscar tienda, email, ciudad, RUT..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="pl-8 h-9 text-xs"
+                    className="pl-8 h-8 text-xs"
                   />
                 </div>
 
                 <select
                   value={planFilter}
                   onChange={(e) => setPlanFilter(e.target.value)}
-                  className="h-9 rounded-md border border-input bg-background px-3 text-xs font-medium"
+                  className="h-8 rounded-md border border-input bg-background px-2.5 text-xs font-medium"
                 >
                   <option value="all">Todos los planes</option>
                   <option value="free">Free</option>
@@ -881,7 +1427,7 @@ export default function SuperAdminPage() {
                 <select
                   value={estadoFilter}
                   onChange={(e) => setEstadoFilter(e.target.value)}
-                  className="h-9 rounded-md border border-input bg-background px-3 text-xs font-medium"
+                  className="h-8 rounded-md border border-input bg-background px-2.5 text-xs font-medium"
                 >
                   <option value="all">Todos los estados</option>
                   <option value="inactivas">Para Reactivar (Free / Vencidas / Susp.)</option>
@@ -903,20 +1449,21 @@ export default function SuperAdminPage() {
               <div className="overflow-x-auto">
                 <table className="w-full text-sm text-left border-collapse">
                   <thead>
-                    <tr className="border-b border-border text-xs uppercase text-muted-foreground">
-                      <th className="py-3 px-3 font-semibold">Comercio / Contacto</th>
-                      <th className="py-3 px-3 font-semibold">País / Ciudad Ref.</th>
-                      <th className="py-3 px-3 font-semibold">Tipo</th>
-                      <th className="py-3 px-3 font-semibold">Plan</th>
-                      <th className="py-3 px-3 font-semibold">Estado</th>
-                      <th className="py-3 px-3 font-semibold">Vencimiento</th>
-                      <th className="py-3 px-3 font-semibold text-right">Acciones</th>
+                    <tr className="border-b border-border text-[11px] uppercase text-muted-foreground">
+                      <th className="py-2.5 px-3 font-semibold">Comercio / Propietario</th>
+                      <th className="py-2.5 px-3 font-semibold">País / Ciudad Ref.</th>
+                      <th className="py-2.5 px-3 font-semibold">Última Actividad</th>
+                      <th className="py-2.5 px-3 font-semibold">Plan</th>
+                      <th className="py-2.5 px-3 font-semibold">Estado</th>
+                      <th className="py-2.5 px-3 font-semibold">Vencimiento</th>
+                      <th className="py-2.5 px-3 font-semibold text-right">Acciones</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border">
                     {filteredNegocios.map((neg) => {
                       const susc = suscripcionesMap[neg.id];
                       const contact = contactsMap[neg.id];
+                      const act = storesActivityMap[neg.id];
                       const loc = inferFallbackLocation(neg, contact);
                       const planLabel = (susc?.plan || neg.plan || "free").toUpperCase();
                       const estadoLabel = susc?.estado || "activa";
@@ -926,7 +1473,7 @@ export default function SuperAdminPage() {
 
                       return (
                         <tr key={neg.id} className="hover:bg-muted/40 transition-colors">
-                          <td className="py-3 px-3">
+                          <td className="py-2.5 px-3">
                             <div className="font-semibold text-foreground">{neg.nombre}</div>
                             <div className="text-xs text-muted-foreground flex items-center gap-1.5">
                               <span>/{neg.slug}</span>
@@ -939,6 +1486,9 @@ export default function SuperAdminPage() {
                               >
                                 <ExternalLink className="h-3 w-3" />
                               </a>
+                              <span className="text-[10px] opacity-75">
+                                · {neg.tipo_negocio === "restaurant" ? "Restaurante" : "Retail"}
+                              </span>
                             </div>
                             {contact?.email && (
                               <div className="text-[11px] text-muted-foreground mt-0.5 truncate max-w-[210px]">
@@ -947,7 +1497,7 @@ export default function SuperAdminPage() {
                             )}
                           </td>
 
-                          <td className="py-3 px-3 text-xs">
+                          <td className="py-2.5 px-3 text-xs">
                             {loc ? (
                               <div className="flex items-start gap-1.5">
                                 <span className="text-sm leading-none mt-0.5">{loc.flag}</span>
@@ -962,17 +1512,28 @@ export default function SuperAdminPage() {
                                 </div>
                               </div>
                             ) : (
-                              <span className="text-[11px] text-muted-foreground italic">
-                                Sin registro aún
+                              <span className="text-[11px] text-muted-foreground italic">—</span>
+                            )}
+                          </td>
+
+                          <td className="py-2.5 px-3 text-xs">
+                            {act ? (
+                              <div>
+                                <div className="font-medium">
+                                  {new Date(act.last_real_activity_at).toLocaleDateString("es-CL")}
+                                </div>
+                                <div className="text-[10px] text-muted-foreground">
+                                  Hace {act.inactive_days}d · {act.last_activity_type}
+                                </div>
+                              </div>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">
+                                {new Date(neg.created_at).toLocaleDateString("es-CL")}
                               </span>
                             )}
                           </td>
 
-                          <td className="py-3 px-3 capitalize text-xs">
-                            {neg.tipo_negocio === "restaurant" ? "Restaurante" : "Tienda / Retail"}
-                          </td>
-
-                          <td className="py-3 px-3">
+                          <td className="py-2.5 px-3">
                             <Badge
                               variant={
                                 planLabel === "PRO" ||
@@ -987,7 +1548,7 @@ export default function SuperAdminPage() {
                             </Badge>
                           </td>
 
-                          <td className="py-3 px-3">
+                          <td className="py-2.5 px-3">
                             <Badge
                               variant="outline"
                               className={
@@ -1002,54 +1563,50 @@ export default function SuperAdminPage() {
                             </Badge>
                           </td>
 
-                          <td className="py-3 px-3 text-xs text-muted-foreground">
+                          <td className="py-2.5 px-3 text-xs text-muted-foreground">
                             <div>
                               {susc?.vence_at
                                 ? new Date(susc.vence_at).toLocaleDateString("es-CL")
                                 : "Sin límite"}
                             </div>
-                            <div className="text-[10px] opacity-75">
-                              Creado: {new Date(neg.created_at).toLocaleDateString("es-CL")}
-                            </div>
                           </td>
 
-                          <td className="py-3 px-3 text-right">
+                          <td className="py-2.5 px-3 text-right">
                             <div className="inline-flex items-center gap-1.5">
                               <Button
                                 variant="outline"
                                 size="sm"
-                                className="h-8 text-xs gap-1 border-primary/30 text-primary hover:bg-primary/10"
-                                title="Enviar correo de reactivación o cupón"
+                                className="h-7 text-xs gap-1 border-primary/30 text-primary hover:bg-primary/10"
                                 onClick={() => openReactivationEmailModal(neg)}
                               >
-                                <Mail className="h-3.5 w-3.5" />
-                                Reactivar
+                                <Mail className="h-3 w-3" />
+                                Correo
                               </Button>
 
                               <Button
                                 variant="outline"
                                 size="sm"
-                                className="h-8 text-xs gap-1"
+                                className="h-7 text-xs gap-1"
                                 onClick={() => openStoreDetails(neg)}
                               >
-                                <Eye className="h-3.5 w-3.5" />
+                                <Eye className="h-3 w-3" />
                                 Métricas
                               </Button>
 
                               <Button
                                 variant="default"
                                 size="sm"
-                                className="h-8 text-xs gap-1"
+                                className="h-7 text-xs gap-1"
                                 onClick={() => openEditSubscription(neg)}
                               >
-                                <CreditCard className="h-3.5 w-3.5" />
+                                <CreditCard className="h-3 w-3" />
                                 Plan
                               </Button>
 
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                className="h-8 w-8 p-0 text-destructive hover:bg-destructive/10"
+                                className="h-7 w-7 p-0 text-destructive hover:bg-destructive/10"
                                 title="Eliminar comercio"
                                 onClick={() => {
                                   setDeletingNegocio(neg);
@@ -1071,75 +1628,1128 @@ export default function SuperAdminPage() {
         </Card>
       )}
 
-      {/* TAB 2: CUPONES INTERNOS */}
-      {activeTab === "cupones" && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base font-bold">Cupones Internos de Suscripción</CardTitle>
-            <CardDescription>
-              Permiten otorgar días gratuitos de planes Básico, Pro o Enterprise a los comercios.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {cupones.length === 0 ? (
-              <div className="py-10 text-center text-sm text-muted-foreground">
-                No hay cupones creados todavía.
+      {/* =====================================================================
+          MÓDULO 3: USUARIOS
+         ===================================================================== */}
+      {activeModule === "usuarios" && (
+        <Card className="shadow-2xs">
+          <CardHeader className="pb-3">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <div>
+                <CardTitle className="text-base font-bold">
+                  Usuarios Registrados en Operix ERP ({filteredProfiles.length})
+                </CardTitle>
+                <CardDescription className="text-xs">
+                  Supervisión global de cuentas de propietarios, administradores, cajeros, vendedores y bodegueros.
+                </CardDescription>
               </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm text-left border-collapse">
-                  <thead>
-                    <tr className="border-b border-border text-xs uppercase text-muted-foreground">
-                      <th className="py-3 px-3 font-semibold">Código</th>
-                      <th className="py-3 px-3 font-semibold">Plan</th>
-                      <th className="py-3 px-3 font-semibold">Días Otorgados</th>
-                      <th className="py-3 px-3 font-semibold">Usos</th>
-                      <th className="py-3 px-3 font-semibold">Expira</th>
-                      <th className="py-3 px-3 font-semibold">Estado</th>
-                      <th className="py-3 px-3 font-semibold text-right">Acciones</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border">
-                    {cupones.map((c) => (
-                      <tr key={c.id} className="hover:bg-muted/40">
-                        <td className="py-3 px-3 font-mono font-bold text-primary">{c.codigo}</td>
-                        <td className="py-3 px-3 uppercase text-xs font-bold">{c.plan}</td>
-                        <td className="py-3 px-3 text-xs">{c.dias_otorgados} días</td>
-                        <td className="py-3 px-3 text-xs">
-                          {c.usos} / {c.max_usos ?? "∞"}
+
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="relative w-full sm:w-64">
+                  <Search className="h-3.5 w-3.5 text-muted-foreground absolute left-2.5 top-2.5" />
+                  <Input
+                    placeholder="Buscar por nombre, correo o tienda..."
+                    value={userSearch}
+                    onChange={(e) => setUserSearch(e.target.value)}
+                    className="pl-8 h-8 text-xs"
+                  />
+                </div>
+
+                <select
+                  value={userRoleFilter}
+                  onChange={(e) => setUserRoleFilter(e.target.value)}
+                  className="h-8 rounded-md border border-input bg-background px-2.5 text-xs font-medium"
+                >
+                  <option value="all">Todos los roles</option>
+                  <option value="super_admin">Super Admin</option>
+                  <option value="admin">Admin Comercio</option>
+                  <option value="cajero">Cajero</option>
+                  <option value="vendedor">Vendedor</option>
+                  <option value="bodeguero">Bodeguero</option>
+                </select>
+              </div>
+            </div>
+          </CardHeader>
+
+          <CardContent>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm text-left border-collapse">
+                <thead>
+                  <tr className="border-b border-border text-[11px] uppercase text-muted-foreground">
+                    <th className="py-2.5 px-3 font-semibold">Nombre / Correo</th>
+                    <th className="py-2.5 px-3 font-semibold">Comercio Asociado</th>
+                    <th className="py-2.5 px-3 font-semibold">Roles Asignados</th>
+                    <th className="py-2.5 px-3 font-semibold">Estado</th>
+                    <th className="py-2.5 px-3 font-semibold">Registro</th>
+                    <th className="py-2.5 px-3 font-semibold text-right">Control</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {filteredProfiles.map((prof) => {
+                    const neg = prof.negocio_id ? negocioNameById[prof.negocio_id] : null;
+                    const roles = rolesByUserMap[prof.id] || ["admin"];
+                    const isSuper =
+                      roles.includes("super_admin") ||
+                      prof.email?.toLowerCase() === "santibanez.elmer@gmail.com";
+
+                    return (
+                      <tr key={prof.id} className="hover:bg-muted/40">
+                        <td className="py-2.5 px-3">
+                          <div className="font-semibold text-foreground">{prof.nombre}</div>
+                          <div className="text-xs text-muted-foreground">{prof.email || "—"}</div>
                         </td>
-                        <td className="py-3 px-3 text-xs text-muted-foreground">
-                          {c.vence_at
-                            ? new Date(c.vence_at).toLocaleDateString("es-CL")
-                            : "Sin expiración"}
+
+                        <td className="py-2.5 px-3 text-xs">
+                          {neg ? (
+                            <div>
+                              <span className="font-medium text-foreground">{neg.nombre}</span>
+                              <span className="text-muted-foreground ml-1">(/{neg.slug})</span>
+                            </div>
+                          ) : isSuper ? (
+                            <Badge variant="default" className="text-[10px]">
+                              Plataforma Global
+                            </Badge>
+                          ) : (
+                            <span className="text-muted-foreground italic">
+                              Sin comercio (Onboarding)
+                            </span>
+                          )}
                         </td>
-                        <td className="py-3 px-3">
+
+                        <td className="py-2.5 px-3">
+                          <div className="flex items-center gap-1 flex-wrap">
+                            {roles.map((r) => (
+                              <Badge
+                                key={r}
+                                variant={r === "super_admin" ? "default" : "secondary"}
+                                className="text-[10px] uppercase"
+                              >
+                                {r}
+                              </Badge>
+                            ))}
+                          </div>
+                        </td>
+
+                        <td className="py-2.5 px-3">
                           <Badge
-                            variant={c.activo ? "default" : "secondary"}
-                            className="text-[10px]"
+                            variant="outline"
+                            className={
+                              prof.activo
+                                ? "border-emerald-500/40 text-emerald-600 bg-emerald-500/10 text-[10px]"
+                                : "border-destructive/40 text-destructive bg-destructive/10 text-[10px]"
+                            }
                           >
-                            {c.activo ? "ACTIVO" : "INACTIVO"}
+                            {prof.activo ? "ACTIVO" : "SUSPENDIDO"}
                           </Badge>
                         </td>
-                        <td className="py-3 px-3 text-right">
-                          <div className="inline-flex items-center gap-1.5">
+
+                        <td className="py-2.5 px-3 text-xs text-muted-foreground">
+                          {new Date(prof.created_at).toLocaleDateString("es-CL")}
+                        </td>
+
+                        <td className="py-2.5 px-3 text-right">
+                          {!isSuper && (
                             <Button
                               variant="outline"
                               size="sm"
-                              className="h-8 text-xs"
-                              onClick={() => openNewCuponModal(c)}
+                              className="h-7 text-xs"
+                              disabled={togglingUserId === prof.id}
+                              onClick={() => handleToggleUserStatus(prof)}
                             >
-                              Editar
+                              {togglingUserId === prof.id
+                                ? "..."
+                                : prof.activo
+                                ? "Suspender"
+                                : "Reactivar"}
                             </Button>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* =====================================================================
+          MÓDULO 4: SUSCRIPCIONES Y PLANES
+         ===================================================================== */}
+      {activeModule === "suscripciones" && (
+        <div className="space-y-5">
+          {/* Resumen financiero de suscripciones */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            <Card className="shadow-2xs">
+              <CardHeader className="p-3.5 pb-1">
+                <CardTitle className="text-[11px] font-semibold uppercase text-muted-foreground">
+                  Ingresos Cobrados (Mercado Pago)
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-3.5 pt-1">
+                <div className="text-2xl font-bold text-emerald-600">
+                  {formatMoney(executive?.ingresosSuscripcionesTotal ?? 0)}
+                </div>
+                <p className="text-[11px] text-muted-foreground">
+                  {executive?.pagosAprobadosCount ?? 0} pagos aprobados históricos
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card className="shadow-2xs">
+              <CardHeader className="p-3.5 pb-1">
+                <CardTitle className="text-[11px] font-semibold uppercase text-muted-foreground">
+                  Ingresos Últimos 30 Días
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-3.5 pt-1">
+                <div className="text-2xl font-bold">
+                  {formatMoney(executive?.ingresosSuscripciones30d ?? 0)}
+                </div>
+                <p className="text-[11px] text-muted-foreground">Facturación de membresías</p>
+              </CardContent>
+            </Card>
+
+            <Card className="shadow-2xs">
+              <CardHeader className="p-3.5 pb-1">
+                <CardTitle className="text-[11px] font-semibold uppercase text-muted-foreground">
+                  Suscripciones Activas
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-3.5 pt-1">
+                <div className="text-2xl font-bold">
+                  {kpis?.por_estado_susc?.activa ?? 0}
+                </div>
+                <p className="text-[11px] text-muted-foreground">
+                  Pro: {kpis?.por_plan?.pro ?? 0} · Enterprise: {kpis?.por_plan?.enterprise ?? 0}
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card className="shadow-2xs">
+              <CardHeader className="p-3.5 pb-1">
+                <CardTitle className="text-[11px] font-semibold uppercase text-muted-foreground">
+                  Próximas a Vencer (7 días)
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-3.5 pt-1">
+                <div className="text-2xl font-bold text-amber-600">
+                  {executive?.suscripcionesPorVencerCount ?? 0}
+                </div>
+                <p className="text-[11px] text-muted-foreground">Requieren renovación</p>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Tabla de Suscripciones por Tienda */}
+          <Card className="shadow-2xs">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base font-bold">
+                Estado de Suscripciones por Comercio ({suscripciones.length})
+              </CardTitle>
+              <CardDescription className="text-xs">
+                Administra planes, fechas de vencimiento, proveedor de cobro y notas administrativas.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm text-left border-collapse">
+                  <thead>
+                    <tr className="border-b border-border text-[11px] uppercase text-muted-foreground">
+                      <th className="py-2.5 px-3 font-semibold">Comercio</th>
+                      <th className="py-2.5 px-3 font-semibold">Plan</th>
+                      <th className="py-2.5 px-3 font-semibold">Estado</th>
+                      <th className="py-2.5 px-3 font-semibold">Proveedor / Ciclo</th>
+                      <th className="py-2.5 px-3 font-semibold">Vencimiento</th>
+                      <th className="py-2.5 px-3 font-semibold">Notas</th>
+                      <th className="py-2.5 px-3 font-semibold text-right">Acción</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {suscripciones.map((s) => {
+                      const neg = negocioNameById[s.negocio_id];
+                      const isVencida = Boolean(
+                        s.vence_at && new Date(s.vence_at).getTime() < Date.now()
+                      );
+                      return (
+                        <tr key={s.id} className="hover:bg-muted/40">
+                          <td className="py-2.5 px-3">
+                            <div className="font-semibold">
+                              {neg?.nombre || s.negocio_id.slice(0, 8)}
+                            </div>
+                            <div className="text-xs text-muted-foreground">
+                              /{neg?.slug || "—"}
+                            </div>
+                          </td>
+                          <td className="py-2.5 px-3">
+                            <Badge variant="default" className="text-[10px] uppercase">
+                              {s.plan}
+                            </Badge>
+                          </td>
+                          <td className="py-2.5 px-3">
+                            <Badge
+                              variant="outline"
+                              className={
+                                s.estado === "activa" && !isVencida
+                                  ? "border-emerald-500/40 text-emerald-600 bg-emerald-500/10 text-[10px]"
+                                  : "border-amber-500/40 text-amber-600 bg-amber-500/10 text-[10px]"
+                              }
+                            >
+                              {isVencida ? "VENCIDA" : s.estado.toUpperCase()}
+                            </Badge>
+                          </td>
+                          <td className="py-2.5 px-3 text-xs capitalize">
+                            {s.proveedor || "manual"} {s.ciclo ? `(${s.ciclo})` : ""}
+                          </td>
+                          <td className="py-2.5 px-3 text-xs">
+                            {s.vence_at
+                              ? new Date(s.vence_at).toLocaleDateString("es-CL")
+                              : "Sin vencimiento"}
+                          </td>
+                          <td className="py-2.5 px-3 text-xs text-muted-foreground max-w-[240px] truncate">
+                            {s.notas || "—"}
+                          </td>
+                          <td className="py-2.5 px-3 text-right">
+                            {neg && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-7 text-xs"
+                                onClick={() => openEditSubscription(neg)}
+                              >
+                                Ajustar Plan
+                              </Button>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Historial de Pagos de Mercado Pago */}
+          <Card className="shadow-2xs">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base font-bold">
+                Historial de Transacciones Mercado Pago ({mpPagos.length})
+              </CardTitle>
+              <CardDescription className="text-xs">
+                Pagos reales registrados desde el webhook de suscripciones de Mercado Pago.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {mpPagos.length === 0 ? (
+                <div className="py-8 text-center text-xs text-muted-foreground">
+                  No se registran pagos en la tabla mp_pagos todavía.
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm text-left border-collapse">
+                    <thead>
+                      <tr className="border-b border-border text-[11px] uppercase text-muted-foreground">
+                        <th className="py-2.5 px-3 font-semibold">Fecha</th>
+                        <th className="py-2.5 px-3 font-semibold">Comercio</th>
+                        <th className="py-2.5 px-3 font-semibold">Payment ID</th>
+                        <th className="py-2.5 px-3 font-semibold">Plan / Ciclo</th>
+                        <th className="py-2.5 px-3 font-semibold">Monto</th>
+                        <th className="py-2.5 px-3 font-semibold">Estado</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border">
+                      {mpPagos.map((p) => {
+                        const neg = p.negocio_id ? negocioNameById[p.negocio_id] : null;
+                        return (
+                          <tr key={p.id} className="hover:bg-muted/40 text-xs">
+                            <td className="py-2.5 px-3">
+                              {new Date(p.created_at).toLocaleString("es-CL")}
+                            </td>
+                            <td className="py-2.5 px-3 font-medium">
+                              {neg?.nombre || p.negocio_id || "—"}
+                            </td>
+                            <td className="py-2.5 px-3 font-mono">{p.payment_id || "—"}</td>
+                            <td className="py-2.5 px-3 uppercase">
+                              {p.plan || "—"} ({p.ciclo || "—"})
+                            </td>
+                            <td className="py-2.5 px-3 font-bold">
+                              {formatMoney(p.monto || 0)}
+                            </td>
+                            <td className="py-2.5 px-3">
+                              <Badge
+                                variant={
+                                  p.estado === "aprobada" || p.estado === "approved"
+                                    ? "default"
+                                    : "secondary"
+                                }
+                                className="text-[10px] uppercase"
+                              >
+                                {p.estado}
+                              </Badge>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* =====================================================================
+          MÓDULO 5: CENTRO DE RECUPERACIÓN DE CLIENTES
+         ===================================================================== */}
+      {activeModule === "recuperacion" && <RecuperacionClientesSection />}
+
+      {/* =====================================================================
+          MÓDULO 6: CENTRO DE AUTOMATIZACIONES
+         ===================================================================== */}
+      {activeModule === "automatizaciones" && (
+        <div className="space-y-5">
+          <Card className="shadow-2xs">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base font-bold">
+                Procesos Automáticos Programados (Cron & Background Workers)
+              </CardTitle>
+              <CardDescription className="text-xs">
+                Monitorea el estado, última y próxima ejecución, registros procesados, duración y errores. Ningún proceso se dispara al cargar la página.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm text-left border-collapse">
+                  <thead>
+                    <tr className="border-b border-border text-[11px] uppercase text-muted-foreground">
+                      <th className="py-2.5 px-3 font-semibold">Nombre del Proceso</th>
+                      <th className="py-2.5 px-3 font-semibold">Estado</th>
+                      <th className="py-2.5 px-3 font-semibold">Cadencia / Próxima Ejecución</th>
+                      <th className="py-2.5 px-3 font-semibold">Última Ejecución</th>
+                      <th className="py-2.5 px-3 font-semibold">Procesados / Errores / Duración</th>
+                      <th className="py-2.5 px-3 font-semibold text-right">Controles</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {/* Proceso 1: Detección de Inactividad y Recuperación con Resend */}
+                    {(() => {
+                      const lastRunLog = (automations?.runs || []).find(
+                        (r: any) => r.action === "system_cron_recovery_run"
+                      );
+                      const liveRes = lastJobResult.recovery || lastRunLog?.after_data || null;
+                      const nextRunDate = new Date();
+                      if (nextRunDate.getUTCHours() >= 13) {
+                        nextRunDate.setUTCDate(nextRunDate.getUTCDate() + 1);
+                      }
+                      nextRunDate.setUTCHours(13, 0, 0, 0);
+
+                      return (
+                        <tr className="hover:bg-muted/40">
+                          <td className="py-3 px-3">
+                            <div className="font-semibold text-foreground">
+                              Detección de Tiendas Inactivas y Campaña de Recuperación
+                            </div>
+                            <div className="text-xs text-muted-foreground font-mono">
+                              /api/cron/recuperacion-tiendas (Vercel Cron)
+                            </div>
+                          </td>
+                          <td className="py-3 px-3">
+                            <Badge
+                              variant={
+                                recConfig?.automatizacion_activa ? "default" : "secondary"
+                              }
+                              className="text-[10px]"
+                            >
+                              {recConfig?.automatizacion_activa ? "ACTIVO" : "PAUSADO"}
+                            </Badge>
+                          </td>
+                          <td className="py-3 px-3 text-xs">
+                            <div className="font-medium">Diario · 13:00 UTC</div>
+                            <div className="text-[11px] text-muted-foreground">
+                              Próxima: {nextRunDate.toLocaleString("es-CL")}
+                            </div>
+                          </td>
+                          <td className="py-3 px-3 text-xs">
+                            {lastRunLog ? (
+                              new Date(lastRunLog.created_at).toLocaleString("es-CL")
+                            ) : liveRes?.timestamp ? (
+                              new Date(liveRes.timestamp).toLocaleString("es-CL")
+                            ) : (
+                              <span className="text-muted-foreground">Sin ejecuciones registradas</span>
+                            )}
+                          </td>
+                          <td className="py-3 px-3 text-xs">
+                            {liveRes ? (
+                              <div>
+                                <span className="font-semibold">
+                                  {liveRes.processedStores ?? 0} tiendas
+                                </span>{" "}
+                                ({liveRes.sentStep1 ?? 0} C1, {liveRes.sentStep2 ?? 0} C2) ·{" "}
+                                <span
+                                  className={
+                                    (liveRes.errorsCount || liveRes.errors?.length || 0) > 0
+                                      ? "text-destructive font-bold"
+                                      : "text-emerald-600"
+                                  }
+                                >
+                                  {liveRes.errorsCount ?? liveRes.errors?.length ?? 0} errores
+                                </span>{" "}
+                                · {liveRes.durationMs ?? 0}ms
+                              </div>
+                            ) : (
+                              <span className="text-muted-foreground">—</span>
+                            )}
+                          </td>
+                          <td className="py-3 px-3 text-right">
+                            <div className="inline-flex items-center gap-1.5">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-7 text-xs"
+                                onClick={() => setActiveModule("recuperacion")}
+                              >
+                                Configurar
+                              </Button>
+                              <Button
+                                size="sm"
+                                className="h-7 text-xs gap-1"
+                                disabled={runningJob === "recovery"}
+                                onClick={handleRunRecoveryAutomation}
+                              >
+                                {runningJob === "recovery" ? (
+                                  <Loader2 className="h-3 w-3 animate-spin" />
+                                ) : (
+                                  <Play className="h-3 w-3" />
+                                )}
+                                Ejecutar
+                              </Button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })()}
+
+                    {/* Proceso 2: Suspensión Automática de Suscripciones Vencidas */}
+                    {(() => {
+                      const liveSub = lastJobResult.expired_subs;
+                      const nextHour = new Date();
+                      nextHour.setMinutes(7, 0, 0);
+                      if (nextHour.getTime() <= Date.now()) {
+                        nextHour.setHours(nextHour.getHours() + 1);
+                      }
+
+                      return (
+                        <tr className="hover:bg-muted/40">
+                          <td className="py-3 px-3">
+                            <div className="font-semibold text-foreground">
+                              Suspensión Automática de Suscripciones Vencidas
+                            </div>
+                            <div className="text-xs text-muted-foreground font-mono">
+                              RPC: public.suspender_suscripciones_vencidas() (pg_cron)
+                            </div>
+                          </td>
+                          <td className="py-3 px-3">
+                            <Badge variant="default" className="text-[10px]">
+                              ACTIVO
+                            </Badge>
+                          </td>
+                          <td className="py-3 px-3 text-xs">
+                            <div className="font-medium">Cada hora (minuto 07)</div>
+                            <div className="text-[11px] text-muted-foreground">
+                              Próxima: {nextHour.toLocaleTimeString("es-CL")}
+                            </div>
+                          </td>
+                          <td className="py-3 px-3 text-xs">
+                            {liveSub?.executedAt ? (
+                              new Date(liveSub.executedAt).toLocaleString("es-CL")
+                            ) : (
+                              <span className="text-muted-foreground">Automático en PostgreSQL</span>
+                            )}
+                          </td>
+                          <td className="py-3 px-3 text-xs">
+                            {liveSub ? (
+                              <div>
+                                <span className="font-semibold">
+                                  {liveSub.suspendedCount} suspendidas
+                                </span>{" "}
+                                · <span className="text-emerald-600">0 errores</span> ·{" "}
+                                {liveSub.durationMs}ms
+                              </div>
+                            ) : (
+                              <span className="text-muted-foreground">—</span>
+                            )}
+                          </td>
+                          <td className="py-3 px-3 text-right">
                             <Button
-                              variant="ghost"
                               size="sm"
-                              className="h-8 w-8 p-0 text-destructive hover:bg-destructive/10"
-                              onClick={() => handleDeleteCupon(c)}
+                              variant="outline"
+                              className="h-7 text-xs gap-1"
+                              disabled={runningJob === "expired_subs"}
+                              onClick={handleRunExpiredSubscriptionsJob}
                             >
-                              <Trash2 className="h-3.5 w-3.5" />
+                              {runningJob === "expired_subs" ? (
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                              ) : (
+                                <Play className="h-3 w-3" />
+                              )}
+                              Ejecutar Ahora
                             </Button>
+                          </td>
+                        </tr>
+                      );
+                    })()}
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Historial de Ejecuciones Automáticas */}
+          <Card className="shadow-2xs">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base font-bold">
+                Historial de Ejecuciones y Eventos Automáticos ({automations?.runs?.length ?? 0})
+              </CardTitle>
+              <CardDescription className="text-xs">
+                Registro cronológico de procesos de recuperación, envíos automáticos y activaciones de promociones.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {!automations?.runs || automations.runs.length === 0 ? (
+                <div className="py-8 text-center text-xs text-muted-foreground">
+                  Aún no hay ejecuciones registradas en la bitácora de auditoría.
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs text-left border-collapse">
+                    <thead>
+                      <tr className="border-b border-border text-[11px] uppercase text-muted-foreground">
+                        <th className="py-2 px-3 font-semibold">Fecha y Hora</th>
+                        <th className="py-2 px-3 font-semibold">Proceso / Acción</th>
+                        <th className="py-2 px-3 font-semibold">Comercio</th>
+                        <th className="py-2 px-3 font-semibold">Resultado / Detalle</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border">
+                      {automations.runs.map((r: AuditLogRow) => (
+                        <tr key={r.id} className="hover:bg-muted/40">
+                          <td className="py-2 px-3 whitespace-nowrap">
+                            {new Date(r.created_at).toLocaleString("es-CL")}
+                          </td>
+                          <td className="py-2 px-3 font-mono font-semibold text-primary">
+                            {r.action}
+                          </td>
+                          <td className="py-2 px-3">
+                            {negocioNameById[r.negocio_id]?.nombre || r.negocio_id.slice(0, 8)}
+                          </td>
+                          <td className="py-2 px-3 font-mono text-[11px] text-muted-foreground">
+                            {r.after_data ? JSON.stringify(r.after_data) : "—"}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* =====================================================================
+          MÓDULO 7: CUPONES Y PROMOCIONES
+         ===================================================================== */}
+      {activeModule === "cupones" && (
+        <div className="space-y-5">
+          <Card className="shadow-2xs">
+            <CardHeader className="pb-3 flex flex-row items-center justify-between">
+              <div>
+                <CardTitle className="text-base font-bold">
+                  Cupones Promocionales ({cupones.length})
+                </CardTitle>
+                <CardDescription className="text-xs">
+                  Códigos internos para otorgar días gratuitos de planes Básico, Pro o Enterprise.
+                </CardDescription>
+              </div>
+              <Button size="sm" onClick={() => openNewCuponModal()} className="h-8 text-xs gap-1.5">
+                <Plus className="h-3.5 w-3.5" />
+                Nuevo Cupón
+              </Button>
+            </CardHeader>
+            <CardContent>
+              {cupones.length === 0 ? (
+                <div className="py-10 text-center text-sm text-muted-foreground">
+                  No hay cupones creados todavía.
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm text-left border-collapse">
+                    <thead>
+                      <tr className="border-b border-border text-[11px] uppercase text-muted-foreground">
+                        <th className="py-2.5 px-3 font-semibold">Código</th>
+                        <th className="py-2.5 px-3 font-semibold">Plan</th>
+                        <th className="py-2.5 px-3 font-semibold">Días Otorgados</th>
+                        <th className="py-2.5 px-3 font-semibold">Usos</th>
+                        <th className="py-2.5 px-3 font-semibold">Expira</th>
+                        <th className="py-2.5 px-3 font-semibold">Estado</th>
+                        <th className="py-2.5 px-3 font-semibold text-right">Acciones</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border">
+                      {cupones.map((c) => (
+                        <tr key={c.id} className="hover:bg-muted/40">
+                          <td className="py-2.5 px-3 font-mono font-bold text-primary">
+                            {c.codigo}
+                          </td>
+                          <td className="py-2.5 px-3 uppercase text-xs font-bold">{c.plan}</td>
+                          <td className="py-2.5 px-3 text-xs">{c.dias_otorgados} días</td>
+                          <td className="py-2.5 px-3 text-xs">
+                            {c.usos} / {c.max_usos ?? "∞"}
+                          </td>
+                          <td className="py-2.5 px-3 text-xs text-muted-foreground">
+                            {c.vence_at
+                              ? new Date(c.vence_at).toLocaleDateString("es-CL")
+                              : "Sin expiración"}
+                          </td>
+                          <td className="py-2.5 px-3">
+                            <Badge
+                              variant={c.activo ? "default" : "secondary"}
+                              className="text-[10px]"
+                            >
+                              {c.activo ? "ACTIVO" : "INACTIVO"}
+                            </Badge>
+                          </td>
+                          <td className="py-2.5 px-3 text-right">
+                            <div className="inline-flex items-center gap-1.5">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-7 text-xs"
+                                onClick={() => openNewCuponModal(c)}
+                              >
+                                Editar
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 w-7 p-0 text-destructive hover:bg-destructive/10"
+                                onClick={() => handleDeleteCupon(c)}
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Historial de Canjes de Cupones */}
+          <Card className="shadow-2xs">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base font-bold">
+                Historial de Canjes de Cupones ({cuponCanjes.length})
+              </CardTitle>
+              <CardDescription className="text-xs">
+                Trazabilidad de promociones canjeadas por cada comercio.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {cuponCanjes.length === 0 ? (
+                <div className="py-8 text-center text-xs text-muted-foreground">
+                  Ningún comercio ha canjeado cupones todavía.
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs text-left border-collapse">
+                    <thead>
+                      <tr className="border-b border-border text-[11px] uppercase text-muted-foreground">
+                        <th className="py-2 px-3 font-semibold">Fecha Canje</th>
+                        <th className="py-2 px-3 font-semibold">Comercio</th>
+                        <th className="py-2 px-3 font-semibold">Plan Aplicado</th>
+                        <th className="py-2 px-3 font-semibold">Días Otorgados</th>
+                        <th className="py-2 px-3 font-semibold">Nuevo Vencimiento</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border">
+                      {cuponCanjes.map((cj) => (
+                        <tr key={cj.id} className="hover:bg-muted/40">
+                          <td className="py-2 px-3">
+                            {new Date(cj.created_at).toLocaleString("es-CL")}
+                          </td>
+                          <td className="py-2 px-3 font-semibold">
+                            {negocioNameById[cj.negocio_id]?.nombre || cj.negocio_id}
+                          </td>
+                          <td className="py-2 px-3 uppercase font-bold">{cj.plan_aplicado}</td>
+                          <td className="py-2 px-3">{cj.dias_aplicados} días</td>
+                          <td className="py-2 px-3">
+                            {new Date(cj.vence_at_nuevo).toLocaleDateString("es-CL")}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* =====================================================================
+          MÓDULO 8: COMUNICACIONES Y CORREOS (RESEND)
+         ===================================================================== */}
+      {activeModule === "comunicaciones" && (
+        <div className="space-y-5">
+          {/* Estado de Conexión con Resend y Métricas de Entregabilidad */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2.5">
+            <div className="p-3 rounded-xl border border-border bg-card col-span-2">
+              <div className="text-[10px] font-semibold uppercase text-muted-foreground">
+                Estado Resend & Dominio
+              </div>
+              <div className="flex items-center gap-2 mt-1">
+                <Badge
+                  variant={communications?.resendConfigured ? "default" : "secondary"}
+                  className={
+                    communications?.resendConfigured
+                      ? "bg-emerald-600 text-[10px]"
+                      : "text-[10px]"
+                  }
+                >
+                  {communications?.resendConfigured ? "CONECTADO" : "PENDIENTE API KEY"}
+                </Badge>
+                <span className="text-xs font-bold truncate">
+                  {communications?.senderDomain || "operixerp.cloud"}
+                </span>
+              </div>
+              <div className="text-[10px] text-muted-foreground mt-1 truncate">
+                Remitente: {communications?.senderEmail}
+              </div>
+            </div>
+
+            <div className="p-3 rounded-xl border border-border bg-card">
+              <div className="text-[10px] font-semibold uppercase text-muted-foreground">
+                Enviados
+              </div>
+              <div className="text-xl font-bold mt-1">
+                {communications?.stats?.totalSent ?? 0}
+              </div>
+              <div className="text-[10px] text-muted-foreground">En bitácora</div>
+            </div>
+
+            <div className="p-3 rounded-xl border border-border bg-card">
+              <div className="text-[10px] font-semibold uppercase text-muted-foreground">
+                Entregabilidad
+              </div>
+              <div className="text-xl font-bold text-emerald-600 mt-1">
+                {communications?.stats?.deliverabilityRate ?? 100}%
+              </div>
+              <div className="text-[10px] text-muted-foreground">
+                {communications?.stats?.delivered ?? 0} entregados
+              </div>
+            </div>
+
+            <div className="p-3 rounded-xl border border-border bg-card">
+              <div className="text-[10px] font-semibold uppercase text-muted-foreground">
+                Aperturas
+              </div>
+              <div className="text-xl font-bold text-indigo-600 mt-1">
+                {communications?.stats?.opened ?? 0}
+              </div>
+              <div className="text-[10px] text-muted-foreground">Confirmadas</div>
+            </div>
+
+            <div className="p-3 rounded-xl border border-border bg-card">
+              <div className="text-[10px] font-semibold uppercase text-muted-foreground">
+                Clics
+              </div>
+              <div className="text-xl font-bold text-primary mt-1">
+                {communications?.stats?.clicked ?? 0}
+              </div>
+              <div className="text-[10px] text-muted-foreground">En enlaces CTA</div>
+            </div>
+
+            <div className="p-3 rounded-xl border border-border bg-card">
+              <div className="text-[10px] font-semibold uppercase text-muted-foreground">
+                Rebotes
+              </div>
+              <div className="text-xl font-bold text-destructive mt-1">
+                {communications?.stats?.bounced ?? 0}
+              </div>
+              <div className="text-[10px] text-muted-foreground">Bounces</div>
+            </div>
+
+            <div className="p-3 rounded-xl border border-border bg-card">
+              <div className="text-[10px] font-semibold uppercase text-muted-foreground">
+                Quejas / Bajas
+              </div>
+              <div className="text-xl font-bold mt-1">
+                {(communications?.stats?.complained ?? 0) +
+                  (communications?.stats?.unsubscribed ?? 0)}
+              </div>
+              <div className="text-[10px] text-muted-foreground">Suprimidos</div>
+            </div>
+          </div>
+
+          {/* Endpoint de Webhook Resend y Plantillas */}
+          <Card className="shadow-2xs">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base font-bold">
+                Configuración de Webhooks y Plantillas Transaccionales (Resend)
+              </CardTitle>
+              <CardDescription className="text-xs">
+                Las claves API permanecen exclusivamente en el servidor. Aquí puedes editar las plantillas de recuperación y verificar el webhook de eventos.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="p-3 rounded-lg border border-border bg-muted/20 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 text-xs">
+                <div>
+                  <span className="font-bold text-foreground">Webhook Receptor de Eventos Resend:</span>{" "}
+                  <code className="font-mono bg-background px-2 py-0.5 rounded border border-border">
+                    https://operixerp.cloud/api/recuperacion/webhook-resend
+                  </code>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-xs gap-1"
+                  onClick={() => {
+                    navigator.clipboard.writeText(
+                      "https://operixerp.cloud/api/recuperacion/webhook-resend"
+                    );
+                    toast.success("URL de Webhook copiada al portapapeles");
+                  }}
+                >
+                  <Copy className="h-3 w-3" />
+                  Copiar URL
+                </Button>
+              </div>
+
+              {recConfig && (
+                <form onSubmit={handleSaveGlobalRecConfig} className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  <div className="space-y-3 p-3.5 rounded-xl border border-border">
+                    <div className="font-bold text-xs uppercase text-primary">
+                      Plantilla 1: Reactivación por Inactividad ({recConfig.dias_inactividad}d)
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Asunto</Label>
+                      <Input
+                        value={recConfig.asunto_correo_1}
+                        onChange={(e) =>
+                          setRecConfig({ ...recConfig, asunto_correo_1: e.target.value })
+                        }
+                        className="h-8 text-xs"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Contenido</Label>
+                      <textarea
+                        rows={5}
+                        value={recConfig.cuerpo_correo_1}
+                        onChange={(e) =>
+                          setRecConfig({ ...recConfig, cuerpo_correo_1: e.target.value })
+                        }
+                        className="w-full rounded-md border border-input bg-background p-2.5 text-xs"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-3 p-3.5 rounded-xl border border-border">
+                    <div className="font-bold text-xs uppercase text-primary">
+                      Plantilla 2: Segundo Seguimiento (+{recConfig.dias_segundo_seguimiento}d)
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Asunto</Label>
+                      <Input
+                        value={recConfig.asunto_correo_2}
+                        onChange={(e) =>
+                          setRecConfig({ ...recConfig, asunto_correo_2: e.target.value })
+                        }
+                        className="h-8 text-xs"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Contenido</Label>
+                      <textarea
+                        rows={5}
+                        value={recConfig.cuerpo_correo_2}
+                        onChange={(e) =>
+                          setRecConfig({ ...recConfig, cuerpo_correo_2: e.target.value })
+                        }
+                        className="w-full rounded-md border border-input bg-background p-2.5 text-xs"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="lg:col-span-2 flex justify-end">
+                    <Button type="submit" size="sm" disabled={savingGlobalCfg}>
+                      {savingGlobalCfg ? "Guardando..." : "Guardar Plantillas de Comunicación"}
+                    </Button>
+                  </div>
+                </form>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Bitácora de Correos Enviados y Lista de Suprimidos */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+            <Card className="lg:col-span-2 shadow-2xs">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-bold">
+                  Bitácora de Correos Enviados ({communications?.emailLogs?.length ?? 0})
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {!communications?.emailLogs || communications.emailLogs.length === 0 ? (
+                  <p className="py-6 text-center text-xs text-muted-foreground">
+                    Sin registros en email_send_log.
+                  </p>
+                ) : (
+                  <div className="overflow-x-auto max-h-80">
+                    <table className="w-full text-xs text-left border-collapse">
+                      <thead>
+                        <tr className="border-b border-border text-[10px] uppercase text-muted-foreground">
+                          <th className="py-2 px-2">Fecha</th>
+                          <th className="py-2 px-2">Destinatario</th>
+                          <th className="py-2 px-2">Plantilla</th>
+                          <th className="py-2 px-2">Estado</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-border">
+                        {communications.emailLogs.map((log: any) => (
+                          <tr key={log.id}>
+                            <td className="py-2 px-2 whitespace-nowrap">
+                              {new Date(log.created_at).toLocaleString("es-CL")}
+                            </td>
+                            <td className="py-2 px-2 font-medium">{log.recipient_email}</td>
+                            <td className="py-2 px-2 font-mono text-[11px]">
+                              {log.template_name}
+                            </td>
+                            <td className="py-2 px-2">
+                              <Badge variant="outline" className="text-[10px] uppercase">
+                                {log.status}
+                              </Badge>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card className="shadow-2xs">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-bold">
+                  Bajas y Correos Suprimidos ({communications?.suppressedEmails?.length ?? 0})
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {!communications?.suppressedEmails ||
+                communications.suppressedEmails.length === 0 ? (
+                  <p className="py-6 text-center text-xs text-muted-foreground">
+                    No hay correos dados de baja o rebotados.
+                  </p>
+                ) : (
+                  <div className="divide-y divide-border max-h-80 overflow-y-auto text-xs">
+                    {communications.suppressedEmails.map((s: any) => (
+                      <div key={s.id} className="py-2 flex items-center justify-between gap-2">
+                        <div className="truncate">
+                          <div className="font-medium truncate">{s.email}</div>
+                          <div className="text-[10px] text-muted-foreground uppercase">
+                            Motivo: {s.reason}
                           </div>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 text-[10px]"
+                          onClick={() => handleRemoveSuppressedEmail(s.email)}
+                        >
+                          Rehabilitar
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      )}
+
+      {/* =====================================================================
+          MÓDULO 9: AUDITORÍA Y ACTIVIDAD ADMINISTRATIVA
+         ===================================================================== */}
+      {activeModule === "auditoria" && (
+        <Card className="shadow-2xs">
+          <CardHeader className="pb-3">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <div>
+                <CardTitle className="text-base font-bold">
+                  Bitácora Inmutable de Auditoría ({filteredAuditLogs.length})
+                </CardTitle>
+                <CardDescription className="text-xs">
+                  Trazabilidad de acciones administrativas, activaciones de promociones y eventos relevantes.
+                </CardDescription>
+              </div>
+              <div className="relative w-full sm:w-64">
+                <Search className="h-3.5 w-3.5 text-muted-foreground absolute left-2.5 top-2.5" />
+                <Input
+                  placeholder="Filtrar por acción, entidad o tienda..."
+                  value={auditSearch}
+                  onChange={(e) => setAuditSearch(e.target.value)}
+                  className="pl-8 h-8 text-xs"
+                />
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {filteredAuditLogs.length === 0 ? (
+              <div className="py-10 text-center text-xs text-muted-foreground">
+                No se encontraron eventos de auditoría.
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs text-left border-collapse">
+                  <thead>
+                    <tr className="border-b border-border text-[11px] uppercase text-muted-foreground">
+                      <th className="py-2.5 px-3 font-semibold">Fecha y Hora</th>
+                      <th className="py-2.5 px-3 font-semibold">Comercio</th>
+                      <th className="py-2.5 px-3 font-semibold">Acción</th>
+                      <th className="py-2.5 px-3 font-semibold">Entidad / ID</th>
+                      <th className="py-2.5 px-3 font-semibold">Metadatos (after_data)</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {filteredAuditLogs.map((log) => (
+                      <tr key={log.id} className="hover:bg-muted/40">
+                        <td className="py-2.5 px-3 whitespace-nowrap">
+                          {new Date(log.created_at).toLocaleString("es-CL")}
+                        </td>
+                        <td className="py-2.5 px-3 font-medium">
+                          {negocioNameById[log.negocio_id]?.nombre ||
+                            log.negocio_id?.slice(0, 8)}
+                        </td>
+                        <td className="py-2.5 px-3 font-mono font-semibold text-primary">
+                          {log.action || "—"}
+                        </td>
+                        <td className="py-2.5 px-3">
+                          {log.entity_type || "—"}{" "}
+                          <span className="text-muted-foreground font-mono">
+                            ({log.entity_id?.slice(0, 10) || "—"})
+                          </span>
+                        </td>
+                        <td className="py-2.5 px-3 font-mono text-[11px] text-muted-foreground max-w-md truncate">
+                          {log.after_data ? JSON.stringify(log.after_data) : "—"}
                         </td>
                       </tr>
                     ))}
@@ -1151,22 +2761,156 @@ export default function SuperAdminPage() {
         </Card>
       )}
 
-      {/* MODAL 1: ENVIAR CORREO DE REACTIVACIÓN */}
+      {/* =====================================================================
+          MÓDULO 10: CONFIGURACIÓN GLOBAL
+         ===================================================================== */}
+      {activeModule === "configuracion" && recConfig && (
+        <Card className="shadow-2xs">
+          <CardHeader>
+            <CardTitle className="text-base font-bold">
+              Parámetros Globales de Operix ERP Cloud
+            </CardTitle>
+            <CardDescription className="text-xs">
+              Configura las reglas globales de automatización, remitente oficial de comunicaciones y beneficios de recuperación.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleSaveGlobalRecConfig} className="space-y-5 max-w-2xl">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Nombre del Remitente Oficial</Label>
+                  <Input
+                    value={recConfig.remitente_nombre}
+                    onChange={(e) =>
+                      setRecConfig({ ...recConfig, remitente_nombre: e.target.value })
+                    }
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Correo Remitente (Dominio Verificado)</Label>
+                  <Input
+                    type="email"
+                    value={recConfig.remitente_email}
+                    onChange={(e) =>
+                      setRecConfig({ ...recConfig, remitente_email: e.target.value })
+                    }
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Umbral Inactividad (Días)</Label>
+                  <Input
+                    type="number"
+                    min={1}
+                    max={365}
+                    value={recConfig.dias_inactividad}
+                    onChange={(e) =>
+                      setRecConfig({
+                        ...recConfig,
+                        dias_inactividad: Number(e.target.value),
+                      })
+                    }
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">2° Seguimiento (+Días)</Label>
+                  <Input
+                    type="number"
+                    min={1}
+                    max={90}
+                    value={recConfig.dias_segundo_seguimiento}
+                    onChange={(e) =>
+                      setRecConfig({
+                        ...recConfig,
+                        dias_segundo_seguimiento: Number(e.target.value),
+                      })
+                    }
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Días de Beneficio Gratis</Label>
+                  <Input
+                    type="number"
+                    min={1}
+                    max={365}
+                    value={recConfig.dias_beneficio}
+                    onChange={(e) =>
+                      setRecConfig({
+                        ...recConfig,
+                        dias_beneficio: Number(e.target.value),
+                      })
+                    }
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2.5">
+                <div className="flex items-center justify-between p-3 rounded-lg border border-border">
+                  <div className="text-xs">
+                    <div className="font-semibold">Automatización Diaria de Recuperación</div>
+                    <div className="text-muted-foreground">
+                      Ejecuta diariamente a las 13:00 UTC la detección de tiendas con ≥{" "}
+                      {recConfig.dias_inactividad} días sin actividad real
+                    </div>
+                  </div>
+                  <Switch
+                    checked={recConfig.automatizacion_activa}
+                    onCheckedChange={(v) =>
+                      setRecConfig({ ...recConfig, automatizacion_activa: v })
+                    }
+                  />
+                </div>
+
+                <div className="flex items-center justify-between p-3 rounded-lg border border-border">
+                  <div className="text-xs">
+                    <div className="font-semibold">Promoción de 1 Mes Gratuito por Tienda</div>
+                    <div className="text-muted-foreground">
+                      Habilita el botón de aceptación expresa del beneficio de uso único en el panel de cada tienda elegible
+                    </div>
+                  </div>
+                  <Switch
+                    checked={recConfig.promocion_activa}
+                    onCheckedChange={(v) =>
+                      setRecConfig({ ...recConfig, promocion_activa: v })
+                    }
+                  />
+                </div>
+              </div>
+
+              <Button type="submit" disabled={savingGlobalCfg}>
+                {savingGlobalCfg ? "Guardando..." : "Guardar Configuración Global"}
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* =====================================================================
+          MÓDULO 11: CENTRO DE SOPORTE Y ATENCIÓN A TIENDAS
+         ===================================================================== */}
+      {activeModule === "soporte" && <CentroSoporteSection />}
+
+      {/* =====================================================================
+          MODALES COMPARTIDOS (Correo, Suscripción, Métricas, Cupón, Eliminar)
+         ===================================================================== */}
+      {/* MODAL 1: ENVIAR CORREO DIRECTO */}
       <Dialog open={Boolean(emailNegocio)} onOpenChange={(o) => !o && setEmailNegocio(null)}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Mail className="h-5 w-5 text-primary" />
-              Enviar Correo de Reactivación
+              Enviar Comunicación a Comercio
             </DialogTitle>
             <DialogDescription>
-              Invita a <strong>{emailNegocio?.nombre}</strong> (/{emailNegocio?.slug}) a reactivar su tienda en Operix ERP.
+              Comercio: <strong>{emailNegocio?.nombre}</strong> (/{emailNegocio?.slug})
             </DialogDescription>
           </DialogHeader>
 
           <form onSubmit={handleSendReactivationEmail} className="space-y-4">
             <div className="space-y-1.5">
-              <Label htmlFor="react-email">Correo del Administrador</Label>
+              <Label htmlFor="react-email">Correo del Destinatario</Label>
               <Input
                 id="react-email"
                 type="email"
@@ -1185,7 +2929,10 @@ export default function SuperAdminPage() {
                   value={emailTemplate}
                   onChange={(e) =>
                     handleTemplateChange(
-                      e.target.value as "reactivacion" | "trial_por_vencer" | "cupon_regalo",
+                      e.target.value as
+                        | "reactivacion"
+                        | "trial_por_vencer"
+                        | "cupon_regalo",
                       emailCupon
                     )
                   }
@@ -1231,10 +2978,10 @@ export default function SuperAdminPage() {
               <Label htmlFor="react-body">Mensaje</Label>
               <textarea
                 id="react-body"
-                rows={7}
+                rows={6}
                 value={emailBody}
                 onChange={(e) => setEmailBody(e.target.value)}
-                className="w-full rounded-md border border-input bg-background p-3 text-xs leading-relaxed focus:outline-none focus:ring-2 focus:ring-primary"
+                className="w-full rounded-md border border-input bg-background p-3 text-xs leading-relaxed"
                 required
               />
             </div>
@@ -1250,7 +2997,7 @@ export default function SuperAdminPage() {
                     emailCupon ? `\n\nCupón: ${emailCupon}` : ""
                   }\n\nReactiva tu tienda en: https://operixerp.cloud/planes`;
                   navigator.clipboard.writeText(fullText);
-                  toast.success("Mensaje copiado al portapapeles (ideal para WhatsApp o correo)");
+                  toast.success("Mensaje copiado al portapapeles");
                 }}
               >
                 <Copy className="h-3.5 w-3.5" />
@@ -1375,7 +3122,7 @@ export default function SuperAdminPage() {
         </DialogContent>
       </Dialog>
 
-      {/* MODAL 3: MÉTRICAS Y DETALLE DE TIENDA (sa_negocio_detalle) */}
+      {/* MODAL 3: MÉTRICAS Y DETALLE DE TIENDA */}
       <Dialog open={Boolean(detailNegocio)} onOpenChange={(o) => !o && setDetailNegocio(null)}>
         <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
@@ -1399,7 +3146,6 @@ export default function SuperAdminPage() {
             </div>
           ) : detailData ? (
             <div className="space-y-4">
-              {/* Ubicación de referencia en el detalle */}
               {detailNegocio && (
                 <div className="p-3 rounded-lg border border-border bg-muted/30 flex items-center justify-between text-xs">
                   <div className="flex items-center gap-2">
@@ -1414,12 +3160,9 @@ export default function SuperAdminPage() {
                         <span>
                           {loc.flag} {loc.country}
                           {loc.city ? ` · ${loc.city}` : ""}
-                          {loc.isInferred ? " (inferido de perfil/RUT)" : " (red IP creación)"}
                         </span>
                       ) : (
-                        <span className="text-muted-foreground">
-                          Se registrará automáticamente en el próximo acceso del usuario
-                        </span>
+                        <span className="text-muted-foreground">Sin registro aún</span>
                       );
                     })()}
                   </div>
@@ -1489,7 +3232,6 @@ export default function SuperAdminPage() {
                 </div>
               </div>
 
-              {/* Últimas ventas */}
               <div>
                 <h4 className="text-xs font-bold uppercase text-muted-foreground mb-2">
                   Últimas Ventas Registradas
@@ -1666,5 +3408,22 @@ export default function SuperAdminPage() {
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+export default function SuperAdminPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-[60vh] flex flex-col items-center justify-center gap-3">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          <p className="text-sm text-muted-foreground font-medium">
+            Cargando Consola Super Admin...
+          </p>
+        </div>
+      }
+    >
+      <SuperAdminConsoleInner />
+    </Suspense>
   );
 }

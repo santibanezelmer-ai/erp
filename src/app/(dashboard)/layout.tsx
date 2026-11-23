@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { TenantProvider, useTenant } from "@/contexts/tenant-context";
 import { Button } from "@/components/ui/button";
 import {
@@ -29,6 +29,13 @@ import {
   ExternalLink,
   CreditCard,
   ShieldCheck,
+  Sparkles,
+  Bot,
+  Ticket,
+  Mail,
+  FileSearch,
+  Sliders,
+  LifeBuoy,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Logo } from "@/components/Logo";
@@ -36,6 +43,8 @@ import { Logo } from "@/components/Logo";
 function DashboardContent({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const currentMod = searchParams.get("mod") || "resumen";
   const {
     negocio,
     sucursales,
@@ -71,33 +80,49 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
     negocio?.tipo_negocio === "restaurant" ||
     negocio?.tipo_negocio === "gastronomia";
 
-  const navigation =
-    isSuperAdmin && !negocio
-      ? [{ name: "Consola Super Admin", href: "/super-admin", icon: ShieldCheck }]
-      : [
-          ...(isSuperAdmin
-            ? [{ name: "Consola Super Admin", href: "/super-admin", icon: ShieldCheck }]
-            : []),
-          { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-          { name: "Punto de Venta (POS)", href: "/pos", icon: ShoppingCart },
-          { name: "Ventas", href: "/ventas", icon: Receipt },
-          { name: "Productos & Stock", href: "/productos", icon: Package },
-          { name: "Compras", href: "/compras", icon: Truck },
-          { name: "Clientes", href: "/clientes", icon: Users },
-          { name: "Mi Tienda Web", href: "/tienda-online", icon: Store },
-          ...(isRestaurant
-            ? [
-                { name: "Mesas", href: "/mesas", icon: UtensilsCrossed },
-                { name: "Comandas", href: "/comandas", icon: Layers },
-                { name: "Cocina (KDS)", href: "/cocina", icon: ChefHat },
-                { name: "Reservas", href: "/reservas", icon: CalendarDays },
-              ]
-            : []),
-          { name: "Caja / Turno", href: "/caja", icon: Wallet },
-          { name: "Reportes", href: "/reportes", icon: BarChart3 },
-          { name: "Planes y Suscripción", href: "/planes", icon: CreditCard },
-          { name: "Configuración", href: "/configuracion", icon: Settings },
-        ];
+  const superAdminNavigation = [
+    { name: "1. Resumen Ejecutivo", href: "/super-admin?mod=resumen", mod: "resumen", icon: LayoutDashboard },
+    { name: "2. Tiendas y Comercios", href: "/super-admin?mod=comercios", mod: "comercios", icon: Store },
+    { name: "3. Usuarios", href: "/super-admin?mod=usuarios", mod: "usuarios", icon: Users },
+    { name: "4. Suscripciones y Planes", href: "/super-admin?mod=suscripciones", mod: "suscripciones", icon: CreditCard },
+    { name: "5. Recuperación de Clientes", href: "/super-admin?mod=recuperacion", mod: "recuperacion", icon: Sparkles },
+    { name: "6. Automatizaciones", href: "/super-admin?mod=automatizaciones", mod: "automatizaciones", icon: Bot },
+    { name: "7. Cupones y Promociones", href: "/super-admin?mod=cupones", mod: "cupones", icon: Ticket },
+    { name: "8. Comunicaciones y Correos", href: "/super-admin?mod=comunicaciones", mod: "comunicaciones", icon: Mail },
+    { name: "9. Auditoría Administrativa", href: "/super-admin?mod=auditoria", mod: "auditoria", icon: FileSearch },
+    { name: "10. Configuración Global", href: "/super-admin?mod=configuracion", mod: "configuracion", icon: Sliders },
+    { name: "11. Centro de Soporte", href: "/super-admin?mod=soporte", mod: "soporte", icon: LifeBuoy },
+  ];
+
+  const isSuperAdminView = isSuperAdmin && (!negocio || pathname.startsWith("/super-admin"));
+
+  const navigation = isSuperAdminView
+    ? superAdminNavigation
+    : [
+        ...(isSuperAdmin
+          ? [{ name: "Consola Super Admin", href: "/super-admin", mod: "resumen", icon: ShieldCheck }]
+          : []),
+        { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
+        { name: "Punto de Venta (POS)", href: "/pos", icon: ShoppingCart },
+        { name: "Ventas", href: "/ventas", icon: Receipt },
+        { name: "Productos & Stock", href: "/productos", icon: Package },
+        { name: "Compras", href: "/compras", icon: Truck },
+        { name: "Clientes", href: "/clientes", icon: Users },
+        { name: "Mi Tienda Web", href: "/tienda-online", icon: Store },
+        ...(isRestaurant
+          ? [
+              { name: "Mesas", href: "/mesas", icon: UtensilsCrossed },
+              { name: "Comandas", href: "/comandas", icon: Layers },
+              { name: "Cocina (KDS)", href: "/cocina", icon: ChefHat },
+              { name: "Reservas", href: "/reservas", icon: CalendarDays },
+            ]
+          : []),
+        { name: "Caja / Turno", href: "/caja", icon: Wallet },
+        { name: "Reportes", href: "/reportes", icon: BarChart3 },
+        { name: "Planes y Suscripción", href: "/planes", icon: CreditCard },
+        { name: "Ayuda y Soporte", href: "/soporte", icon: LifeBuoy },
+        { name: "Configuración", href: "/configuracion", icon: Settings },
+      ];
 
   return (
     <div className="min-h-screen flex bg-background">
@@ -137,8 +162,20 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
 
         {/* Navigation list */}
         <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-1">
-          {navigation.map((item) => {
-            const isActive = pathname === item.href || (item.href !== "/dashboard" && pathname.startsWith(item.href));
+          {isSuperAdmin && negocio && pathname.startsWith("/super-admin") && (
+            <Link
+              href="/dashboard"
+              onClick={() => setMobileOpen(false)}
+              className="flex items-center gap-2 px-3 py-1.5 mb-2 rounded-lg text-xs font-semibold text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground border border-border"
+            >
+              ← Volver al ERP de {negocio.nombre}
+            </Link>
+          )}
+          {navigation.map((item: any) => {
+            const isActive = isSuperAdminView
+              ? currentMod === item.mod
+              : pathname === item.href ||
+                (item.href !== "/dashboard" && pathname.startsWith(item.href));
             const Icon = item.icon;
             return (
               <Link
@@ -146,14 +183,14 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
                 href={item.href}
                 onClick={() => setMobileOpen(false)}
                 className={cn(
-                  "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
+                  "flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-medium transition-colors",
                   isActive
-                    ? "bg-primary text-primary-foreground shadow-sm"
+                    ? "bg-primary text-primary-foreground shadow-sm font-semibold"
                     : "text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground"
                 )}
               >
                 <Icon className="h-4 w-4 shrink-0" />
-                <span>{item.name}</span>
+                <span className="truncate">{item.name}</span>
               </Link>
             );
           })}
@@ -346,7 +383,16 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
     <TenantProvider>
-      <DashboardContent>{children}</DashboardContent>
+      <Suspense
+        fallback={
+          <div className="min-h-screen flex flex-col items-center justify-center gap-3 bg-muted/20">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            <p className="text-sm text-muted-foreground font-medium">Cargando Operix ERP...</p>
+          </div>
+        }
+      >
+        <DashboardContent>{children}</DashboardContent>
+      </Suspense>
     </TenantProvider>
   );
 }

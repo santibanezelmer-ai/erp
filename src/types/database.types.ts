@@ -2524,6 +2524,209 @@ export type Database = {
         }
         Relationships: []
       }
+      soporte_config: {
+        Row: {
+          dias_habiles: number[]
+          dias_reapertura: number
+          email_soporte: string
+          horario_fin: string
+          horario_inicio: string
+          id: number
+          notificaciones_activas: boolean
+          sla_alta_horas: number
+          sla_baja_horas: number
+          sla_normal_horas: number
+          sla_urgente_horas: number
+          timezone: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          dias_habiles?: number[]
+          dias_reapertura?: number
+          email_soporte?: string
+          horario_fin?: string
+          horario_inicio?: string
+          id?: number
+          notificaciones_activas?: boolean
+          sla_alta_horas?: number
+          sla_baja_horas?: number
+          sla_normal_horas?: number
+          sla_urgente_horas?: number
+          timezone?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          dias_habiles?: number[]
+          dias_reapertura?: number
+          email_soporte?: string
+          horario_fin?: string
+          horario_inicio?: string
+          id?: number
+          notificaciones_activas?: boolean
+          sla_alta_horas?: number
+          sla_baja_horas?: number
+          sla_normal_horas?: number
+          sla_urgente_horas?: number
+          timezone?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
+      soporte_mensajes: {
+        Row: {
+          adjuntos: Json
+          autor_id: string
+          autor_nombre: string
+          autor_rol: string
+          created_at: string
+          es_nota_interna: boolean
+          id: string
+          mensaje: string
+          negocio_id: string
+          ticket_id: string
+        }
+        Insert: {
+          adjuntos?: Json
+          autor_id: string
+          autor_nombre: string
+          autor_rol?: string
+          created_at?: string
+          es_nota_interna?: boolean
+          id?: string
+          mensaje: string
+          negocio_id: string
+          ticket_id: string
+        }
+        Update: {
+          adjuntos?: Json
+          autor_id?: string
+          autor_nombre?: string
+          autor_rol?: string
+          created_at?: string
+          es_nota_interna?: boolean
+          id?: string
+          mensaje?: string
+          negocio_id?: string
+          ticket_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "soporte_mensajes_ticket_id_fkey"
+            columns: ["ticket_id"]
+            isOneToOne: false
+            referencedRelation: "soporte_tickets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      soporte_tickets: {
+        Row: {
+          adjuntos: Json
+          asunto: string
+          calificacion: number | null
+          categoria: string
+          cerrado_at: string | null
+          codigo: string
+          comentario_evaluacion: string | null
+          created_at: string
+          descripcion: string
+          estado: string
+          evaluado_at: string | null
+          id: string
+          negocio_id: string
+          numero: number
+          primera_respuesta_at: string | null
+          prioridad: string
+          reabierto_at: string | null
+          responsable_id: string | null
+          responsable_nombre: string | null
+          resuelto_at: string | null
+          sla_incumplido: boolean
+          sla_objetivo_minutos: number
+          solicitante_email: string | null
+          solicitante_id: string
+          solicitante_nombre: string
+          tiempo_primera_respuesta_habil_min: number | null
+          tiempo_primera_respuesta_min: number | null
+          tiempo_resolucion_habil_min: number | null
+          tiempo_resolucion_min: number | null
+          updated_at: string
+        }
+        Insert: {
+          adjuntos?: Json
+          asunto: string
+          calificacion?: number | null
+          categoria: string
+          cerrado_at?: string | null
+          comentario_evaluacion?: string | null
+          created_at?: string
+          descripcion: string
+          estado?: string
+          evaluado_at?: string | null
+          id?: string
+          negocio_id: string
+          numero?: number
+          primera_respuesta_at?: string | null
+          prioridad?: string
+          reabierto_at?: string | null
+          responsable_id?: string | null
+          responsable_nombre?: string | null
+          resuelto_at?: string | null
+          sla_incumplido?: boolean
+          sla_objetivo_minutos?: number
+          solicitante_email?: string | null
+          solicitante_id: string
+          solicitante_nombre: string
+          tiempo_primera_respuesta_habil_min?: number | null
+          tiempo_primera_respuesta_min?: number | null
+          tiempo_resolucion_habil_min?: number | null
+          tiempo_resolucion_min?: number | null
+          updated_at?: string
+        }
+        Update: {
+          adjuntos?: Json
+          asunto?: string
+          calificacion?: number | null
+          categoria?: string
+          cerrado_at?: string | null
+          comentario_evaluacion?: string | null
+          created_at?: string
+          descripcion?: string
+          estado?: string
+          evaluado_at?: string | null
+          id?: string
+          negocio_id?: string
+          numero?: number
+          primera_respuesta_at?: string | null
+          prioridad?: string
+          reabierto_at?: string | null
+          responsable_id?: string | null
+          responsable_nombre?: string | null
+          resuelto_at?: string | null
+          sla_incumplido?: boolean
+          sla_objetivo_minutos?: number
+          solicitante_email?: string | null
+          solicitante_id?: string
+          solicitante_nombre?: string
+          tiempo_primera_respuesta_habil_min?: number | null
+          tiempo_primera_respuesta_min?: number | null
+          tiempo_resolucion_habil_min?: number | null
+          tiempo_resolucion_min?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "soporte_tickets_negocio_id_fkey"
+            columns: ["negocio_id"]
+            isOneToOne: false
+            referencedRelation: "negocios"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       reservas: {
         Row: {
           area_id: string | null

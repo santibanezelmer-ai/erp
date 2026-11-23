@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { PLANES, formatPrecio, type Ciclo, type PlanId } from "@/lib/mercadopago";
@@ -51,7 +51,7 @@ interface RecoveryOfferState {
   promocionVenceAt: string | null;
 }
 
-export default function PlanesPage() {
+function PlanesPageInner() {
   const { negocio, reloadTenant } = useTenant();
   const searchParams = useSearchParams();
   const [cicloGlobal, setCicloGlobal] = useState<Ciclo>("monthly");
@@ -489,5 +489,19 @@ export default function PlanesPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function PlanesPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-[40vh] flex items-center justify-center">
+          <Loader2 className="h-6 w-6 animate-spin text-primary" />
+        </div>
+      }
+    >
+      <PlanesPageInner />
+    </Suspense>
   );
 }

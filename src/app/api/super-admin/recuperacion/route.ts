@@ -56,12 +56,26 @@ export async function GET() {
     }
 
     const config = await loadRecuperacionConfig(auth.client);
-    const stores = await computeAllStoresActivityAndCampaigns(auth.client, config);
+    const [stores, emailLogsRes] = await Promise.all([
+      computeAllStoresActivityAndCampaigns(auth.client, config),
+      auth.client
+        .from("email_send_log")
+        .select("*")
+        .in("template_name", ["recuperacion_inactividad_12d", "recuperacion_seguimiento_5d"])
+        .order("created_at", { ascending: false })
+        .limit(300),
+    ]);
 
-    // Calcular métricas solicitadas para la sección "Recuperación de clientes"
+    const emailLogs = emailLogsRes.data || [];
+
+    // Calcular métricas solicitadas para el Centro de Recuperación de Clientes
     const tiendasInactivas = stores.filter((s) => s.is_inactive_threshold_met).length;
     const campañasEnviadas = stores.filter((s) => Boolean(s.campaign?.correo_1_enviado_at));
     const tiendasRecibieronCorreos = campañasEnviadas.length;
+
+    const totalCorreosEnviados =
+      campañasEnviadas.length +
+      campañasEnviadas.filter((s) => Boolean(s.campaign?.correo_2_enviado_at)).length;
 
     const correosEntregados = campañasEnviadas.filter(
       (s) =>
@@ -71,6 +85,14 @@ export async function GET() {
         s.campaign?.correo_1_estado === "abierto" ||
         s.campaign?.correo_1_estado === "clic" ||
         s.campaign?.correo_1_estado === "enviado"
+    ).length;
+
+    const correosRechazados = campañasEnviadas.filter(
+      (s) =>
+        s.campaign?.correo_1_estado === "rebotado" ||
+        s.campaign?.correo_1_estado === "fallido" ||
+        s.campaign?.correo_2_estado === "rebotado" ||
+        s.campaign?.correo_2_estado === "fallido"
     ).length;
 
     const correosAbiertos = campañasEnviadas.filter(
@@ -142,7 +164,9 @@ export async function GET() {
       metrics: {
         tiendasInactivas,
         tiendasRecibieronCorreos,
+        totalCorreosEnviados,
         correosEntregados,
+        correosRechazados,
         correosAbiertos,
         clicsBoton,
         promocionesAceptadas,
@@ -155,6 +179,7 @@ export async function GET() {
         step2: previewStep2,
       },
       stores,
+      emailLogs,
     });
   } catch (err: any) {
     console.error("[SuperAdmin Recuperacion GET]:", err);

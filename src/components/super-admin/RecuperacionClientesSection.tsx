@@ -31,7 +31,11 @@ import {
   Clock,
   Sparkles,
   MailOpen,
-  AlertCircle,
+  XCircle,
+  Search,
+  FileText,
+  Calendar,
+  Activity,
 } from "lucide-react";
 import { toast } from "sonner";
 import type { RecuperacionConfig, StoreRealActivitySummary } from "@/lib/recuperacion.server";
@@ -39,13 +43,26 @@ import type { RecuperacionConfig, StoreRealActivitySummary } from "@/lib/recuper
 interface RecuperacionMetrics {
   tiendasInactivas: number;
   tiendasRecibieronCorreos: number;
+  totalCorreosEnviados: number;
   correosEntregados: number;
+  correosRechazados: number;
   correosAbiertos: number;
   clicsBoton: number;
   promocionesAceptadas: number;
   tiendasRecuperadas: number;
   tasaRecuperacion: number;
   mesesGratuitosOtorgados: number;
+}
+
+interface EmailSendLogRow {
+  id: string;
+  recipient_email: string;
+  template_name: string;
+  status: string;
+  message_id: string | null;
+  error_message: string | null;
+  metadata: any;
+  created_at: string;
 }
 
 export function RecuperacionClientesSection() {
@@ -58,9 +75,19 @@ export function RecuperacionClientesSection() {
   const [resendConfigured, setResendConfigured] = useState(false);
   const [metrics, setMetrics] = useState<RecuperacionMetrics | null>(null);
   const [stores, setStores] = useState<StoreRealActivitySummary[]>([]);
-  const [filterView, setFilterView] = useState<"inactivas" | "enviadas" | "recuperadas" | "todas">(
-    "inactivas"
-  );
+  const [emailLogs, setEmailLogs] = useState<EmailSendLogRow[]>([]);
+
+  // Filtros por estado, búsqueda y fecha
+  const [filterView, setFilterView] = useState<
+    "inactivas" | "enviadas" | "rechazadas" | "recuperadas" | "todas"
+  >("inactivas");
+  const [searchText, setSearchText] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+
+  // Ficha detallada de seguimiento por tienda
+  const [selectedStoreDossier, setSelectedStoreDossier] =
+    useState<StoreRealActivitySummary | null>(null);
 
   // Modal de configuración y editor/previsualizador de correos
   const [configModalOpen, setConfigModalOpen] = useState(false);
@@ -81,6 +108,7 @@ export function RecuperacionClientesSection() {
       setResendConfigured(Boolean(data.resendConfigured));
       setMetrics(data.metrics);
       setStores(data.stores || []);
+      setEmailLogs(data.emailLogs || []);
       if (data.previews?.step1) {
         setPreviewHtml(data.previews.step1.html);
         setPreviewSubject(data.previews.step1.subject);
@@ -97,14 +125,61 @@ export function RecuperacionClientesSection() {
   }, []);
 
   const filteredStores = useMemo(() => {
+    const q = searchText.trim().toLowerCase();
+    const fromMs = dateFrom ? new Date(`${dateFrom}T00:00:00`).getTime() : null;
+    const toMs = dateTo ? new Date(`${dateTo}T23:59:59`).getTime() : null;
+
     return stores.filter((s) => {
-      if (filterView === "inactivas") return s.is_inactive_threshold_met;
-      if (filterView === "enviadas") return Boolean(s.campaign?.correo_1_enviado_at);
-      if (filterView === "recuperadas")
-        return Boolean(s.campaign?.tienda_recuperada) || s.campaign?.estado_promocion === "aceptada";
+      if (filterView === "inactivas" && !s.is_inactive_threshold_met) return false;
+      if (filterView === "enviadas" && !s.campaign?.correo_1_enviado_at) return false;
+      if (
+        filterView === "rechazadas" &&
+        s.campaign?.correo_1_estado !== "rebotado" &&
+        s.campaign?.correo_1_estado !== "fallido" &&
+        s.campaign?.correo_2_estado !== "rebotado" &&
+        s.campaign?.correo_2_estado !== "fallido"
+      ) {
+        return false;
+      }
+      if (
+        filterView === "recuperadas" &&
+        !s.campaign?.tienda_recuperada &&
+        s.campaign?.estado_promocion !== "aceptada"
+      ) {
+        return false;
+      }
+
+      if (q) {
+        const matchName = s.nombre.toLowerCase().includes(q);
+        const matchSlug = s.slug.toLowerCase().includes(q);
+        const matchEmail = s.owner_email?.toLowerCase().includes(q);
+        if (!matchName && !matchSlug && !matchEmail) return false;
+      }
+
+      if (fromMs || toMs) {
+        const refIso =
+          s.campaign?.correo_1_enviado_at ||
+          s.campaign?.inactividad_detectada_at ||
+          s.last_real_activity_at;
+        const refMs = new Date(refIso).getTime();
+        if (fromMs && refMs < fromMs) return false;
+        if (toMs && refMs > toMs) return false;
+      }
+
       return true;
     });
-  }, [stores, filterView]);
+  }, [stores, filterView, searchText, dateFrom, dateTo]);
+
+  const dossierEmails = useMemo(() => {
+    if (!selectedStoreDossier) return [];
+    const targetId = selectedStoreDossier.negocio_id;
+    const targetEmail = selectedStoreDossier.owner_email?.toLowerCase();
+    return emailLogs.filter(
+      (l) =>
+        l.metadata?.negocio_id === targetId ||
+        (targetEmail && l.recipient_email?.toLowerCase() === targetEmail)
+    );
+  }, [selectedStoreDossier, emailLogs]);
 
   const handleSaveConfig = async (e?: React.FormEvent) => {
     e?.preventDefault();
@@ -166,7 +241,7 @@ export function RecuperacionClientesSection() {
         setPreviewHtml(data.preview.html);
         setPreviewSubject(data.preview.subject);
       }
-    } catch {} finally {
+    } catch { } finally {
       setLoadingPreview(false);
     }
   };
@@ -186,7 +261,7 @@ export function RecuperacionClientesSection() {
         );
       } else {
         toast.success(
-          `Detección completada: ${data.sentStep1} correos de reactivación y ${data.sentStep2} de 2° seguimiento enviados.`
+          `Detección completada en ${data.durationMs ?? 0}ms: ${data.sentStep1} correos de reactivación y ${data.sentStep2} de 2° seguimiento enviados.`
         );
       }
       await loadRecuperacionData();
@@ -218,8 +293,7 @@ export function RecuperacionClientesSection() {
       if (!res.ok) throw new Error(data.error || "No se pudo enviar el correo");
 
       toast.success(
-        `Correo ${step === 1 ? "de reactivación" : "de 2° seguimiento"} enviado a ${
-          store.owner_email
+        `Correo ${step === 1 ? "de reactivación" : "de 2° seguimiento"} enviado a ${store.owner_email
         } vía Resend`
       );
       await loadRecuperacionData();
@@ -242,15 +316,15 @@ export function RecuperacionClientesSection() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       {/* Barra de Estado y Controles Rápidos de Automatización */}
-      <Card className="border-primary/20 bg-card">
-        <CardContent className="p-4 sm:p-5 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+      <Card className="border-border bg-card shadow-2xs">
+        <CardContent className="p-4 sm:p-5 flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4">
           <div className="space-y-1">
             <div className="flex items-center gap-2 flex-wrap">
               <h3 className="text-base font-bold text-foreground flex items-center gap-1.5">
                 <Sparkles className="h-4 w-4 text-primary" />
-                Motor Automático de Recuperación de Clientes
+                Centro de Recuperación de Clientes
               </h3>
               <Badge
                 variant={config?.automatizacion_activa ? "default" : "secondary"}
@@ -272,17 +346,17 @@ export function RecuperacionClientesSection() {
               </Badge>
             </div>
             <p className="text-xs text-muted-foreground">
-              Detecta tiendas con <strong>{config?.dias_inactividad ?? 12} días</strong> sin actividad real, ofrece{" "}
+              Regla activa: <strong>{config?.dias_inactividad ?? 12} días</strong> sin actividad real → 1° Correo con oferta de{" "}
               <strong>
                 {config?.dias_beneficio ?? 30} días gratis (Plan{" "}
                 {(config?.plan_beneficio || "pro").toUpperCase()})
               </strong>{" "}
-              y envía un 2° seguimiento a los{" "}
-              <strong>{config?.dias_segundo_seguimiento ?? 5} días</strong> si continúa inactiva.
+              → 2° seguimiento a los{" "}
+              <strong>+{config?.dias_segundo_seguimiento ?? 5} días</strong> si continúa inactiva.
             </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2.5">
             <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-border bg-muted/30 text-xs">
               <Switch
                 checked={Boolean(config?.automatizacion_activa)}
@@ -302,17 +376,17 @@ export function RecuperacionClientesSection() {
             <Button
               variant="outline"
               size="sm"
-              className="gap-1.5 text-xs"
+              className="gap-1.5 text-xs h-8"
               onClick={() => handleOpenPreview(1)}
             >
               <Eye className="h-3.5 w-3.5" />
-              Previsualizar y Editar Correos
+              Plantillas de Correo
             </Button>
 
             <Button
               variant="outline"
               size="sm"
-              className="gap-1.5 text-xs"
+              className="gap-1.5 text-xs h-8"
               onClick={() => setConfigModalOpen(true)}
             >
               <Settings2 className="h-3.5 w-3.5" />
@@ -323,7 +397,7 @@ export function RecuperacionClientesSection() {
               size="sm"
               onClick={handleRunAutomatedCycleNow}
               disabled={runningCron}
-              className="gap-1.5 text-xs font-bold"
+              className="gap-1.5 text-xs font-bold h-8"
             >
               {runningCron ? (
                 <>
@@ -333,7 +407,7 @@ export function RecuperacionClientesSection() {
               ) : (
                 <>
                   <Play className="h-3.5 w-3.5" />
-                  Ejecutar Detección Ahora
+                  Ejecutar Detección
                 </>
               )}
             </Button>
@@ -341,140 +415,115 @@ export function RecuperacionClientesSection() {
         </CardContent>
       </Card>
 
-      {/* 9 Indicadores solicitados para Recuperación de clientes */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-9 gap-3">
-        <Card>
-          <CardHeader className="p-3 pb-1">
-            <CardTitle className="text-[11px] font-semibold uppercase text-muted-foreground flex items-center justify-between">
-              <span>Tiendas Inactivas</span>
-              <Clock className="h-3.5 w-3.5 text-amber-500" />
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-3 pt-1">
-            <div className="text-2xl font-bold">{metrics?.tiendasInactivas ?? 0}</div>
-            <p className="text-[10px] text-muted-foreground">
-              ≥ {config?.dias_inactividad ?? 12} días sin uso
-            </p>
-          </CardContent>
-        </Card>
+      {/* 10 Indicadores del Embudo de Recuperación */}
+      <div className="grid grid-cols-2 sm:grid-cols-5 lg:grid-cols-10 gap-2.5">
+        <div className="p-3 rounded-xl border border-border bg-card">
+          <div className="text-[10px] font-semibold uppercase text-muted-foreground flex items-center justify-between">
+            <span>Inactivas</span>
+            <Clock className="h-3.5 w-3.5 text-amber-500" />
+          </div>
+          <div className="text-xl font-bold mt-1">{metrics?.tiendasInactivas ?? 0}</div>
+          <div className="text-[10px] text-muted-foreground">≥ {config?.dias_inactividad ?? 12}d sin uso</div>
+        </div>
 
-        <Card>
-          <CardHeader className="p-3 pb-1">
-            <CardTitle className="text-[11px] font-semibold uppercase text-muted-foreground flex items-center justify-between">
-              <span>Recibieron Correo</span>
-              <Mail className="h-3.5 w-3.5 text-blue-500" />
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-3 pt-1">
-            <div className="text-2xl font-bold">{metrics?.tiendasRecibieronCorreos ?? 0}</div>
-            <p className="text-[10px] text-muted-foreground">Campañas iniciadas</p>
-          </CardContent>
-        </Card>
+        <div className="p-3 rounded-xl border border-border bg-card">
+          <div className="text-[10px] font-semibold uppercase text-muted-foreground flex items-center justify-between">
+            <span>Campañas</span>
+            <Store className="h-3.5 w-3.5 text-blue-500" />
+          </div>
+          <div className="text-xl font-bold mt-1">{metrics?.tiendasRecibieronCorreos ?? 0}</div>
+          <div className="text-[10px] text-muted-foreground">Tiendas contactadas</div>
+        </div>
 
-        <Card>
-          <CardHeader className="p-3 pb-1">
-            <CardTitle className="text-[11px] font-semibold uppercase text-muted-foreground flex items-center justify-between">
-              <span>Entregados</span>
-              <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-3 pt-1">
-            <div className="text-2xl font-bold">{metrics?.correosEntregados ?? 0}</div>
-            <p className="text-[10px] text-muted-foreground">Vía Resend</p>
-          </CardContent>
-        </Card>
+        <div className="p-3 rounded-xl border border-border bg-card">
+          <div className="text-[10px] font-semibold uppercase text-muted-foreground flex items-center justify-between">
+            <span>Enviados</span>
+            <Mail className="h-3.5 w-3.5 text-sky-500" />
+          </div>
+          <div className="text-xl font-bold mt-1">
+            {metrics?.totalCorreosEnviados ?? metrics?.tiendasRecibieronCorreos ?? 0}
+          </div>
+          <div className="text-[10px] text-muted-foreground">1° + 2° seguimiento</div>
+        </div>
 
-        <Card>
-          <CardHeader className="p-3 pb-1">
-            <CardTitle className="text-[11px] font-semibold uppercase text-muted-foreground flex items-center justify-between">
-              <span>Abiertos</span>
-              <MailOpen className="h-3.5 w-3.5 text-indigo-500" />
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-3 pt-1">
-            <div className="text-2xl font-bold">{metrics?.correosAbiertos ?? 0}</div>
-            <p className="text-[10px] text-muted-foreground">Lecturas confirmadas</p>
-          </CardContent>
-        </Card>
+        <div className="p-3 rounded-xl border border-border bg-card">
+          <div className="text-[10px] font-semibold uppercase text-muted-foreground flex items-center justify-between">
+            <span>Entregados</span>
+            <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
+          </div>
+          <div className="text-xl font-bold mt-1">{metrics?.correosEntregados ?? 0}</div>
+          <div className="text-[10px] text-muted-foreground">Confirmados Resend</div>
+        </div>
 
-        <Card>
-          <CardHeader className="p-3 pb-1">
-            <CardTitle className="text-[11px] font-semibold uppercase text-muted-foreground flex items-center justify-between">
-              <span>Clics Botón</span>
-              <MousePointerClick className="h-3.5 w-3.5 text-primary" />
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-3 pt-1">
-            <div className="text-2xl font-bold">{metrics?.clicsBoton ?? 0}</div>
-            <p className="text-[10px] text-muted-foreground">En Activar Mes Gratis</p>
-          </CardContent>
-        </Card>
+        <div className="p-3 rounded-xl border border-border bg-card">
+          <div className="text-[10px] font-semibold uppercase text-muted-foreground flex items-center justify-between">
+            <span>Rechazados</span>
+            <XCircle className="h-3.5 w-3.5 text-destructive" />
+          </div>
+          <div className="text-xl font-bold mt-1 text-destructive">
+            {metrics?.correosRechazados ?? 0}
+          </div>
+          <div className="text-[10px] text-muted-foreground">Rebotes / fallidos</div>
+        </div>
 
-        <Card>
-          <CardHeader className="p-3 pb-1">
-            <CardTitle className="text-[11px] font-semibold uppercase text-muted-foreground flex items-center justify-between">
-              <span>Promos Aceptadas</span>
-              <Gift className="h-3.5 w-3.5 text-emerald-600" />
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-3 pt-1">
-            <div className="text-2xl font-bold text-emerald-600">
-              {metrics?.promocionesAceptadas ?? 0}
-            </div>
-            <p className="text-[10px] text-muted-foreground">Confirmadas en panel</p>
-          </CardContent>
-        </Card>
+        <div className="p-3 rounded-xl border border-border bg-card">
+          <div className="text-[10px] font-semibold uppercase text-muted-foreground flex items-center justify-between">
+            <span>Aperturas</span>
+            <MailOpen className="h-3.5 w-3.5 text-indigo-500" />
+          </div>
+          <div className="text-xl font-bold mt-1">{metrics?.correosAbiertos ?? 0}</div>
+          <div className="text-[10px] text-muted-foreground">Lecturas confirmadas</div>
+        </div>
 
-        <Card>
-          <CardHeader className="p-3 pb-1">
-            <CardTitle className="text-[11px] font-semibold uppercase text-muted-foreground flex items-center justify-between">
-              <span>Recuperadas</span>
-              <Store className="h-3.5 w-3.5 text-emerald-500" />
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-3 pt-1">
-            <div className="text-2xl font-bold">{metrics?.tiendasRecuperadas ?? 0}</div>
-            <p className="text-[10px] text-muted-foreground">Volvieron al ERP</p>
-          </CardContent>
-        </Card>
+        <div className="p-3 rounded-xl border border-border bg-card">
+          <div className="text-[10px] font-semibold uppercase text-muted-foreground flex items-center justify-between">
+            <span>Clics CTA</span>
+            <MousePointerClick className="h-3.5 w-3.5 text-primary" />
+          </div>
+          <div className="text-xl font-bold mt-1">{metrics?.clicsBoton ?? 0}</div>
+          <div className="text-[10px] text-muted-foreground">Botón reactivación</div>
+        </div>
 
-        <Card>
-          <CardHeader className="p-3 pb-1">
-            <CardTitle className="text-[11px] font-semibold uppercase text-muted-foreground flex items-center justify-between">
-              <span>Tasa Recuperación</span>
-              <TrendingUp className="h-3.5 w-3.5 text-primary" />
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-3 pt-1">
-            <div className="text-2xl font-bold">{metrics?.tasaRecuperacion ?? 0}%</div>
-            <p className="text-[10px] text-muted-foreground">Sobre contactadas</p>
-          </CardContent>
-        </Card>
+        <div className="p-3 rounded-xl border border-border bg-card">
+          <div className="text-[10px] font-semibold uppercase text-muted-foreground flex items-center justify-between">
+            <span>Aceptadas</span>
+            <Gift className="h-3.5 w-3.5 text-emerald-600" />
+          </div>
+          <div className="text-xl font-bold mt-1 text-emerald-600">
+            {metrics?.promocionesAceptadas ?? 0}
+          </div>
+          <div className="text-[10px] text-muted-foreground">Mes gratis activado</div>
+        </div>
 
-        <Card className="col-span-2 sm:col-span-1">
-          <CardHeader className="p-3 pb-1">
-            <CardTitle className="text-[11px] font-semibold uppercase text-muted-foreground flex items-center justify-between">
-              <span>Meses Gratis</span>
-              <Sparkles className="h-3.5 w-3.5 text-amber-500" />
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-3 pt-1">
-            <div className="text-2xl font-bold">{metrics?.mesesGratuitosOtorgados ?? 0}</div>
-            <p className="text-[10px] text-muted-foreground">Beneficios otorgados</p>
-          </CardContent>
-        </Card>
+        <div className="p-3 rounded-xl border border-border bg-card">
+          <div className="text-[10px] font-semibold uppercase text-muted-foreground flex items-center justify-between">
+            <span>Recuperadas</span>
+            <Activity className="h-3.5 w-3.5 text-emerald-500" />
+          </div>
+          <div className="text-xl font-bold mt-1">{metrics?.tiendasRecuperadas ?? 0}</div>
+          <div className="text-[10px] text-muted-foreground">Volvieron al ERP</div>
+        </div>
+
+        <div className="p-3 rounded-xl border border-border bg-card">
+          <div className="text-[10px] font-semibold uppercase text-muted-foreground flex items-center justify-between">
+            <span>Conversión</span>
+            <TrendingUp className="h-3.5 w-3.5 text-primary" />
+          </div>
+          <div className="text-xl font-bold mt-1">{metrics?.tasaRecuperacion ?? 0}%</div>
+          <div className="text-[10px] text-muted-foreground">Tasa recuperación</div>
+        </div>
       </div>
 
-      {/* Tabla de Tiendas Inactivas y Seguimiento de Correos */}
+      {/* Tabla de Tiendas Inactivas, Filtros por Estado/Fecha y Ficha de Seguimiento */}
       <Card>
         <CardHeader className="pb-3">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
             <div>
               <CardTitle className="text-base font-bold">
-                Seguimiento de Inactividad, Correos y Promociones
+                Seguimiento de Inactividad, Campañas y Promociones
               </CardTitle>
               <CardDescription className="text-xs">
-                Actividad calculada según última sesión, venta, pedido, inventario o acción real en el ERP (excluyendo procesos automáticos).
+                Haz clic en <strong>Ficha</strong> para inspeccionar el historial completo de campañas, eventos de Resend y promociones de cada tienda.
               </CardDescription>
             </div>
 
@@ -493,7 +542,15 @@ export function RecuperacionClientesSection() {
                 className="h-8 text-xs"
                 onClick={() => setFilterView("enviadas")}
               >
-                Con Correo Enviado ({metrics?.tiendasRecibieronCorreos ?? 0})
+                Campañas Iniciadas ({metrics?.tiendasRecibieronCorreos ?? 0})
+              </Button>
+              <Button
+                variant={filterView === "rechazadas" ? "default" : "outline"}
+                size="sm"
+                className="h-8 text-xs"
+                onClick={() => setFilterView("rechazadas")}
+              >
+                Rebotes / Fallidos ({metrics?.correosRechazados ?? 0})
               </Button>
               <Button
                 variant={filterView === "recuperadas" ? "default" : "outline"}
@@ -511,37 +568,83 @@ export function RecuperacionClientesSection() {
               >
                 Todas ({stores.length})
               </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-8 w-8 p-0"
-                onClick={loadRecuperacionData}
-                title="Refrescar"
-              >
-                <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
-              </Button>
             </div>
+          </div>
+
+          {/* Barra de búsqueda y filtro por rango de fechas */}
+          <div className="flex flex-wrap items-center gap-2 pt-2">
+            <div className="relative flex-1 min-w-[220px] max-w-xs">
+              <Search className="h-3.5 w-3.5 text-muted-foreground absolute left-2.5 top-2.5" />
+              <Input
+                placeholder="Buscar por tienda, slug o correo..."
+                value={searchText}
+                onChange={(e) => setSearchText(e.target.value)}
+                className="pl-8 h-8 text-xs"
+              />
+            </div>
+
+            <div className="flex items-center gap-1.5 text-xs">
+              <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
+              <span className="text-muted-foreground">Desde:</span>
+              <Input
+                type="date"
+                value={dateFrom}
+                onChange={(e) => setDateFrom(e.target.value)}
+                className="h-8 w-36 text-xs"
+              />
+              <span className="text-muted-foreground">Hasta:</span>
+              <Input
+                type="date"
+                value={dateTo}
+                onChange={(e) => setDateTo(e.target.value)}
+                className="h-8 w-36 text-xs"
+              />
+              {(dateFrom || dateTo || searchText) && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 text-xs"
+                  onClick={() => {
+                    setDateFrom("");
+                    setDateTo("");
+                    setSearchText("");
+                  }}
+                >
+                  Limpiar
+                </Button>
+              )}
+            </div>
+
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 ml-auto gap-1 text-xs"
+              onClick={loadRecuperacionData}
+            >
+              <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
+              Actualizar
+            </Button>
           </div>
         </CardHeader>
 
         <CardContent>
           {filteredStores.length === 0 ? (
             <div className="py-12 text-center text-sm text-muted-foreground">
-              No hay tiendas en esta vista actualmente.
+              No se encontraron tiendas con los criterios de filtro actuales.
             </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm text-left border-collapse">
                 <thead>
-                  <tr className="border-b border-border text-xs uppercase text-muted-foreground">
-                    <th className="py-3 px-3 font-semibold">Tienda / Destinatario</th>
-                    <th className="py-3 px-3 font-semibold">Última Actividad Real</th>
-                    <th className="py-3 px-3 font-semibold">Inactividad</th>
-                    <th className="py-3 px-3 font-semibold">1° Correo (Reactivación)</th>
-                    <th className="py-3 px-3 font-semibold">2° Seguimiento (+{config?.dias_segundo_seguimiento ?? 5}d)</th>
-                    <th className="py-3 px-3 font-semibold">Apertura / Clic</th>
-                    <th className="py-3 px-3 font-semibold">Estado Promoción</th>
-                    <th className="py-3 px-3 font-semibold text-right">Acciones</th>
+                  <tr className="border-b border-border text-[11px] uppercase text-muted-foreground">
+                    <th className="py-2.5 px-3 font-semibold">Tienda / Destinatario</th>
+                    <th className="py-2.5 px-3 font-semibold">Última Actividad Real</th>
+                    <th className="py-2.5 px-3 font-semibold">Inactividad</th>
+                    <th className="py-2.5 px-3 font-semibold">1° Correo (12d)</th>
+                    <th className="py-2.5 px-3 font-semibold">2° Correo (+{config?.dias_segundo_seguimiento ?? 5}d)</th>
+                    <th className="py-2.5 px-3 font-semibold">Apertura / Clic</th>
+                    <th className="py-2.5 px-3 font-semibold">Promoción / Estado</th>
+                    <th className="py-2.5 px-3 font-semibold text-right">Acciones</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
@@ -552,7 +655,7 @@ export function RecuperacionClientesSection() {
 
                     return (
                       <tr key={st.negocio_id} className="hover:bg-muted/40 transition-colors">
-                        <td className="py-3 px-3">
+                        <td className="py-2.5 px-3">
                           <div className="font-semibold text-foreground">{st.nombre}</div>
                           <div className="text-xs text-muted-foreground">/{st.slug}</div>
                           <div className="text-[11px] text-muted-foreground truncate max-w-[200px]">
@@ -562,7 +665,7 @@ export function RecuperacionClientesSection() {
                           </div>
                         </td>
 
-                        <td className="py-3 px-3 text-xs">
+                        <td className="py-2.5 px-3 text-xs">
                           <div className="font-medium text-foreground">
                             {new Date(st.last_real_activity_at).toLocaleDateString("es-CL", {
                               day: "2-digit",
@@ -575,7 +678,7 @@ export function RecuperacionClientesSection() {
                           </div>
                         </td>
 
-                        <td className="py-3 px-3">
+                        <td className="py-2.5 px-3">
                           <Badge
                             variant="outline"
                             className={
@@ -586,18 +689,20 @@ export function RecuperacionClientesSection() {
                           >
                             {st.inactive_days} {st.inactive_days === 1 ? "día" : "días"}
                           </Badge>
-                          {camp?.inactividad_detectada_at && (
-                            <div className="text-[10px] text-muted-foreground mt-0.5">
-                              Detectada:{" "}
-                              {new Date(camp.inactividad_detectada_at).toLocaleDateString("es-CL")}
-                            </div>
-                          )}
                         </td>
 
-                        <td className="py-3 px-3 text-xs">
+                        <td className="py-2.5 px-3 text-xs">
                           {camp?.correo_1_enviado_at ? (
                             <div>
-                              <Badge variant="secondary" className="text-[10px] uppercase font-bold">
+                              <Badge
+                                variant={
+                                  camp.correo_1_estado === "rebotado" ||
+                                    camp.correo_1_estado === "fallido"
+                                    ? "destructive"
+                                    : "secondary"
+                                }
+                                className="text-[10px] uppercase font-bold"
+                              >
                                 {camp.correo_1_estado}
                               </Badge>
                               <div className="text-[10px] text-muted-foreground mt-0.5">
@@ -609,10 +714,18 @@ export function RecuperacionClientesSection() {
                           )}
                         </td>
 
-                        <td className="py-3 px-3 text-xs">
+                        <td className="py-2.5 px-3 text-xs">
                           {camp?.correo_2_enviado_at ? (
                             <div>
-                              <Badge variant="secondary" className="text-[10px] uppercase font-bold">
+                              <Badge
+                                variant={
+                                  camp.correo_2_estado === "rebotado" ||
+                                    camp.correo_2_estado === "fallido"
+                                    ? "destructive"
+                                    : "secondary"
+                                }
+                                className="text-[10px] uppercase font-bold"
+                              >
                                 {camp.correo_2_estado || "enviado"}
                               </Badge>
                               <div className="text-[10px] text-muted-foreground mt-0.5">
@@ -624,7 +737,7 @@ export function RecuperacionClientesSection() {
                           )}
                         </td>
 
-                        <td className="py-3 px-3 text-xs">
+                        <td className="py-2.5 px-3 text-xs">
                           <div className="space-y-0.5">
                             {camp?.primer_abierto_at ? (
                               <div className="text-[11px] text-indigo-600 font-medium">
@@ -641,7 +754,7 @@ export function RecuperacionClientesSection() {
                           </div>
                         </td>
 
-                        <td className="py-3 px-3 text-xs">
+                        <td className="py-2.5 px-3 text-xs">
                           {camp ? (
                             <div>
                               <Badge
@@ -655,19 +768,12 @@ export function RecuperacionClientesSection() {
                                 }
                               >
                                 {camp.estado_promocion === "aceptada"
-                                  ? `ACEPTADA (${camp.dias_otorgados}D)`
+                                  ? `UTILIZADA (${camp.dias_otorgados}D)`
                                   : camp.estado_promocion.toUpperCase()}
                               </Badge>
-                              {camp.promocion_vence_at && (
-                                <div className="text-[10px] text-muted-foreground mt-0.5">
-                                  Vence:{" "}
-                                  {new Date(camp.promocion_vence_at).toLocaleDateString("es-CL")}
-                                </div>
-                              )}
-                              {camp.tienda_recuperada && camp.reactivada_at && (
-                                <div className="text-[10px] text-emerald-600 font-semibold">
-                                  Recuperada:{" "}
-                                  {new Date(camp.reactivada_at).toLocaleDateString("es-CL")}
+                              {camp.tienda_recuperada && (
+                                <div className="text-[10px] text-emerald-600 font-semibold mt-0.5">
+                                  Recuperada ✓
                                 </div>
                               )}
                             </div>
@@ -676,43 +782,49 @@ export function RecuperacionClientesSection() {
                           )}
                         </td>
 
-                        <td className="py-3 px-3 text-right">
+                        <td className="py-2.5 px-3 text-right">
                           <div className="inline-flex items-center gap-1.5">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-7 text-xs gap-1"
+                              onClick={() => setSelectedStoreDossier(st)}
+                            >
+                              <FileText className="h-3.5 w-3.5" />
+                              Ficha
+                            </Button>
+
                             {!camp?.correo_1_enviado_at ? (
                               <Button
                                 variant="default"
                                 size="sm"
-                                className="h-8 text-xs gap-1"
+                                className="h-7 text-xs gap-1"
                                 disabled={!st.owner_email || Boolean(sendingStoreId)}
                                 onClick={() => handleSendSingleStoreEmail(st, 1, false)}
                               >
                                 {sending1 ? (
-                                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                  <Loader2 className="h-3 w-3 animate-spin" />
                                 ) : (
-                                  <Send className="h-3.5 w-3.5" />
+                                  <Send className="h-3 w-3" />
                                 )}
-                                Enviar 1° Correo
+                                1° Correo
                               </Button>
                             ) : !camp.correo_2_enviado_at && !camp.tienda_recuperada ? (
                               <Button
                                 variant="outline"
                                 size="sm"
-                                className="h-8 text-xs gap-1 border-primary/30 text-primary"
+                                className="h-7 text-xs gap-1 border-primary/30 text-primary"
                                 disabled={!st.owner_email || Boolean(sendingStoreId)}
                                 onClick={() => handleSendSingleStoreEmail(st, 2, false)}
                               >
                                 {sending2 ? (
-                                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                  <Loader2 className="h-3 w-3 animate-spin" />
                                 ) : (
-                                  <Mail className="h-3.5 w-3.5" />
+                                  <Mail className="h-3 w-3" />
                                 )}
-                                Enviar 2° Seguimiento
+                                2° Correo
                               </Button>
-                            ) : (
-                              <Badge variant="outline" className="text-[10px]">
-                                {camp.tienda_recuperada ? "Tienda Recuperada ✓" : "Seguimiento Completo"}
-                              </Badge>
-                            )}
+                            ) : null}
                           </div>
                         </td>
                       </tr>
@@ -724,6 +836,271 @@ export function RecuperacionClientesSection() {
           )}
         </CardContent>
       </Card>
+
+      {/* MODAL: FICHA DE SEGUIMIENTO DE RECUPERACIÓN POR TIENDA */}
+      <Dialog
+        open={Boolean(selectedStoreDossier)}
+        onOpenChange={(o) => !o && setSelectedStoreDossier(null)}
+      >
+        <DialogContent className="sm:max-w-2xl max-h-[88vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FileText className="h-5 w-5 text-primary" />
+              Ficha de Seguimiento: {selectedStoreDossier?.nombre}
+            </DialogTitle>
+            <DialogDescription>
+              Slug: /{selectedStoreDossier?.slug} · Propietario:{" "}
+              <strong>{selectedStoreDossier?.owner_email || "No registrado"}</strong>
+            </DialogDescription>
+          </DialogHeader>
+
+          {selectedStoreDossier && (
+            <div className="space-y-4 text-xs">
+              {/* 1. Última Actividad Real y Estado de Reactivación */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="p-3 rounded-lg border border-border bg-muted/20">
+                  <div className="text-[10px] font-bold uppercase text-muted-foreground">
+                    Última Actividad Real
+                  </div>
+                  <div className="text-sm font-bold text-foreground mt-0.5">
+                    {new Date(selectedStoreDossier.last_real_activity_at).toLocaleString("es-CL")}
+                  </div>
+                  <div className="text-[11px] text-muted-foreground mt-0.5">
+                    Acción: {selectedStoreDossier.last_activity_type}
+                  </div>
+                </div>
+
+                <div className="p-3 rounded-lg border border-border bg-muted/20">
+                  <div className="text-[10px] font-bold uppercase text-muted-foreground">
+                    Días de Inactividad
+                  </div>
+                  <div className="text-sm font-bold text-foreground mt-0.5">
+                    {selectedStoreDossier.inactive_days} días consecutivos
+                  </div>
+                  <div className="text-[11px] text-muted-foreground mt-0.5">
+                    Umbral configurado: {config?.dias_inactividad ?? 12} días
+                  </div>
+                </div>
+
+                <div className="p-3 rounded-lg border border-border bg-muted/20">
+                  <div className="text-[10px] font-bold uppercase text-muted-foreground">
+                    Estado de Reactivación
+                  </div>
+                  <div className="mt-1">
+                    {selectedStoreDossier.campaign?.tienda_recuperada ? (
+                      <Badge className="bg-emerald-600 text-white text-[10px]">
+                        TIENDA RECUPERADA
+                      </Badge>
+                    ) : selectedStoreDossier.campaign?.correo_1_enviado_at ? (
+                      <Badge variant="secondary" className="text-[10px]">
+                        EN SEGUIMIENTO ACTIVO
+                      </Badge>
+                    ) : (
+                      <Badge variant="outline" className="text-[10px]">
+                        SIN CAMPAÑA INICIADA
+                      </Badge>
+                    )}
+                  </div>
+                  {selectedStoreDossier.campaign?.reactivada_at && (
+                    <div className="text-[11px] text-emerald-600 mt-1">
+                      Fecha:{" "}
+                      {new Date(selectedStoreDossier.campaign.reactivada_at).toLocaleDateString(
+                        "es-CL"
+                      )}{" "}
+                      ({selectedStoreDossier.campaign.origen_reactivacion || "ERP"})
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* 2. Promociones Ofrecidas y Utilizadas */}
+              <div className="p-3.5 rounded-lg border border-border bg-card space-y-2">
+                <div className="font-bold text-foreground uppercase text-[11px] flex items-center gap-1.5">
+                  <Gift className="h-3.5 w-3.5 text-primary" />
+                  Promoción de Recuperación (Uso Único por Tienda)
+                </div>
+                {selectedStoreDossier.campaign ? (
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
+                    <div>
+                      <span className="text-muted-foreground block text-[10px]">
+                        Beneficio Ofrecido
+                      </span>
+                      <span className="font-semibold">
+                        {selectedStoreDossier.campaign.dias_otorgados} días · Plan{" "}
+                        {selectedStoreDossier.campaign.plan_otorgado.toUpperCase()}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground block text-[10px]">
+                        Estado Promoción
+                      </span>
+                      <span className="font-semibold uppercase">
+                        {selectedStoreDossier.campaign.estado_promocion}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground block text-[10px]">
+                        Fecha Otorgamiento
+                      </span>
+                      <span className="font-semibold">
+                        {selectedStoreDossier.campaign.promocion_otorgada_at
+                          ? new Date(
+                            selectedStoreDossier.campaign.promocion_otorgada_at
+                          ).toLocaleDateString("es-CL")
+                          : "No utilizada aún"}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground block text-[10px]">
+                        Vencimiento Beneficio
+                      </span>
+                      <span className="font-semibold">
+                        {selectedStoreDossier.campaign.promocion_vence_at
+                          ? new Date(
+                            selectedStoreDossier.campaign.promocion_vence_at
+                          ).toLocaleDateString("es-CL")
+                          : "—"}
+                      </span>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-muted-foreground">
+                    Esta tienda aún no ha recibido una oferta de recuperación.
+                  </p>
+                )}
+              </div>
+
+              {/* 3. Línea de tiempo de Campañas y Eventos Resend */}
+              <div className="p-3.5 rounded-lg border border-border bg-card space-y-2.5">
+                <div className="font-bold text-foreground uppercase text-[11px] flex items-center gap-1.5">
+                  <Mail className="h-3.5 w-3.5 text-primary" />
+                  Historial de Campaña y Eventos de Resend
+                </div>
+
+                {selectedStoreDossier.campaign ? (
+                  <div className="space-y-2 divide-y divide-border">
+                    <div className="pt-1 flex items-center justify-between">
+                      <div>
+                        <span className="font-semibold">1° Correo de Reactivación (12 días)</span>
+                        <div className="text-[11px] text-muted-foreground">
+                          ID Resend: {selectedStoreDossier.campaign.correo_1_resend_id || "—"}
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <Badge variant="outline" className="text-[10px] uppercase">
+                          {selectedStoreDossier.campaign.correo_1_estado}
+                        </Badge>
+                        <div className="text-[10px] text-muted-foreground">
+                          {selectedStoreDossier.campaign.correo_1_enviado_at
+                            ? new Date(
+                              selectedStoreDossier.campaign.correo_1_enviado_at
+                            ).toLocaleString("es-CL")
+                            : "No enviado"}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="pt-2 flex items-center justify-between">
+                      <div>
+                        <span className="font-semibold">2° Correo de Seguimiento (+5 días)</span>
+                        <div className="text-[11px] text-muted-foreground">
+                          ID Resend: {selectedStoreDossier.campaign.correo_2_resend_id || "—"}
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <Badge variant="outline" className="text-[10px] uppercase">
+                          {selectedStoreDossier.campaign.correo_2_estado || "pendiente"}
+                        </Badge>
+                        <div className="text-[10px] text-muted-foreground">
+                          {selectedStoreDossier.campaign.correo_2_enviado_at
+                            ? new Date(
+                              selectedStoreDossier.campaign.correo_2_enviado_at
+                            ).toLocaleString("es-CL")
+                            : "No enviado"}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="pt-2 grid grid-cols-3 gap-2 text-[11px]">
+                      <div>
+                        <span className="text-muted-foreground block">Entregado:</span>
+                        <span className="font-medium">
+                          {selectedStoreDossier.campaign.correo_1_entregado_at
+                            ? new Date(
+                              selectedStoreDossier.campaign.correo_1_entregado_at
+                            ).toLocaleString("es-CL")
+                            : "—"}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground block">Primera Apertura:</span>
+                        <span className="font-medium">
+                          {selectedStoreDossier.campaign.primer_abierto_at
+                            ? new Date(
+                              selectedStoreDossier.campaign.primer_abierto_at
+                            ).toLocaleString("es-CL")
+                            : "—"}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground block">Primer Clic CTA:</span>
+                        <span className="font-medium">
+                          {selectedStoreDossier.campaign.primer_clic_at
+                            ? new Date(
+                              selectedStoreDossier.campaign.primer_clic_at
+                            ).toLocaleString("es-CL")
+                            : "—"}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-muted-foreground">Sin eventos de campaña registrados.</p>
+                )}
+              </div>
+
+              {/* 4. Bitácora técnica de envíos (email_send_log) */}
+              <div className="p-3.5 rounded-lg border border-border bg-card space-y-2">
+                <div className="font-bold text-foreground uppercase text-[11px]">
+                  Bitácora de Correos Enviados ({dossierEmails.length})
+                </div>
+                {dossierEmails.length === 0 ? (
+                  <p className="text-muted-foreground">
+                    No hay registros en email_send_log para este comercio.
+                  </p>
+                ) : (
+                  <div className="divide-y divide-border max-h-40 overflow-y-auto">
+                    {dossierEmails.map((log) => (
+                      <div key={log.id} className="py-1.5 flex items-center justify-between">
+                        <div>
+                          <span className="font-medium">{log.template_name}</span>
+                          <span className="text-muted-foreground ml-2">
+                            ({log.recipient_email})
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Badge variant="outline" className="text-[10px] uppercase">
+                            {log.status}
+                          </Badge>
+                          <span className="text-[10px] text-muted-foreground">
+                            {new Date(log.created_at).toLocaleString("es-CL")}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" size="sm" onClick={() => setSelectedStoreDossier(null)}>
+              Cerrar Ficha
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* MODAL 1: CONFIGURACIÓN DE REGLAS Y PROMOCIÓN */}
       <Dialog open={configModalOpen} onOpenChange={setConfigModalOpen}>
@@ -904,7 +1281,6 @@ export function RecuperacionClientesSection() {
               </div>
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                {/* Editor */}
                 <div className="space-y-3">
                   <div className="space-y-1.5">
                     <Label>Asunto del Correo</Label>
@@ -962,7 +1338,6 @@ export function RecuperacionClientesSection() {
                   </Button>
                 </div>
 
-                {/* Vista Previa HTML Real */}
                 <div className="rounded-xl border border-border overflow-hidden bg-slate-100 flex flex-col">
                   <div className="bg-slate-800 text-white px-3 py-2 text-xs">
                     <div className="opacity-75">

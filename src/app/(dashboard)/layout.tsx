@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { TenantProvider, useTenant } from "@/contexts/tenant-context";
 import { Button } from "@/components/ui/button";
 import {
@@ -17,6 +17,7 @@ import {
   UtensilsCrossed,
   Layers,
   ChefHat,
+  CalendarDays,
   BarChart3,
   Settings,
   LogOut,
@@ -27,15 +28,34 @@ import {
   Loader2,
   ExternalLink,
   CreditCard,
+  ShieldCheck,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Logo } from "@/components/Logo";
 
 function DashboardContent({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const { negocio, sucursales, sucursalActiva, setSucursalActiva, profile, rol, loading, logout } = useTenant();
+  const router = useRouter();
+  const {
+    negocio,
+    sucursales,
+    sucursalActiva,
+    setSucursalActiva,
+    profile,
+    rol,
+    isSuperAdmin,
+    loading,
+    logout,
+  } = useTenant();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [branchDropdownOpen, setBranchDropdownOpen] = useState(false);
+
+  // Si es super_admin sin negocio propio y entra a /dashboard, redirigir a su panel /super-admin
+  useEffect(() => {
+    if (!loading && isSuperAdmin && !negocio && pathname !== "/super-admin") {
+      router.replace("/super-admin");
+    }
+  }, [loading, isSuperAdmin, negocio, pathname, router]);
 
   if (loading) {
     return (
@@ -51,26 +71,33 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
     negocio?.tipo_negocio === "restaurant" ||
     negocio?.tipo_negocio === "gastronomia";
 
-  const navigation = [
-    { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-    { name: "Punto de Venta (POS)", href: "/pos", icon: ShoppingCart },
-    { name: "Ventas", href: "/ventas", icon: Receipt },
-    { name: "Productos & Stock", href: "/productos", icon: Package },
-    { name: "Compras", href: "/compras", icon: Truck },
-    { name: "Clientes", href: "/clientes", icon: Users },
-    { name: "Mi Tienda Web", href: "/tienda-online", icon: Store },
-    ...(isRestaurant
-      ? [
-          { name: "Mesas", href: "/mesas", icon: UtensilsCrossed },
-          { name: "Comandas", href: "/comandas", icon: Layers },
-          { name: "Cocina (KDS)", href: "/cocina", icon: ChefHat },
-        ]
-      : []),
-    { name: "Caja / Turno", href: "/caja", icon: Wallet },
-    { name: "Reportes", href: "/reportes", icon: BarChart3 },
-    { name: "Planes y Suscripción", href: "/planes", icon: CreditCard },
-    { name: "Configuración", href: "/configuracion", icon: Settings },
-  ];
+  const navigation =
+    isSuperAdmin && !negocio
+      ? [{ name: "Consola Super Admin", href: "/super-admin", icon: ShieldCheck }]
+      : [
+          ...(isSuperAdmin
+            ? [{ name: "Consola Super Admin", href: "/super-admin", icon: ShieldCheck }]
+            : []),
+          { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
+          { name: "Punto de Venta (POS)", href: "/pos", icon: ShoppingCart },
+          { name: "Ventas", href: "/ventas", icon: Receipt },
+          { name: "Productos & Stock", href: "/productos", icon: Package },
+          { name: "Compras", href: "/compras", icon: Truck },
+          { name: "Clientes", href: "/clientes", icon: Users },
+          { name: "Mi Tienda Web", href: "/tienda-online", icon: Store },
+          ...(isRestaurant
+            ? [
+                { name: "Mesas", href: "/mesas", icon: UtensilsCrossed },
+                { name: "Comandas", href: "/comandas", icon: Layers },
+                { name: "Cocina (KDS)", href: "/cocina", icon: ChefHat },
+                { name: "Reservas", href: "/reservas", icon: CalendarDays },
+              ]
+            : []),
+          { name: "Caja / Turno", href: "/caja", icon: Wallet },
+          { name: "Reportes", href: "/reportes", icon: BarChart3 },
+          { name: "Planes y Suscripción", href: "/planes", icon: CreditCard },
+          { name: "Configuración", href: "/configuracion", icon: Settings },
+        ];
 
   return (
     <div className="min-h-screen flex bg-background">
@@ -96,7 +123,7 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
             <div>
               <span className="font-bold text-lg leading-tight block">Operix ERP</span>
               <span className="text-[11px] text-muted-foreground block truncate max-w-[130px]">
-                {negocio?.nombre || "Cargando..."}
+                {negocio?.nombre || (isSuperAdmin ? "Super Admin Global" : "Cargando...")}
               </span>
             </div>
           </div>
@@ -166,45 +193,52 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
               <Menu className="h-5 w-5" />
             </button>
 
-            {/* Selector de Sucursal */}
-            <div className="relative">
-              <button
-                onClick={() => setBranchDropdownOpen(!branchDropdownOpen)}
-                className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1.5 rounded-lg border border-border bg-background hover:bg-muted/50 text-xs font-medium transition-colors max-w-[150px] sm:max-w-xs"
-              >
-                <Building2 className="h-3.5 w-3.5 text-primary shrink-0" />
-                <span className="truncate">
-                  {sucursalActiva?.nombre || "Principal"}
-                </span>
-                <ChevronDown className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-              </button>
+            {/* Selector de Sucursal (solo si el usuario pertenece a un comercio) */}
+            {negocio ? (
+              <div className="relative">
+                <button
+                  onClick={() => setBranchDropdownOpen(!branchDropdownOpen)}
+                  className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1.5 rounded-lg border border-border bg-background hover:bg-muted/50 text-xs font-medium transition-colors max-w-[150px] sm:max-w-xs"
+                >
+                  <Building2 className="h-3.5 w-3.5 text-primary shrink-0" />
+                  <span className="truncate">
+                    {sucursalActiva?.nombre || "Principal"}
+                  </span>
+                  <ChevronDown className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                </button>
 
-              {branchDropdownOpen && (
-                <div className="absolute left-0 mt-1 w-48 rounded-lg border border-border bg-popover p-1 shadow-lg z-50">
-                  <div className="px-2 py-1 text-[11px] font-semibold text-muted-foreground">
-                    Cambiar Sucursal
+                {branchDropdownOpen && (
+                  <div className="absolute left-0 mt-1 w-48 rounded-lg border border-border bg-popover p-1 shadow-lg z-50">
+                    <div className="px-2 py-1 text-[11px] font-semibold text-muted-foreground">
+                      Cambiar Sucursal
+                    </div>
+                    {sucursales.map((suc) => (
+                      <button
+                        key={suc.id}
+                        onClick={() => {
+                          setSucursalActiva(suc);
+                          setBranchDropdownOpen(false);
+                        }}
+                        className={cn(
+                          "w-full text-left px-2 py-1.5 rounded text-xs transition-colors flex items-center justify-between",
+                          suc.id === sucursalActiva?.id
+                            ? "bg-primary text-primary-foreground font-medium"
+                            : "hover:bg-muted text-popover-foreground"
+                        )}
+                      >
+                        <span>{suc.nombre}</span>
+                        {suc.id === sucursalActiva?.id && <span className="text-[10px]">✓</span>}
+                      </button>
+                    ))}
                   </div>
-                  {sucursales.map((suc) => (
-                    <button
-                      key={suc.id}
-                      onClick={() => {
-                        setSucursalActiva(suc);
-                        setBranchDropdownOpen(false);
-                      }}
-                      className={cn(
-                        "w-full text-left px-2 py-1.5 rounded text-xs transition-colors flex items-center justify-between",
-                        suc.id === sucursalActiva?.id
-                          ? "bg-primary text-primary-foreground font-medium"
-                          : "hover:bg-muted text-popover-foreground"
-                      )}
-                    >
-                      <span>{suc.nombre}</span>
-                      {suc.id === sucursalActiva?.id && <span className="text-[10px]">✓</span>}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
+                )}
+              </div>
+            ) : isSuperAdmin ? (
+              <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-primary/30 bg-primary/10 text-primary text-xs font-semibold">
+                <ShieldCheck className="h-3.5 w-3.5" />
+                <span>Administración Plataforma Operix</span>
+              </div>
+            ) : null}
           </div>
 
           <div className="flex items-center gap-2">
@@ -222,13 +256,15 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
               </a>
             )}
 
-            <Link
-              href="/pos"
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-semibold shadow hover:bg-primary/90 transition-colors"
-            >
-              <ShoppingCart className="h-3.5 w-3.5" />
-              <span>Abrir POS</span>
-            </Link>
+            {negocio && (
+              <Link
+                href="/pos"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-semibold shadow hover:bg-primary/90 transition-colors"
+              >
+                <ShoppingCart className="h-3.5 w-3.5" />
+                <span>Abrir POS</span>
+              </Link>
+            )}
           </div>
         </header>
 

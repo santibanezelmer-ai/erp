@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState, useTransition } from "react";
+import { createContext, useContext, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import type { Database } from "@/types/database.types";
@@ -17,6 +17,7 @@ interface TenantContextType {
   sucursalActiva: Sucursal | null;
   setSucursalActiva: (s: Sucursal) => void;
   rol: string;
+  isSuperAdmin: boolean;
   loading: boolean;
   logout: () => Promise<void>;
   reloadTenant: () => Promise<void>;
@@ -32,6 +33,7 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
   const [sucursales, setSucursales] = useState<Sucursal[]>([]);
   const [sucursalActiva, setSucursalActivaState] = useState<Sucursal | null>(null);
   const [rol, setRol] = useState<string>("admin");
+  const [isSuperAdmin, setIsSuperAdmin] = useState<boolean>(false);
   const [loading, setLoading] = useState(true);
 
   const loadTenant = async () => {
@@ -46,24 +48,43 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
         setProfile(null);
         setNegocio(null);
         setSucursales([]);
+        setIsSuperAdmin(false);
         setLoading(false);
         return;
       }
 
       setUser(authUser);
 
-      // Cargar profile
-      const { data: prof } = await supabase
-        .from("profiles")
-        .select("*")
-        .eq("id", authUser.id)
-        .maybeSingle();
+      // Consultar perfil y estado super_admin en paralelo
+      const [{ data: prof }, { data: superRoleRow }, { data: isSaRpc }] = await Promise.all([
+        supabase.from("profiles").select("*").eq("id", authUser.id).maybeSingle(),
+        supabase
+          .from("user_roles")
+          .select("role")
+          .eq("user_id", authUser.id)
+          .eq("role", "super_admin")
+          .maybeSingle(),
+        supabase.rpc("is_super_admin", { _uid: authUser.id }),
+      ]);
 
       setProfile(prof);
 
+      const superAdminDetected =
+        Boolean(superRoleRow) ||
+        Boolean(isSaRpc) ||
+        authUser.email?.toLowerCase() === "santibanez.elmer@gmail.com";
+
+      setIsSuperAdmin(superAdminDetected);
+
+      // Si es super_admin y no tiene un comercio propio asignado, NO enviarlo a /onboarding
       if (!prof?.negocio_id) {
         setNegocio(null);
         setSucursales([]);
+        if (superAdminDetected) {
+          setRol("super_admin");
+          setLoading(false);
+          return;
+        }
         setLoading(false);
         router.push("/onboarding");
         return;
@@ -89,7 +110,8 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
       setSucursales(sucursalList);
 
       // Determinar sucursal activa (preferida o primera)
-      const savedSucId = typeof window !== "undefined" ? localStorage.getItem("operix_sucursal_id") : null;
+      const savedSucId =
+        typeof window !== "undefined" ? localStorage.getItem("operix_sucursal_id") : null;
       const initialSuc =
         sucursalList.find((s) => s.id === savedSucId) ||
         sucursalList.find((s) => s.id === (prof as any).sucursal_id) ||
@@ -98,16 +120,20 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
 
       setSucursalActivaState(initialSuc);
 
-      // Cargar rol del usuario en este negocio
-      const { data: roleRow } = await supabase
-        .from("user_roles")
-        .select("role")
-        .eq("user_id", authUser.id)
-        .eq("negocio_id", prof.negocio_id)
-        .maybeSingle();
+      if (superAdminDetected) {
+        setRol("super_admin");
+      } else {
+        // Cargar rol del usuario en este negocio
+        const { data: roleRow } = await supabase
+          .from("user_roles")
+          .select("role")
+          .eq("user_id", authUser.id)
+          .eq("negocio_id", prof.negocio_id)
+          .maybeSingle();
 
-      if (roleRow?.role) {
-        setRol(roleRow.role);
+        if (roleRow?.role) {
+          setRol(roleRow.role);
+        }
       }
     } catch (err) {
       console.error("Error loading tenant:", err);
@@ -133,6 +159,7 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
     setUser(null);
     setProfile(null);
     setNegocio(null);
+    setIsSuperAdmin(false);
     router.push("/login");
     router.refresh();
   };
@@ -147,6 +174,7 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
         sucursalActiva,
         setSucursalActiva,
         rol,
+        isSuperAdmin,
         loading,
         logout,
         reloadTenant: loadTenant,

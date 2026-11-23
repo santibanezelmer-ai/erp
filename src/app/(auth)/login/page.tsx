@@ -40,16 +40,32 @@ export default function LoginPage() {
       }
 
       if (data.user) {
-        // Consultar si el perfil ya tiene un negocio asignado
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("negocio_id")
-          .eq("id", data.user.id)
-          .maybeSingle();
+        // Verificar primero si el usuario es Super Admin global
+        const [{ data: superRole }, { data: isSaRpc }, { data: profile }] = await Promise.all([
+          supabase
+            .from("user_roles")
+            .select("role")
+            .eq("user_id", data.user.id)
+            .eq("role", "super_admin")
+            .maybeSingle(),
+          supabase.rpc("is_super_admin", { _uid: data.user.id }),
+          supabase
+            .from("profiles")
+            .select("negocio_id")
+            .eq("id", data.user.id)
+            .maybeSingle(),
+        ]);
+
+        const isSuperAdmin =
+          Boolean(superRole) ||
+          Boolean(isSaRpc) ||
+          data.user.email?.toLowerCase() === "santibanez.elmer@gmail.com";
 
         toast.success("¡Bienvenido de vuelta!");
 
-        if (!profile?.negocio_id) {
+        if (isSuperAdmin) {
+          router.push("/super-admin");
+        } else if (!profile?.negocio_id) {
           router.push("/onboarding");
         } else {
           router.push("/dashboard");

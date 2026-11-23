@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { slugify } from "@/lib/format";
@@ -15,8 +15,49 @@ import { cn } from "@/lib/utils";
 export default function OnboardingPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
+  const [checkingRole, setCheckingRole] = useState(true);
   const [nombre, setNombre] = useState("");
   const [tipo, setTipo] = useState<"tienda" | "restaurant">("tienda");
+
+  useEffect(() => {
+    const checkSuperAdmin = async () => {
+      const supabase = createClient();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (user) {
+        const [{ data: superRole }, { data: isSaRpc }] = await Promise.all([
+          supabase
+            .from("user_roles")
+            .select("role")
+            .eq("user_id", user.id)
+            .eq("role", "super_admin")
+            .maybeSingle(),
+          supabase.rpc("is_super_admin", { _uid: user.id }),
+        ]);
+
+        if (
+          Boolean(superRole) ||
+          Boolean(isSaRpc) ||
+          user.email?.toLowerCase() === "santibanez.elmer@gmail.com"
+        ) {
+          router.replace("/super-admin");
+          return;
+        }
+      }
+      setCheckingRole(false);
+    };
+    checkSuperAdmin();
+  }, [router]);
+
+  if (checkingRole) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-muted/40">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

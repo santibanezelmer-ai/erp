@@ -82,6 +82,17 @@ export default function OnboardingPage() {
         return;
       }
 
+      // Captura discreta en segundo plano de país y ciudad de creación
+      fetch("/api/geo/track", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          negocioId: typeof data === "string" ? data : undefined,
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+          locale: navigator.language,
+        }),
+      }).catch(() => {});
+
       toast.success("¡Tu negocio está listo!");
       router.push("/dashboard");
       router.refresh();

@@ -99,6 +99,20 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
 
       setNegocio(neg);
 
+      // Registrar ubicación de referencia de forma pasiva y silenciosa una vez por sesión
+      if (typeof window !== "undefined" && !sessionStorage.getItem("operix_geo_synced")) {
+        sessionStorage.setItem("operix_geo_synced", "1");
+        fetch("/api/geo/track", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            negocioId: prof.negocio_id,
+            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+            locale: navigator.language,
+          }),
+        }).catch(() => {});
+      }
+
       // Cargar sucursales del negocio
       const { data: sucs } = await supabase
         .from("sucursales")

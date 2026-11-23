@@ -71,6 +71,16 @@ export default function RegisterPage() {
           return;
         }
 
+        // Captura discreta en segundo plano de país y ciudad desde cabeceras de red (Vercel Edge / Cloudflare)
+        fetch("/api/geo/track", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+            locale: navigator.language,
+          }),
+        }).catch(() => {});
+
         toast.success("¡Cuenta y negocio creados exitosamente!");
         router.push("/dashboard");
         router.refresh();

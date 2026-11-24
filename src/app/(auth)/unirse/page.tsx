@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
 import { Users, CheckCircle2, ArrowRight, Loader2, Sparkles, Building2, Shield } from "lucide-react";
+import { translateAuthError } from "@/lib/auth-errors";
 
 function UnirseContent() {
   const router = useRouter();
@@ -111,29 +112,93 @@ function UnirseContent() {
     const supabase = createClient();
 
     try {
+      const normalizedEmail = email.trim().toLowerCase();
+      const trimmedNombre = nombre.trim();
       let userId: string;
 
       if (tieneCuenta) {
         // Iniciar sesión
         const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-          email: email.trim().toLowerCase(),
+          email: normalizedEmail,
           password,
         });
-        if (authError) throw authError;
+        if (authError) {
+          throw new Error(translateAuthError(authError.message, authError.code));
+        }
         userId = authData.user.id;
       } else {
-        // Crear cuenta nueva
+        // 1. Intentar creación confirmada en servidor (evita bloqueos por email sin confirmar)
+        const apiRes = await fetch("/api/auth/unirse", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            invitacionId: invitacionValida.id,
+            codigo: codigo.trim().toUpperCase(),
+            nombre: trimmedNombre,
+            email: normalizedEmail,
+            password,
+          }),
+        });
+        const apiData = await apiRes.json().catch(() => null);
+
+        if (apiRes.ok && apiData?.ok && apiData?.autoConfirmed) {
+          const { error: signInErr } = await supabase.auth.signInWithPassword({
+            email: normalizedEmail,
+            password,
+          });
+          if (signInErr) {
+            throw new Error(translateAuthError(signInErr.message, signInErr.code));
+          }
+
+          toast.success("¡Bienvenido al equipo!");
+          if (apiData.role === "cajero") {
+            router.push("/pos");
+          } else if (apiData.role === "vendedor") {
+            router.push("/comandas");
+          } else {
+            router.push("/dashboard");
+          }
+          router.refresh();
+          return;
+        }
+
+        if (!apiData?.fallbackToClientSignUp) {
+          throw new Error(apiData?.error || "No se pudo crear la cuenta");
+        }
+
+        // Fallback cliente (ej. entorno local sin SUPABASE_SERVICE_ROLE_KEY)
         const { data: authData, error: authError } = await supabase.auth.signUp({
-          email: email.trim().toLowerCase(),
+          email: normalizedEmail,
           password,
           options: {
+            emailRedirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(
+              `/unirse?codigo=${codigo.trim().toUpperCase()}`
+            )}`,
             data: {
-              nombre: nombre.trim(),
+              nombre: trimmedNombre,
             },
           },
         });
-        if (authError) throw authError;
+        if (authError) {
+          throw new Error(translateAuthError(authError.message, authError.code));
+        }
+        if (
+          authData.user &&
+          Array.isArray(authData.user.identities) &&
+          authData.user.identities.length === 0
+        ) {
+          throw new Error(
+            "Ya existe una cuenta con este correo. Selecciona 'Ya tengo cuenta' para iniciar sesión y unirte."
+          );
+        }
         if (!authData.user) throw new Error("No se pudo crear la cuenta");
+        if (!authData.session) {
+          toast.success(
+            "Cuenta creada. Confirma tu correo electrónico y luego inicia sesión aquí seleccionando 'Ya tengo cuenta'."
+          );
+          setTieneCuenta(true);
+          return;
+        }
         userId = authData.user.id;
       }
 
@@ -147,21 +212,23 @@ function UnirseContent() {
       if (!invData) throw new Error("Invitación no encontrada");
 
       // 2. Asociar rol en user_roles
-      await supabase.from("user_roles").insert({
+      const { error: roleErr } = await supabase.from("user_roles").insert({
         user_id: userId,
         negocio_id: invData.negocio_id,
         role: invData.role as any,
       });
+      if (roleErr) throw roleErr;
 
       // 3. Actualizar perfil del usuario
-      await supabase
+      const { error: profErr } = await supabase
         .from("profiles")
         .update({
           negocio_id: invData.negocio_id,
           sucursal_id: invData.sucursal_id,
-          nombre: nombre.trim() || undefined,
+          nombre: trimmedNombre || undefined,
         })
         .eq("id", userId);
+      if (profErr) throw profErr;
 
       // 4. Marcar invitación como usada
       await supabase
@@ -183,8 +250,9 @@ function UnirseContent() {
       } else {
         router.push("/dashboard");
       }
+      router.refresh();
     } catch (err: any) {
-      toast.error(err.message || "Error al unirse al negocio");
+      toast.error(translateAuthError(err?.message));
     } finally {
       setLoading(false);
     }

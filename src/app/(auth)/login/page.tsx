@@ -11,31 +11,66 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { toast } from "sonner";
 import { Loader2, ArrowRight } from "lucide-react";
 import { Logo } from "@/components/Logo";
+import { translateAuthError } from "@/lib/auth-errors";
 
 export default function LoginPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
+  const [resending, setResending] = useState(false);
+  const [unconfirmedEmail, setUnconfirmedEmail] = useState<string | null>(null);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
+  const handleResendConfirmation = async () => {
+    if (!unconfirmedEmail) return;
+    setResending(true);
+    try {
+      const supabase = createClient();
+      const { error } = await supabase.auth.resend({
+        type: "signup",
+        email: unconfirmedEmail,
+        options: {
+          emailRedirectTo: `${window.location.origin}/auth/callback`,
+        },
+      });
+      if (error) {
+        toast.error(translateAuthError(error.message, error.code));
+        return;
+      }
+      toast.success("Correo de confirmación reenviado. Revisa tu bandeja de entrada o spam.");
+    } catch (err: any) {
+      toast.error(translateAuthError(err?.message));
+    } finally {
+      setResending(false);
+    }
+  };
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email || !password) {
+    const normalizedEmail = email.trim().toLowerCase();
+    if (!normalizedEmail || !password) {
       toast.error("Por favor completa todos los campos");
       return;
     }
 
     setLoading(true);
+    setUnconfirmedEmail(null);
     const supabase = createClient();
 
     try {
       const { data, error } = await supabase.auth.signInWithPassword({
-        email,
+        email: normalizedEmail,
         password,
       });
 
       if (error) {
-        toast.error(error.message || "Credenciales incorrectas");
+        if (
+          error.code === "email_not_confirmed" ||
+          (error.message || "").toLowerCase().includes("email not confirmed")
+        ) {
+          setUnconfirmedEmail(normalizedEmail);
+        }
+        toast.error(translateAuthError(error.message, error.code));
         return;
       }
 
@@ -73,7 +108,7 @@ export default function LoginPage() {
         router.refresh();
       }
     } catch (err: any) {
-      toast.error(err.message || "Ocurrió un error al iniciar sesión");
+      toast.error(translateAuthError(err?.message));
     } finally {
       setLoading(false);
     }
@@ -96,6 +131,23 @@ export default function LoginPage() {
           </CardHeader>
           <form onSubmit={handleLogin}>
             <CardContent className="space-y-4">
+              {unconfirmedEmail && (
+                <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs space-y-2">
+                  <p className="font-medium text-foreground">
+                    Tu correo <span className="font-semibold">{unconfirmedEmail}</span> aún no está confirmado.
+                  </p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleResendConfirmation}
+                    disabled={resending}
+                    className="h-7 text-xs"
+                  >
+                    {resending ? "Reenviando..." : "Reenviar correo de confirmación"}
+                  </Button>
+                </div>
+              )}
               <div className="space-y-2">
                 <Label htmlFor="email">Correo electrónico</Label>
                 <Input

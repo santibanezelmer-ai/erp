@@ -10,22 +10,87 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
-import { Store, UtensilsCrossed, Loader2, CheckCircle2 } from "lucide-react";
+import { Store, UtensilsCrossed, Loader2, CheckCircle2, MailCheck } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Logo } from "@/components/Logo";
+import { translateAuthError } from "@/lib/auth-errors";
 
 export default function RegisterPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
+  const [resending, setResending] = useState(false);
+  const [pendingConfirmationEmail, setPendingConfirmationEmail] = useState<string | null>(null);
   const [nombre, setNombre] = useState("");
   const [negocio, setNegocio] = useState("");
   const [tipo, setTipo] = useState<"tienda" | "restaurant">("tienda");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
+  const finalizarCreacionNegocio = async (
+    supabase: ReturnType<typeof createClient>,
+    nombreNegocio: string,
+    tipoNegocio: "tienda" | "restaurant"
+  ) => {
+    const slug = slugify(nombreNegocio) || `n-${Date.now()}`;
+    const { error: rpcErr } = await (supabase.rpc as any)("create_negocio_for_user", {
+      _nombre: nombreNegocio,
+      _slug: slug,
+      _tipo: tipoNegocio,
+    });
+
+    if (rpcErr) {
+      console.error("Error creating business:", rpcErr);
+      router.push("/onboarding");
+      router.refresh();
+      return;
+    }
+
+    // Captura discreta en segundo plano de país y ciudad desde cabeceras de red (Vercel Edge / Cloudflare)
+    fetch("/api/geo/track", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        locale: navigator.language,
+      }),
+    }).catch(() => {});
+
+    toast.success("¡Cuenta y negocio creados exitosamente!");
+    router.push("/dashboard");
+    router.refresh();
+  };
+
+  const handleResendConfirmation = async () => {
+    if (!pendingConfirmationEmail) return;
+    setResending(true);
+    try {
+      const supabase = createClient();
+      const { error } = await supabase.auth.resend({
+        type: "signup",
+        email: pendingConfirmationEmail,
+        options: {
+          emailRedirectTo: `${window.location.origin}/auth/callback`,
+        },
+      });
+      if (error) {
+        toast.error(translateAuthError(error.message, error.code));
+        return;
+      }
+      toast.success("Correo de verificación reenviado. Revisa tu bandeja de entrada o spam.");
+    } catch (err: any) {
+      toast.error(translateAuthError(err?.message));
+    } finally {
+      setResending(false);
+    }
+  };
+
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!nombre || !negocio || !email || !password) {
+    const trimmedNombre = nombre.trim();
+    const trimmedNegocio = negocio.trim();
+    const normalizedEmail = email.trim().toLowerCase();
+
+    if (!trimmedNombre || !trimmedNegocio || !normalizedEmail || !password) {
       toast.error("Por favor completa todos los campos requeridos");
       return;
     }
@@ -39,61 +104,128 @@ export default function RegisterPage() {
     const supabase = createClient();
 
     try {
-      // 1. Crear el usuario en Supabase Auth
+      // 1. Intentar creación confirmada en servidor (evita bloqueos por email sin confirmar o límites SMTP)
+      const apiRes = await fetch("/api/auth/registro", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          nombre: trimmedNombre,
+          negocio: trimmedNegocio,
+          tipo,
+          email: normalizedEmail,
+          password,
+        }),
+      });
+      const apiData = await apiRes.json().catch(() => null);
+
+      if (apiRes.ok && apiData?.ok && apiData?.autoConfirmed) {
+        const { error: signInErr } = await supabase.auth.signInWithPassword({
+          email: normalizedEmail,
+          password,
+        });
+
+        if (signInErr) {
+          toast.error(translateAuthError(signInErr.message, signInErr.code));
+          return;
+        }
+
+        await finalizarCreacionNegocio(supabase, trimmedNegocio, tipo);
+        return;
+      }
+
+      if (!apiData?.fallbackToClientSignUp) {
+        toast.error(apiData?.error || "Error al crear la cuenta");
+        return;
+      }
+
+      // 2. Fallback cliente (ej. entorno local sin SUPABASE_SERVICE_ROLE_KEY)
       const { data, error } = await supabase.auth.signUp({
-        email,
+        email: normalizedEmail,
         password,
         options: {
+          emailRedirectTo: `${window.location.origin}/auth/callback`,
           data: {
-            nombre,
+            nombre: trimmedNombre,
+            negocio_pendiente: trimmedNegocio,
+            tipo_negocio_pendiente: tipo,
           },
         },
       });
 
       if (error) {
-        toast.error(error.message || "Error al crear la cuenta");
+        toast.error(translateAuthError(error.message, error.code));
+        return;
+      }
+
+      // Cuando el correo ya existe y la protección de enumeración está activa,
+      // Supabase retorna user con identities vacío y sin sesión.
+      if (data.user && Array.isArray(data.user.identities) && data.user.identities.length === 0) {
+        toast.error(
+          "Ya existe una cuenta registrada con este correo electrónico. Intenta iniciar sesión o usa otro correo."
+        );
         return;
       }
 
       if (data.session) {
-        // 2. Crear negocio para el usuario automáticamente
-        const slug = slugify(negocio) || `n-${Date.now()}`;
-        const { error: rpcErr } = await (supabase.rpc as any)("create_negocio_for_user", {
-          _nombre: negocio,
-          _slug: slug,
-          _tipo: tipo,
-        });
-
-        if (rpcErr) {
-          console.error("Error creating business:", rpcErr);
-          // Redirigir a onboarding para completar manualmente
-          router.push("/onboarding");
-          return;
-        }
-
-        // Captura discreta en segundo plano de país y ciudad desde cabeceras de red (Vercel Edge / Cloudflare)
-        fetch("/api/geo/track", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-            locale: navigator.language,
-          }),
-        }).catch(() => {});
-
-        toast.success("¡Cuenta y negocio creados exitosamente!");
-        router.push("/dashboard");
-        router.refresh();
+        await finalizarCreacionNegocio(supabase, trimmedNegocio, tipo);
       } else {
-        toast.success("Cuenta creada. Por favor revisa tu correo electrónico para verificar tu cuenta.");
-        router.push("/login");
+        setPendingConfirmationEmail(normalizedEmail);
+        toast.success("Cuenta creada. Revisa tu correo electrónico para confirmar tu cuenta.");
       }
     } catch (err: any) {
-      toast.error(err.message || "Ocurrió un error inesperado");
+      toast.error(translateAuthError(err?.message));
     } finally {
       setLoading(false);
     }
   };
+
+  if (pendingConfirmationEmail) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-muted/40 p-4">
+        <div className="w-full max-w-md">
+          <div className="flex items-center justify-center gap-2 mb-6">
+            <Logo className="h-10 w-10 shadow-md" />
+            <span className="font-bold text-2xl tracking-tight">Operix ERP</span>
+          </div>
+
+          <Card className="shadow-lg border-muted/60">
+            <CardHeader className="space-y-2 text-center">
+              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
+                <MailCheck className="h-6 w-6" />
+              </div>
+              <CardTitle className="text-xl font-bold">Confirma tu correo electrónico</CardTitle>
+              <CardDescription>
+                Enviamos un enlace de activación a{" "}
+                <span className="font-semibold text-foreground">{pendingConfirmationEmail}</span>.
+                Debes confirmarlo antes de iniciar sesión.
+              </CardDescription>
+            </CardHeader>
+            <CardFooter className="flex flex-col gap-3">
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full"
+                onClick={handleResendConfirmation}
+                disabled={resending}
+              >
+                {resending ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Reenviando...
+                  </>
+                ) : (
+                  "Reenviar correo de confirmación"
+                )}
+              </Button>
+              <Button asChild className="w-full">
+                <Link href="/login">Ya confirmé mi correo, ir a Iniciar Sesión</Link>
+              </Button>
+            </CardFooter>
+          </Card>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-muted/40 p-4">

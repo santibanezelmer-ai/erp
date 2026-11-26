@@ -134,3 +134,51 @@ export async function loadPublicCatalog(
     },
   };
 }
+
+export type PublicImagesResult =
+  | { status: "ok"; data: { url: string; orden: number | null }[] }
+  | { status: "not_found" }
+  | { status: "error" };
+
+/** Galería pública de un producto activo de un negocio con plan activo. */
+export async function loadPublicProductImages(productoId: string): Promise<PublicImagesResult> {
+  const supabase = adminClient();
+  if (!supabase) {
+    console.error("[catalogo-publico] Falta SUPABASE_SERVICE_ROLE_KEY o NEXT_PUBLIC_SUPABASE_URL");
+    return { status: "error" };
+  }
+
+  const { data: prod, error: prodErr } = await supabase
+    .from("productos")
+    .select("id, negocio_id")
+    .eq("id", productoId)
+    .eq("activo", true)
+    .maybeSingle();
+  if (prodErr) {
+    console.error(`[catalogo-publico] Error buscando producto '${productoId}':`, prodErr);
+    return { status: "error" };
+  }
+  if (!prod) return { status: "not_found" };
+
+  const { data: hasPro, error: proErr } = await supabase.rpc("negocio_has_pro", {
+    _negocio_id: prod.negocio_id,
+  });
+  if (proErr) {
+    console.error(`[catalogo-publico] Error verificando plan:`, proErr);
+    return { status: "error" };
+  }
+  if (!hasPro) return { status: "not_found" };
+
+  const { data: imgs, error: imgErr } = await supabase
+    .from("producto_imagenes")
+    .select("url, orden")
+    .eq("producto_id", productoId)
+    .eq("negocio_id", prod.negocio_id)
+    .order("orden", { ascending: true });
+  if (imgErr) {
+    console.error(`[catalogo-publico] Error leyendo imágenes de '${productoId}':`, imgErr);
+    return { status: "error" };
+  }
+
+  return { status: "ok", data: (imgs ?? []) as { url: string; orden: number | null }[] };
+}

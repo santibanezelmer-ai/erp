@@ -57,6 +57,7 @@ import {
   descargarPlantillaInventarioCSV,
 } from "@/lib/inventory-csv";
 import { imprimirHojaEtiquetas } from "@/lib/barcode-labels";
+import { VariantesManager } from "@/components/productos/VariantesManager";
 
 type Producto = Database["public"]["Tables"]["productos"]["Row"];
 type Variante = Database["public"]["Tables"]["producto_variantes"]["Row"];
@@ -85,7 +86,7 @@ export default function ProductosPage() {
   // Barcode Scanner Modal
   const [scannerOpen, setScannerOpen] = useState(false);
 
-  // Modal Ver Variantes de Producto
+  // Modal Gestionar Variantes de Producto
   const [variantesModalProd, setVariantesModalProd] = useState<Producto | null>(null);
 
   // Modal Etiquetas Código de Barras
@@ -1022,6 +1023,13 @@ export default function ProductosPage() {
                               <Tag className="h-3.5 w-3.5" />
                             </button>
                             <button
+                              onClick={() => setVariantesModalProd(prod)}
+                              className="p-1.5 rounded-md hover:bg-primary/10 text-muted-foreground hover:text-primary transition-colors"
+                              title="Gestionar variantes (stock y precios por variante)"
+                            >
+                              <Layers className="h-3.5 w-3.5" />
+                            </button>
+                            <button
                               onClick={() => abrirEditar(prod)}
                               className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
                               title="Editar"
@@ -1815,85 +1823,15 @@ export default function ProductosPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Modal Ver Variantes */}
-      <Dialog
-        open={!!variantesModalProd}
-        onOpenChange={(open) => !open && setVariantesModalProd(null)}
-      >
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Layers className="h-5 w-5 text-primary" />
-              <span>Variantes de {variantesModalProd?.nombre}</span>
-            </DialogTitle>
-            <DialogDescription className="text-xs">
-              Variantes registradas en el catálogo con sus respectivos precios y stocks.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-2 py-2 max-h-80 overflow-y-auto">
-            {variantesModalProd &&
-              variantsOf(variantesModalProd.id).map((v) => {
-                const vStock = Number(v.stock || 0);
-                const vPrecio = Number(
-                  v.precio_promocional ?? v.precio_venta ?? variantesModalProd.precio_promocional ?? variantesModalProd.precio_venta ?? 0
-                );
-                const vImg = v.imagen_url || variantesModalProd.imagen_url;
-
-                return (
-                  <div
-                    key={v.id}
-                    className="flex items-center justify-between p-3 rounded-xl border border-border bg-card"
-                  >
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className="h-10 w-10 rounded-lg bg-muted overflow-hidden shrink-0 flex items-center justify-center border">
-                        {vImg ? (
-                          <img
-                            src={vImg}
-                            alt={v.nombre}
-                            className="h-full w-full object-cover"
-                          />
-                        ) : (
-                          <Package className="h-5 w-5 text-muted-foreground/40" />
-                        )}
-                      </div>
-
-                      <div className="min-w-0">
-                        <div className="font-bold text-xs text-foreground truncate">
-                          {v.nombre}
-                        </div>
-                        <div className="text-[11px] text-muted-foreground flex items-center gap-2">
-                          <span>{vStock} u. stock</span>
-                          {v.codigo && (
-                            <span className="font-mono text-[10px] text-muted-foreground/70">
-                              #{v.codigo}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="text-right">
-                      <span className="font-bold text-xs text-primary">
-                        {formatMoney(vPrecio)}
-                      </span>
-                    </div>
-                  </div>
-                );
-              })}
-          </div>
-
-          <DialogFooter>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => setVariantesModalProd(null)}
-            >
-              Cerrar
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* Gestión de Variantes (stock y precios propios por variante) */}
+      <VariantesManager
+        key={variantesModalProd?.id ?? "ninguno"}
+        producto={variantesModalProd}
+        negocioId={negocio?.id}
+        variantes={variantesModalProd ? variantsOf(variantesModalProd.id) : []}
+        onClose={() => setVariantesModalProd(null)}
+        onChanged={fetchProductos}
+      />
 
       {/* Modal Asignación Rápida Individual de Categoría */}
       <Dialog

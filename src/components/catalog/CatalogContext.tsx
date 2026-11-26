@@ -153,7 +153,18 @@ export function CatalogProvider({
 
   const getUnitPrice = (p: Producto, v?: Variante | null): number => {
     if (v) {
-      return effectivePrice(v.precio_promocional != null ? v : p);
+      // La variante hereda el precio del producto cuando no tiene uno propio
+      // (mismo criterio que crear_pedido_catalogo: COALESCE(variante, producto)).
+      const base = v.precio_venta ?? p.precio_venta;
+      if (v.precio_promocional != null) {
+        return effectivePrice({
+          precio_venta: base,
+          precio_promocional: v.precio_promocional,
+          promo_vence_at: v.promo_vence_at,
+        });
+      }
+      if (v.precio_venta != null) return Number(v.precio_venta);
+      return effectivePrice(p);
     }
     return effectivePrice(p);
   };

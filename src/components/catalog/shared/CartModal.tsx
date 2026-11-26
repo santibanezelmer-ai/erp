@@ -104,16 +104,24 @@ export function CartModal() {
         .filter(Boolean)
         .join(" | ");
 
-      // 1. Guardar en Supabase
-      await supabase.from("pedidos_whatsapp").insert({
-        negocio_id: negocio.id,
-        cliente_nombre: clienteNombre.trim(),
-        cliente_telefono: clienteTelefono.trim(),
-        notas: notasConsolidadas,
-        total: cartTotal,
-        items: itemsPayload as any,
-        estado: "pendiente",
+      // 1. Guardar en Supabase mediante el RPC público (valida stock y
+      //    recalcula precios en el servidor). Un visitante sin sesión no
+      //    puede insertar directo en pedidos_whatsapp.
+      const { error: pedidoErr } = await supabase.rpc("crear_pedido_catalogo", {
+        _negocio_id: negocio.id,
+        _cliente_nombre: clienteNombre.trim(),
+        _cliente_telefono: clienteTelefono.trim(),
+        _notas: notasConsolidadas,
+        _items: itemsPayload.map((i) => ({
+          id: i.producto_id,
+          variante_id: i.variante_id,
+          qty: i.qty,
+        })),
+        _total: cartTotal,
       });
+      if (pedidoErr) {
+        throw new Error(pedidoErr.message || "No se pudo registrar el pedido");
+      }
 
       // 2. Construir mensaje estructurado para WhatsApp
       let msg = `🛍️ *NUEVO PEDIDO - ${negocio.nombre}*\n`;

@@ -59,7 +59,7 @@ export async function generateMetadata({
     if (productId) {
       const { data: prod } = await supabase
         .from("productos")
-        .select("id, nombre, descripcion, precio, precio_promocional, imagen_url, categoria")
+        .select("id, nombre, descripcion, precio_venta, precio_promocional, imagen_url, categoria")
         .eq("id", productId)
         .eq("negocio_id", neg.id)
         .maybeSingle();
@@ -68,7 +68,7 @@ export async function generateMetadata({
         const precio =
           prod.precio_promocional != null && prod.precio_promocional > 0
             ? prod.precio_promocional
-            : prod.precio;
+            : prod.precio_venta;
 
         const precioStr = new Intl.NumberFormat("es-CL", {
           style: "currency",

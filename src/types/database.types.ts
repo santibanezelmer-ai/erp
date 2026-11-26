@@ -403,6 +403,7 @@ export type Database = {
           requiere_preparacion: boolean
           sucursal_id: string | null
           updated_at: string
+          variante_id: string | null
         }
         Insert: {
           area_id?: string | null
@@ -421,6 +422,7 @@ export type Database = {
           requiere_preparacion?: boolean
           sucursal_id?: string | null
           updated_at?: string
+          variante_id?: string | null
         }
         Update: {
           area_id?: string | null
@@ -439,6 +441,7 @@ export type Database = {
           requiere_preparacion?: boolean
           sucursal_id?: string | null
           updated_at?: string
+          variante_id?: string | null
         }
         Relationships: []
       }

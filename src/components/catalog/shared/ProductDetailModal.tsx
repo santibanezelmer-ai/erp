@@ -296,9 +296,9 @@ export function ProductDetailModal() {
                         }`}
                       >
                         <span>{v.nombre}</span>
-                        {v.precio_venta !== detailProduct.precio_venta && (
+                        {getUnitPrice(detailProduct, v) !== getUnitPrice(detailProduct) && (
                           <span className="opacity-80 text-[10px]">
-                            ({formatMoney(Number(v.precio_promocional || v.precio_venta))})
+                            ({formatMoney(getUnitPrice(detailProduct, v))})
                           </span>
                         )}
                       </button>

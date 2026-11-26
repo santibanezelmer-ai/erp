@@ -37,11 +37,13 @@ import { imprimirTicketTermico } from "@/lib/ticket";
 
 type Mesa = Database["public"]["Tables"]["mesas"]["Row"];
 type Producto = Database["public"]["Tables"]["productos"]["Row"];
+type Variante = Database["public"]["Tables"]["producto_variantes"]["Row"];
 type Comanda = Database["public"]["Tables"]["comandas"]["Row"];
 type ComandaItem = Database["public"]["Tables"]["comanda_items"]["Row"];
 
 interface ItemDraft {
   producto: Producto;
+  variante: Variante | null;
   qty: number;
   precio: number;
   notas: string;
@@ -52,6 +54,9 @@ export default function ComandasPage() {
   const { negocio, profile } = useTenant();
   const [mesas, setMesas] = useState<Mesa[]>([]);
   const [productos, setProductos] = useState<Producto[]>([]);
+  const [variantes, setVariantes] = useState<Variante[]>([]);
+  // Producto con variantes esperando que se elija una
+  const [elegirVarianteProd, setElegirVarianteProd] = useState<Producto | null>(null);
   const [loading, setLoading] = useState(true);
 
   // Selección actual
@@ -141,7 +146,7 @@ export default function ComandasPage() {
     const supabase = createClient();
 
     try {
-      const [mesasRes, prodsRes] = await Promise.all([
+      const [mesasRes, prodsRes, varsRes] = await Promise.all([
         supabase
           .from("mesas")
           .select("*")
@@ -153,10 +158,17 @@ export default function ComandasPage() {
           .eq("negocio_id", negocio.id)
           .eq("activo", true)
           .order("nombre", { ascending: true }),
+        supabase
+          .from("producto_variantes")
+          .select("*")
+          .eq("negocio_id", negocio.id)
+          .eq("activo", true)
+          .order("nombre", { ascending: true }),
       ]);
 
       setMesas(mesasRes.data || []);
       setProductos(prodsRes.data || []);
+      setVariantes(varsRes.data || []);
     } catch (err: any) {
       toast.error(err.message || "Error al cargar mesas y productos");
     } finally {
@@ -296,21 +308,40 @@ export default function ComandasPage() {
     setDraftItems([]);
   };
 
-  // Agregar producto al borrador
-  const agregarAlDraft = (prod: Producto) => {
+  const variantesDe = (prodId: string) => variantes.filter((v) => v.producto_id === prodId);
+
+  // Precio de la variante; si no tiene uno propio, se usa el del producto
+  const precioDe = (prod: Producto, variante: Variante | null) =>
+    Number(variante?.precio_venta ?? prod.precio_venta ?? 0);
+
+  const nombreItem = (prod: Producto, variante: Variante | null) =>
+    variante ? `${prod.nombre} (${variante.nombre})` : prod.nombre;
+
+  // Agregar producto al borrador. Si tiene variantes, primero se pide elegir una.
+  const agregarAlDraft = (prod: Producto, variante: Variante | null = null) => {
+    if (!variante && variantesDe(prod.id).length > 0) {
+      setElegirVarianteProd(prod);
+      return;
+    }
     setDraftItems((prev) => {
-      const idx = prev.findIndex((i) => i.producto.id === prod.id && !i.notas);
+      const idx = prev.findIndex(
+        (i) =>
+          i.producto.id === prod.id &&
+          (i.variante?.id ?? null) === (variante?.id ?? null) &&
+          !i.notas
+      );
       if (idx >= 0) {
         const copy = [...prev];
-        copy[idx].qty += 1;
+        copy[idx] = { ...copy[idx], qty: copy[idx].qty + 1 };
         return copy;
       }
       return [
         ...prev,
         {
           producto: prod,
+          variante,
           qty: 1,
-          precio: Number(prod.precio_venta || 0),
+          precio: precioDe(prod, variante),
           notas: "",
           requiere_preparacion: true,
         },
@@ -397,7 +428,9 @@ export default function ComandasPage() {
         comanda_id: comId!,
         negocio_id: negocio.id,
         producto_id: d.producto.id,
-        nombre: d.producto.nombre,
+        // variante_id sólo se envía cuando hay variante elegida
+        ...(d.variante ? { variante_id: d.variante.id } : {}),
+        nombre: nombreItem(d.producto, d.variante),
         qty: d.qty,
         precio: d.precio,
         notas: d.notas || null,
@@ -600,7 +633,7 @@ export default function ComandasPage() {
         nota: i.notas,
       })),
       ...draftItems.map((d) => ({
-        nombre: d.producto.nombre,
+        nombre: nombreItem(d.producto, d.variante),
         qty: d.qty,
         precio: d.precio,
         subtotal: d.qty * d.precio,
@@ -741,6 +774,11 @@ export default function ComandasPage() {
                   <div className="flex justify-between items-end pt-1">
                     <span className="text-xs font-black text-primary">
                       {formatMoney(prod.precio_venta)}
+                      {variantesDe(prod.id).length > 0 && (
+                        <span className="block text-[10px] font-semibold text-muted-foreground">
+                          {variantesDe(prod.id).length} opciones
+                        </span>
+                      )}
                     </span>
                     <div className="h-6 w-6 rounded-lg bg-primary/10 text-primary flex items-center justify-center group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
                       <Plus className="h-3.5 w-3.5" />
@@ -916,7 +954,7 @@ export default function ComandasPage() {
                       >
                         <div className="flex-1 pr-2">
                           <div className="font-bold text-foreground">
-                            {d.producto.nombre}
+                            {nombreItem(d.producto, d.variante)}
                           </div>
                           {d.notas ? (
                             <button
@@ -1022,6 +1060,54 @@ export default function ComandasPage() {
           </div>
         </div>
       </div>
+
+      {/* Modal Elegir Variante */}
+      <Dialog open={!!elegirVarianteProd} onOpenChange={(v) => !v && setElegirVarianteProd(null)}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="text-sm">{elegirVarianteProd?.nombre}</DialogTitle>
+            <DialogDescription className="text-xs">Elige una opción</DialogDescription>
+          </DialogHeader>
+
+          <div className="grid gap-1.5 py-2 max-h-80 overflow-y-auto">
+            {elegirVarianteProd &&
+              variantesDe(elegirVarianteProd.id).map((v) => {
+                const sinStock =
+                  !elegirVarianteProd.sin_control_stock && Number(v.stock || 0) <= 0;
+                return (
+                  <button
+                    key={v.id}
+                    type="button"
+                    disabled={sinStock}
+                    onClick={() => {
+                      agregarAlDraft(elegirVarianteProd, v);
+                      setElegirVarianteProd(null);
+                    }}
+                    className="flex items-center justify-between gap-2 rounded-lg border px-3 py-2 text-left text-xs transition-all hover:border-primary/50 hover:bg-muted/40 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    <span className="font-semibold">{v.nombre}</span>
+                    <span className="flex items-center gap-2">
+                      {!elegirVarianteProd.sin_control_stock && (
+                        <span className="text-[10px] text-muted-foreground">
+                          {sinStock ? "Sin stock" : `${Number(v.stock || 0)} u.`}
+                        </span>
+                      )}
+                      <span className="font-black text-primary">
+                        {formatMoney(precioDe(elegirVarianteProd, v))}
+                      </span>
+                    </span>
+                  </button>
+                );
+              })}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" size="sm" onClick={() => setElegirVarianteProd(null)}>
+              Cancelar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Modal Nota Especial */}
       <Dialog open={!!itemNotaModal} onOpenChange={(v) => !v && setItemNotaModal(null)}>

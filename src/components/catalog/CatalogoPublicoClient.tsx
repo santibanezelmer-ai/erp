@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
 import type { Database } from "@/types/database.types";
 import type {
   ThemeId,
@@ -48,51 +47,44 @@ export default function CatalogoPublicoClient({
   const [themeConfig, setThemeConfig] = useState<ThemeCustomConfig>({});
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
+  const [inactive, setInactive] = useState(false);
 
   useEffect(() => {
     const fetchCatalog = async () => {
       setLoading(true);
-      const supabase = createClient();
-
+      setNotFound(false);
+      setInactive(false);
       try {
-        // 1. Obtener negocio por slug
-        const { data: neg, error: negErr } = await supabase
-          .from("negocios")
-          .select("*")
-          .eq("slug", slug)
-          .maybeSingle();
+        // El catálogo se carga desde el servidor: un visitante sin sesión
+        // no tiene permisos para leer las tablas base directamente.
+        const qs = isPreview ? "?preview=true" : "";
+        const res = await fetch(
+          `/api/public/catalogo/${encodeURIComponent(slug)}${qs}`,
+          { cache: "no-store" }
+        );
 
-        if (negErr || !neg) {
-          console.warn(`[Catalogo] Negocio no encontrado para slug '${slug}':`, negErr);
+        if (!res.ok) {
+          if (res.status === 403) {
+            setInactive(true);
+          } else {
+            console.warn(`[Catalogo] No se pudo cargar '${slug}' (HTTP ${res.status})`);
+          }
           setNotFound(true);
           return;
         }
 
-        // 2. Obtener configuración de plantilla y datos en paralelo
-        const [configRes, prodsRes, varsRes, marcasRes] = await Promise.all([
-          supabase
-            .from("configuracion")
-            .select("plantilla_id, plantilla_config, plantilla_draft, telefono, logo_url")
-            .eq("negocio_id", neg.id)
-            .maybeSingle(),
-          supabase
-            .from("productos")
-            .select("*")
-            .eq("negocio_id", neg.id)
-            .eq("activo", true)
-            .order("nombre", { ascending: true }),
-          supabase
-            .from("producto_variantes")
-            .select("*")
-            .eq("negocio_id", neg.id)
-            .eq("activo", true)
-            .order("nombre", { ascending: true }),
-          supabase
-            .from("marcas_public" as any)
-            .select("id, nombre, logo_url")
-            .eq("negocio_id", neg.id)
-            .order("nombre", { ascending: true }),
-        ]);
+        const payload = await res.json();
+        const neg = payload.negocio as Negocio;
+        const prodsRes = { data: payload.productos as Producto[] };
+        const varsRes = { data: payload.variantes as Variante[] };
+        const marcasRes = { data: payload.marcas as Marca[] };
+        const configRes = { data: payload.config as {
+          plantilla_id: string | null;
+          plantilla_config: unknown;
+          plantilla_draft: unknown;
+          telefono: string | null;
+          logo_url: string | null;
+        } | null };
 
         const cfgData = configRes.data;
 
@@ -174,9 +166,13 @@ export default function CatalogoPublicoClient({
         <div className="h-16 w-16 rounded-full bg-muted flex items-center justify-center mb-4">
           <Store className="h-8 w-8 text-muted-foreground" />
         </div>
-        <h1 className="text-2xl font-bold tracking-tight">Tienda no encontrada</h1>
+        <h1 className="text-2xl font-bold tracking-tight">
+          {inactive ? "Tienda no disponible" : "Tienda no encontrada"}
+        </h1>
         <p className="text-sm text-muted-foreground mt-2 max-w-sm">
-          El catálogo que buscas no existe o ha cambiado su dirección.
+          {inactive
+            ? "Este catálogo no está disponible en este momento. Vuelve a intentarlo más tarde."
+            : "El catálogo que buscas no existe o ha cambiado su dirección."}
         </p>
         <Link href="/" className="mt-6">
           <Button variant="outline" size="sm">

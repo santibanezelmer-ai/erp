@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import { useCatalog } from "@/components/catalog/CatalogContext";
 import { formatMoney } from "@/lib/format";
 import { isPromoActive, promoDiscountPct } from "@/lib/promo";
-import { createClient } from "@/lib/supabase/client";
 import type { Variante } from "@/types/theme.types";
 import {
   Dialog,
@@ -57,7 +56,6 @@ export function ProductDetailModal() {
     }
 
     const loadImages = async () => {
-      const supabase = createClient();
       const vs = variantsOf(detailProduct.id);
 
       // Preseleccionar primera variante con stock o la primera
@@ -65,14 +63,20 @@ export function ProductDetailModal() {
       setSelectedVariant(firstAvailable);
       setQty(1);
 
-      // Cargar imágenes secundarias desde producto_imagenes_public
-      const { data: gallery } = await supabase
-        .from("producto_imagenes_public" as any)
-        .select("url, orden")
-        .eq("producto_id", detailProduct.id)
-        .order("orden", { ascending: true });
+      // Cargar imágenes secundarias desde el servidor (no depende de la sesión
+      // del navegador: un vendedor logueado en otra tienda también debe verlas)
+      let gallery: { url: string }[] = [];
+      try {
+        const res = await fetch(
+          `/api/public/producto-imagenes/${encodeURIComponent(detailProduct.id)}`,
+          { cache: "no-store" }
+        );
+        if (res.ok) gallery = await res.json();
+      } catch (err) {
+        console.warn("[Catalogo] No se pudo cargar la galería:", err);
+      }
 
-      const urls = (gallery || []).map((g: any) => g.url);
+      const urls = gallery.map((g) => g.url);
 
       if (detailProduct.imagen_url && !urls.includes(detailProduct.imagen_url)) {
         urls.unshift(detailProduct.imagen_url);

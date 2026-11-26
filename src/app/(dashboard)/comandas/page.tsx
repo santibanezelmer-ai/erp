@@ -438,10 +438,31 @@ export default function ComandasPage() {
         estado: "pendiente",
       }));
 
-      const { data: insertedItems, error: itemsErr } = await supabase
+      let { data: insertedItems, error: itemsErr } = await supabase
         .from("comanda_items")
         .insert(nuevosItemsPayload)
         .select("*");
+
+      // Compatibilidad: si la BD aún no tiene comanda_items.variante_id (migración
+      // 20261126_variantes_comandas.sql sin aplicar), se reintenta sin esa columna.
+      // El pedido sale igual con nombre y precio de la variante; sólo el descuento
+      // de stock queda a nivel de producto hasta aplicar la migración.
+      if (
+        itemsErr &&
+        nuevosItemsPayload.some((i) => "variante_id" in i) &&
+        (itemsErr.code === "PGRST204" || /variante_id/i.test(itemsErr.message || ""))
+      ) {
+        console.warn("[Comandas] comanda_items.variante_id no existe; se guarda sin variante_id");
+        const sinVariante = nuevosItemsPayload.map((item) => {
+          const copia: Record<string, unknown> = { ...item };
+          delete copia.variante_id;
+          return copia as Omit<typeof item, "variante_id">;
+        });
+        ({ data: insertedItems, error: itemsErr } = await supabase
+          .from("comanda_items")
+          .insert(sinVariante)
+          .select("*"));
+      }
 
       if (itemsErr) throw itemsErr;
 

@@ -24,6 +24,7 @@ import {
 import { BannerImagen } from "@/components/catalog/shared/BannerImagen";
 import { enlaceWhatsApp } from "@/lib/whatsapp";
 import { etiquetaCategoria } from "@/lib/categorias";
+import { ComposicionTienda } from "@/components/catalog/bloques/ComposicionTienda";
 
 export function BeautyGlowTheme() {
   const {
@@ -68,8 +69,8 @@ export function BeautyGlowTheme() {
     "Descubre nuestra selección exclusiva en maquillaje, cuidado facial y fragancias.";
   const bannerBadge = config.bannerBadgeText || "✨ Colección Exclusiva";
 
-  return (
-    <div className="min-h-screen flex flex-col bg-[#fffbfb] dark:bg-neutral-950 text-foreground font-sans">
+  const cabecera = (
+    <>
       {/* Top Banner Elegante */}
       <div className="bg-(color:--tp-950) text-(color:--tp-100) text-[11px] py-1.5 px-4 text-center font-medium tracking-wider flex items-center justify-center gap-2">
         <Sparkles className="h-3 w-3 text-(color:--tp-300)" />
@@ -168,7 +169,11 @@ export function BeautyGlowTheme() {
           </div>
         </div>
       </header>
+    </>
+  );
 
+  const hero = (
+    <>
       {/* Hero Banner Editorial */}
       {bannerVisible && config.bannerImageUrl && <BannerImagen />}
       {bannerVisible && !config.bannerImageUrl && (
@@ -196,7 +201,11 @@ export function BeautyGlowTheme() {
           </div>
         </section>
       )}
+    </>
+  );
 
+  const catalogo = (
+    <>
       {/* Main Content Area */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-8 space-y-8">
         {/* Categories Bar */}
@@ -488,7 +497,11 @@ export function BeautyGlowTheme() {
           <CatalogPagination />
         </div>
       </main>
+    </>
+  );
 
+  const pie = (
+    <>
       {/* Footer Editorial */}
       <footer className="mt-16 border-t border-(color:--tp-100) dark:border-neutral-800 bg-white dark:bg-neutral-900 py-8 px-4 text-center text-xs text-neutral-500">
         <div className="max-w-7xl mx-auto space-y-2">
@@ -509,6 +522,16 @@ export function BeautyGlowTheme() {
           </p>
         </div>
       </footer>
-    </div>
+    </>
+  );
+
+  return (
+    <ComposicionTienda
+      className="min-h-screen flex flex-col bg-[#fffbfb] dark:bg-neutral-950 text-foreground font-sans"
+      cabecera={cabecera}
+      hero={hero}
+      catalogo={catalogo}
+      pie={pie}
+    />
   );
 }

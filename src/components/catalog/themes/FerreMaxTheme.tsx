@@ -29,6 +29,7 @@ import {
 import { BannerImagen } from "@/components/catalog/shared/BannerImagen";
 import { enlaceWhatsApp } from "@/lib/whatsapp";
 import { etiquetaCategoria } from "@/lib/categorias";
+import { ComposicionTienda } from "@/components/catalog/bloques/ComposicionTienda";
 
 export function FerreMaxTheme() {
   const {
@@ -70,8 +71,8 @@ export function FerreMaxTheme() {
     "Venta por mayor y detalle. Despacho a obra o retiro inmediato en mesón.";
   const bannerBadge = config.bannerBadgeText || "🔨 Stock Disponible y Precios Claros";
 
-  return (
-    <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-sans">
+  const cabecera = (
+    <>
       {/* Top Bar de Servicio Ferretero */}
       <div className="bg-(color:--tp-900) text-(color:--tp-100) text-xs py-1.5 px-4 font-medium">
         <div className="max-w-7xl mx-auto flex items-center justify-between text-[11px]">
@@ -176,7 +177,11 @@ export function FerreMaxTheme() {
           </div>
         </div>
       </header>
+    </>
+  );
 
+  const hero = (
+    <>
       {/* Hero Ferretero */}
       {config.bannerImageUrl ? (
         <BannerImagen />
@@ -207,7 +212,11 @@ export function FerreMaxTheme() {
           </div>
         </section>
       )}
+    </>
+  );
 
+  const catalogo = (
+    <>
       {/* Navegación por Departamentos */}
       {categorias.length > 1 && (
         <div className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800">
@@ -472,7 +481,11 @@ export function FerreMaxTheme() {
           <CatalogPagination />
         </div>
       </main>
+    </>
+  );
 
+  const pie = (
+    <>
       {/* Footer Industrial */}
       <footer className="mt-16 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 py-8 px-4 text-center text-xs text-slate-500">
         <div className="max-w-7xl mx-auto space-y-2">
@@ -493,6 +506,16 @@ export function FerreMaxTheme() {
           </p>
         </div>
       </footer>
-    </div>
+    </>
+  );
+
+  return (
+    <ComposicionTienda
+      className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-sans"
+      cabecera={cabecera}
+      hero={hero}
+      catalogo={catalogo}
+      pie={pie}
+    />
   );
 }

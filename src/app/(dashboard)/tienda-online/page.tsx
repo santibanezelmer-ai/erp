@@ -5,6 +5,7 @@ import { useTenant } from "@/contexts/tenant-context";
 import { createClient } from "@/lib/supabase/client";
 import { THEMES_LIST, getThemeMetadata } from "@/components/catalog/themes/registry";
 import { FUENTES, colorSobre, colorValido } from "@/lib/tienda-estilo";
+import { EditorBloques } from "@/components/tienda-online/EditorBloques";
 import type { ThemeId, ThemeCustomConfig } from "@/types/theme.types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -659,45 +660,21 @@ export default function TiendaOnlinePage() {
                 <CardHeader>
                   <CardTitle className="text-base font-bold flex items-center gap-2">
                     <Layers className="h-4 w-4 text-primary" />
-                    Secciones del Catálogo
+                    Secciones de la Tienda
                   </CardTitle>
                   <CardDescription className="text-xs">
-                    Activa o desactiva bloques según las necesidades de tu tienda.
+                    Ordena con las flechas y activa los bloques que quieras mostrar. Se ve al instante en la
+                    vista previa.
                   </CardDescription>
                 </CardHeader>
-                <CardContent className="space-y-3">
-                  {[
-                    { key: "bannerHero", label: "Banner Principal (Hero)" },
-                    { key: "categoriasPills", label: "Barra de Categorías" },
-                    { key: "ofertasDestacadas", label: "Filtro de Ofertas Destacadas" },
-                    { key: "novedades", label: "Badge de Novedades" },
-                    { key: "marcasGrid", label: "Filtro de Fabricantes / Marcas" },
-                  ].map(({ key, label }) => {
-                    const isChecked =
-                      (draftConfig.sectionsVisibility as any)?.[key] !== false;
-
-                    return (
-                      <div key={key} className="flex items-center justify-between py-1">
-                        <Label htmlFor={`sec-${key}`} className="text-xs font-medium cursor-pointer">
-                          {label}
-                        </Label>
-                        <Switch
-                          id={`sec-${key}`}
-                          checked={isChecked}
-                          onCheckedChange={(checked) => {
-                            setDraftConfig((prev) => ({
-                              ...prev,
-                              sectionsVisibility: {
-                                ...prev.sectionsVisibility,
-                                [key]: checked,
-                              },
-                            }));
-                            setHasDraft(true);
-                          }}
-                        />
-                      </div>
-                    );
-                  })}
+                <CardContent>
+                  <EditorBloques
+                    config={draftConfig}
+                    onChange={(cambio) => {
+                      setDraftConfig(cambio);
+                      setHasDraft(true);
+                    }}
+                  />
                 </CardContent>
               </Card>
             </div>

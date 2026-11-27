@@ -66,6 +66,11 @@ type Variante = Database["public"]["Tables"]["producto_variantes"]["Row"];
 
 export default function ProductosPage() {
   const { negocio, sucursalActiva } = useTenant();
+  // Mismo criterio que el menú del panel (layout): sin rubro = restaurante
+  const esRestaurante =
+    !negocio?.tipo_negocio ||
+    negocio.tipo_negocio === "restaurant" ||
+    negocio.tipo_negocio === "gastronomia";
   const [productos, setProductos] = useState<Producto[]>([]);
   const [variantes, setVariantes] = useState<Variante[]>([]);
   const [loading, setLoading] = useState(true);
@@ -121,6 +126,8 @@ export default function ProductosPage() {
   const [stock, setStock] = useState<string>("0");
   const [stockMin, setStockMin] = useState<string>("5");
   const [sinControlStock, setSinControlStock] = useState(false);
+  // Solo restaurantes: si el producto pasa por cocina al marchar la comanda
+  const [requierePreparacion, setRequierePreparacion] = useState(true);
   const [activo, setActivo] = useState(true);
 
   // Modal Ajuste Rápido
@@ -297,6 +304,7 @@ export default function ProductosPage() {
     setStock("0");
     setStockMin("5");
     setSinControlStock(false);
+    setRequierePreparacion(true);
     setActivo(true);
     setModalOpen(true);
   };
@@ -313,6 +321,7 @@ export default function ProductosPage() {
     setStock(String(prod.stock || 0));
     setStockMin(String(prod.stock_min || 5));
     setSinControlStock(prod.sin_control_stock || false);
+    setRequierePreparacion(prod.requiere_preparacion ?? true);
     setActivo(prod.activo);
     setModalOpen(true);
   };
@@ -396,6 +405,8 @@ export default function ProductosPage() {
         stock_min: Number(stockMin) || 0,
         sin_control_stock: sinControlStock,
         activo: activo,
+        // Solo se edita en restaurantes; en otros rubros se conserva el valor existente
+        ...(esRestaurante ? { requiere_preparacion: requierePreparacion } : {}),
       };
 
       if (productoEdit?.id) {
@@ -927,6 +938,14 @@ export default function ProductosPage() {
                                 {prod.categoria && (
                                   <span className="sm:hidden text-[10px] text-muted-foreground bg-muted px-1.5 py-0.2 rounded truncate max-w-[100px]">
                                     {prod.categoria}
+                                  </span>
+                                )}
+                                {esRestaurante && prod.requiere_preparacion === false && (
+                                  <span
+                                    className="text-[10px] font-semibold text-sky-700 dark:text-sky-400 bg-sky-500/10 px-1.5 py-0.5 rounded"
+                                    title="No pasa por cocina: queda listo para servir en la comanda"
+                                  >
+                                    Sin cocina
                                   </span>
                                 )}
                                 {vs.length > 0 && (
@@ -1487,6 +1506,29 @@ export default function ProductosPage() {
                     </div>
                   )}
                 </div>
+
+                {/* Solo restaurantes: ¿pasa por cocina? */}
+                {esRestaurante && (
+                  <label className="flex items-center justify-between gap-3 p-4 rounded-xl border border-border bg-card/60 shadow-2xs cursor-pointer">
+                    <div className="space-y-0.5">
+                      <div className="text-xs font-bold text-foreground uppercase tracking-wider">
+                        Requiere preparación
+                      </div>
+                      <div className="text-[10px] text-muted-foreground">
+                        {requierePreparacion
+                          ? "Se envía a cocina al marchar la comanda (platos, tragos preparados)."
+                          : "No pasa por cocina: queda en la comanda listo para servir (bebidas envasadas, postres listos)."}
+                      </div>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={requierePreparacion}
+                      onChange={(e) => setRequierePreparacion(e.target.checked)}
+                      className="h-4 w-4 rounded border-border text-primary cursor-pointer"
+                      disabled={saving}
+                    />
+                  </label>
+                )}
 
                 {/* Tarjeta 5: Control de Inventario */}
                 <div className="p-4 rounded-xl border border-border bg-card/60 space-y-3.5 shadow-2xs">

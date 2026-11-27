@@ -343,7 +343,8 @@ export default function ComandasPage() {
           qty: 1,
           precio: precioDe(prod, variante),
           notas: "",
-          requiere_preparacion: true,
+          // Según el producto: sin preparación no pasa por cocina
+          requiere_preparacion: prod.requiere_preparacion ?? true,
         },
       ];
     });
@@ -435,7 +436,8 @@ export default function ComandasPage() {
         precio: d.precio,
         notas: d.notas || null,
         requiere_preparacion: d.requiere_preparacion,
-        estado: "pendiente",
+        // Lo que no requiere preparación no va a cocina: queda listo para servir
+        estado: d.requiere_preparacion ? "pendiente" : "listo",
       }));
 
       let { data: insertedItems, error: itemsErr } = await supabase
@@ -480,7 +482,15 @@ export default function ComandasPage() {
 
       setItemsEnviados(itemsTotales);
       setDraftItems([]);
-      toast.success("¡Comanda marchada a cocina con éxito!");
+      const aCocina = draftItems.filter((d) => d.requiere_preparacion).length;
+      const directos = draftItems.length - aCocina;
+      toast.success(
+        aCocina > 0 && directos > 0
+          ? `¡Comanda marchada! ${aCocina} a cocina y ${directos} listo(s) para servir`
+          : aCocina > 0
+          ? "¡Comanda marchada a cocina con éxito!"
+          : `${directos} producto(s) agregados listos para servir (no pasan por cocina)`
+      );
 
       // Efecto sonoro de comanda enviada
       try {
@@ -976,6 +986,11 @@ export default function ComandasPage() {
                         <div className="flex-1 pr-2">
                           <div className="font-bold text-foreground">
                             {nombreItem(d.producto, d.variante)}
+                            {!d.requiere_preparacion && (
+                              <span className="ml-1.5 align-middle text-[9px] font-semibold text-sky-700 dark:text-sky-400 bg-sky-500/10 px-1 py-0.5 rounded">
+                                Directo
+                              </span>
+                            )}
                           </div>
                           {d.notas ? (
                             <button

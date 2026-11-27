@@ -21,6 +21,7 @@ import {
   X,
   Package,
 } from "lucide-react";
+import { BannerImagen } from "@/components/catalog/shared/BannerImagen";
 
 export function BeautyGlowTheme() {
   const {
@@ -162,7 +163,8 @@ export function BeautyGlowTheme() {
       </header>
 
       {/* Hero Banner Editorial */}
-      {bannerVisible && (
+      {bannerVisible && config.bannerImageUrl && <BannerImagen />}
+      {bannerVisible && !config.bannerImageUrl && (
         <section className="relative overflow-hidden bg-gradient-to-r from-rose-100 via-rose-50 to-amber-50 dark:from-neutral-900 dark:via-neutral-900 dark:to-neutral-800 py-12 sm:py-20 px-4 sm:px-6 border-b border-rose-100 dark:border-neutral-800">
           <div className="max-w-4xl mx-auto text-center space-y-4">
             <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-white/80 dark:bg-neutral-800 text-rose-600 border border-rose-200 shadow-xs">

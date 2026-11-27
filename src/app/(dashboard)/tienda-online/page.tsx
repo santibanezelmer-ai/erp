@@ -33,6 +33,8 @@ import {
   CheckCircle2,
   AlertCircle,
   Loader2,
+  ImagePlus,
+  Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -53,6 +55,7 @@ export default function TiendaOnlinePage() {
   const [previewDevice, setPreviewDevice] = useState<"desktop" | "mobile">("desktop");
   const [filtroRubro, setFiltroRubro] = useState<string>("todos");
   const [copiado, setCopiado] = useState(false);
+  const [subiendoBanner, setSubiendoBanner] = useState(false);
 
   // Cargar configuración de la tienda desde Supabase
   useEffect(() => {
@@ -114,6 +117,42 @@ export default function TiendaOnlinePage() {
     }));
     setHasDraft(true);
     toast.info(`Plantilla "${meta.name}" seleccionada como borrador.`);
+  };
+
+  // Subir imagen del banner (se guarda en el borrador; se ve en la tienda al publicar)
+  const handleSubirBanner = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file || !negocio?.id) return;
+    if (!file.type.startsWith("image/")) {
+      toast.error("El archivo debe ser una imagen (JPG, PNG o WebP)");
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("La imagen debe pesar menos de 5 MB");
+      return;
+    }
+
+    setSubiendoBanner(true);
+    const supabase = createClient();
+    try {
+      const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
+      const filePath = `${negocio.id}/banners/banner-${Date.now()}.${ext}`;
+      const { error: uploadError } = await supabase.storage
+        .from("producto-imgs")
+        .upload(filePath, file, { upsert: true, cacheControl: "3600", contentType: file.type });
+      if (uploadError) throw uploadError;
+
+      const { data: pubData } = supabase.storage.from("producto-imgs").getPublicUrl(filePath);
+      setDraftConfig((prev) => ({ ...prev, bannerImageUrl: pubData.publicUrl }));
+      setHasDraft(true);
+      toast.success("Imagen del banner cargada. Publica los cambios para mostrarla en tu tienda.");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : (err as { message?: string })?.message;
+      toast.error(msg || "Error al subir la imagen del banner");
+    } finally {
+      setSubiendoBanner(false);
+    }
   };
 
   // Guardar como Borrador
@@ -592,6 +631,49 @@ export default function TiendaOnlinePage() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
+                  <div className="space-y-2">
+                    <Label className="text-xs">Imagen del Banner (opcional)</Label>
+                    {draftConfig.bannerImageUrl ? (
+                      <div className="space-y-2">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={draftConfig.bannerImageUrl}
+                          alt="Imagen del banner"
+                          className="w-full max-h-64 object-contain rounded-lg border bg-muted"
+                        />
+                        <div className="flex flex-wrap gap-2">
+                          <Button asChild type="button" variant="outline" size="sm" className="gap-1.5 text-xs" disabled={subiendoBanner}>
+                            <label className="cursor-pointer">
+                              {subiendoBanner ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ImagePlus className="h-3.5 w-3.5" />}
+                              Cambiar imagen
+                              <input type="file" accept="image/*" className="hidden" onChange={handleSubirBanner} />
+                            </label>
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="gap-1.5 text-xs text-destructive hover:text-destructive"
+                            onClick={() => {
+                              setDraftConfig((prev) => ({ ...prev, bannerImageUrl: undefined }));
+                              setHasDraft(true);
+                            }}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                            Quitar imagen
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <label className="flex flex-col items-center justify-center gap-1.5 rounded-lg border-2 border-dashed p-5 text-center text-xs text-muted-foreground cursor-pointer hover:border-primary/50 hover:bg-muted/40 transition-colors">
+                        {subiendoBanner ? <Loader2 className="h-5 w-5 animate-spin" /> : <ImagePlus className="h-5 w-5" />}
+                        <span className="font-semibold text-foreground">Subir imagen promocional</span>
+                        <span>JPG, PNG o WebP, máx. 5 MB. Reemplaza el banner de texto y lleva a las ofertas al tocarla.</span>
+                        <input type="file" accept="image/*" className="hidden" disabled={subiendoBanner} onChange={handleSubirBanner} />
+                      </label>
+                    )}
+                  </div>
+
                   <div className="space-y-1">
                     <Label className="text-xs">Distintivo Superior (Badge)</Label>
                     <Input

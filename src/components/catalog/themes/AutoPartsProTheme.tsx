@@ -23,6 +23,7 @@ import {
   ShieldCheck,
   Building2,
 } from "lucide-react";
+import { BannerImagen } from "@/components/catalog/shared/BannerImagen";
 
 export function AutoPartsProTheme() {
   const {
@@ -170,22 +171,26 @@ export function AutoPartsProTheme() {
       </header>
 
       {/* Hero Técnico de Alta Potencia */}
-      <section className="relative bg-gradient-to-b from-neutral-900 to-neutral-950 py-10 sm:py-16 px-4 sm:px-6 border-b border-neutral-800">
-        <div className="max-w-5xl mx-auto text-center space-y-4">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-md text-xs font-mono font-bold bg-amber-500/10 text-amber-400 border border-amber-500/30">
-            <Zap className="h-3.5 w-3.5" />
-            <span>{bannerBadge}</span>
+      {config.bannerImageUrl ? (
+        <BannerImagen />
+      ) : (
+        <section className="relative bg-gradient-to-b from-neutral-900 to-neutral-950 py-10 sm:py-16 px-4 sm:px-6 border-b border-neutral-800">
+          <div className="max-w-5xl mx-auto text-center space-y-4">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-md text-xs font-mono font-bold bg-amber-500/10 text-amber-400 border border-amber-500/30">
+              <Zap className="h-3.5 w-3.5" />
+              <span>{bannerBadge}</span>
+            </div>
+
+            <h2 className="text-3xl sm:text-5xl font-black tracking-tight text-white uppercase leading-tight">
+              {bannerTitle}
+            </h2>
+
+            <p className="text-xs sm:text-sm text-neutral-400 max-w-xl mx-auto font-normal">
+              {bannerSubtitle}
+            </p>
           </div>
-
-          <h2 className="text-3xl sm:text-5xl font-black tracking-tight text-white uppercase leading-tight">
-            {bannerTitle}
-          </h2>
-
-          <p className="text-xs sm:text-sm text-neutral-400 max-w-xl mx-auto font-normal">
-            {bannerSubtitle}
-          </p>
-        </div>
-      </section>
+        </section>
+      )}
 
       {/* Layout Principal */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-8 space-y-6">

@@ -24,6 +24,7 @@ import {
   Clock,
   Layers,
 } from "lucide-react";
+import { BannerImagen } from "@/components/catalog/shared/BannerImagen";
 
 export function MarketFreshTheme() {
   const {
@@ -187,7 +188,8 @@ export function MarketFreshTheme() {
       </header>
 
       {/* Hero Fresco */}
-      {bannerVisible && (
+      {bannerVisible && config.bannerImageUrl && <BannerImagen />}
+      {bannerVisible && !config.bannerImageUrl && (
         <section className="bg-gradient-to-r from-emerald-800 via-emerald-700 to-teal-800 text-white py-8 sm:py-12 px-4 sm:px-6">
           <div className="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center justify-between gap-6">
             <div className="max-w-2xl space-y-2.5">

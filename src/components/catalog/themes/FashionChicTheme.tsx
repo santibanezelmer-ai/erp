@@ -21,6 +21,7 @@ import {
   ArrowRight,
   Heart,
 } from "lucide-react";
+import { BannerImagen } from "@/components/catalog/shared/BannerImagen";
 
 export function FashionChicTheme() {
   const {
@@ -151,7 +152,8 @@ export function FashionChicTheme() {
       </header>
 
       {/* Hero Editorial */}
-      {bannerVisible && (
+      {bannerVisible && config.bannerImageUrl && <BannerImagen />}
+      {bannerVisible && !config.bannerImageUrl && (
         <section className="bg-neutral-100 dark:bg-neutral-900 py-12 sm:py-16 px-4 sm:px-6 border-b border-neutral-200 dark:border-neutral-800">
           <div className="max-w-4xl mx-auto text-center space-y-3">
             <span className="text-[11px] font-bold tracking-widest uppercase text-neutral-500">

@@ -26,6 +26,7 @@ import {
   ArrowRight,
   Coffee,
 } from "lucide-react";
+import { BannerImagen } from "@/components/catalog/shared/BannerImagen";
 
 export function FoodBistroTheme() {
   const {
@@ -201,7 +202,8 @@ export function FoodBistroTheme() {
       </header>
 
       {/* Hero Gastronómico */}
-      {bannerVisible && (
+      {bannerVisible && config.bannerImageUrl && <BannerImagen />}
+      {bannerVisible && !config.bannerImageUrl && (
         <section className="relative overflow-hidden bg-gradient-to-br from-amber-900 via-orange-950 to-stone-950 text-white py-10 sm:py-16 px-4 sm:px-6">
           <div className="absolute inset-0 opacity-15 bg-[radial-gradient(#ea580c_1px,transparent_1px)] [background-size:16px_16px]" />
           

@@ -26,6 +26,7 @@ import {
   Flame,
   ArrowRight,
 } from "lucide-react";
+import { BannerImagen } from "@/components/catalog/shared/BannerImagen";
 
 export function FerreMaxTheme() {
   const {
@@ -170,31 +171,35 @@ export function FerreMaxTheme() {
       </header>
 
       {/* Hero Ferretero */}
-      <section className="bg-blue-800 text-white py-8 sm:py-12 px-4 sm:px-6">
-        <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-6">
-          <div className="space-y-3 text-center md:text-left">
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded bg-orange-500 text-white text-[11px] font-black uppercase tracking-wider shadow-2xs">
-              {bannerBadge}
-            </span>
-            <h2 className="text-2xl sm:text-4xl font-black uppercase tracking-tight leading-tight">
-              {bannerTitle}
-            </h2>
-            <p className="text-xs sm:text-sm text-blue-100 max-w-xl">
-              {bannerSubtitle}
-            </p>
-          </div>
+      {config.bannerImageUrl ? (
+        <BannerImagen />
+      ) : (
+        <section className="bg-blue-800 text-white py-8 sm:py-12 px-4 sm:px-6">
+          <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-6">
+            <div className="space-y-3 text-center md:text-left">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded bg-orange-500 text-white text-[11px] font-black uppercase tracking-wider shadow-2xs">
+                {bannerBadge}
+              </span>
+              <h2 className="text-2xl sm:text-4xl font-black uppercase tracking-tight leading-tight">
+                {bannerTitle}
+              </h2>
+              <p className="text-xs sm:text-sm text-blue-100 max-w-xl">
+                {bannerSubtitle}
+              </p>
+            </div>
 
-          <div className="flex items-center gap-3">
-            <Button
-              onClick={() => setFiltroRapido("ofertas")}
-              className="bg-orange-500 hover:bg-orange-600 text-white font-bold text-xs h-10 px-5 gap-1.5 shadow-sm"
-            >
-              <Flame className="h-4 w-4" />
-              Ver Ofertas
-            </Button>
+            <div className="flex items-center gap-3">
+              <Button
+                onClick={() => setFiltroRapido("ofertas")}
+                className="bg-orange-500 hover:bg-orange-600 text-white font-bold text-xs h-10 px-5 gap-1.5 shadow-sm"
+              >
+                <Flame className="h-4 w-4" />
+                Ver Ofertas
+              </Button>
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
+      )}
 
       {/* Navegación por Departamentos */}
       {categorias.length > 1 && (

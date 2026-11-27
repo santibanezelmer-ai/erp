@@ -22,6 +22,8 @@ import {
   Package,
 } from "lucide-react";
 import { BannerImagen } from "@/components/catalog/shared/BannerImagen";
+import { enlaceWhatsApp } from "@/lib/whatsapp";
+import { etiquetaCategoria } from "@/lib/categorias";
 
 export function BeautyGlowTheme() {
   const {
@@ -103,10 +105,16 @@ export function BeautyGlowTheme() {
                   </span>
                 )}
                 {(negocio as any)?.telefono && (
-                  <span className="inline-flex items-center gap-1">
+                  <a
+                    href={enlaceWhatsApp((negocio as { telefono?: string | null }).telefono)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 hover:text-rose-600 transition-colors"
+                    title="Escríbenos por WhatsApp"
+                  >
                     <Phone className="h-3 w-3 text-rose-400" />
                     {(negocio as any).telefono}
-                  </span>
+                  </a>
                 )}
               </div>
             </div>
@@ -207,7 +215,7 @@ export function BeautyGlowTheme() {
                       : "bg-white dark:bg-neutral-900 text-neutral-700 dark:text-neutral-300 border-rose-100 dark:border-neutral-800 hover:border-rose-300"
                   }`}
                 >
-                  {cat === "todas" ? "Todas las Colecciones" : cat}
+                  {cat === "todas" ? "Todas las Colecciones" : etiquetaCategoria(cat)}
                 </button>
               );
             })}
@@ -367,7 +375,7 @@ export function BeautyGlowTheme() {
                       <div>
                         {p.categoria && (
                           <span className="text-[10px] font-medium text-rose-500 uppercase tracking-wider block truncate">
-                            {p.categoria}
+                            {etiquetaCategoria(p.categoria)}
                           </span>
                         )}
                         <h4 className="font-medium text-xs sm:text-sm text-neutral-900 dark:text-neutral-100 line-clamp-2 leading-snug group-hover:text-rose-600 transition-colors">
@@ -433,7 +441,7 @@ export function BeautyGlowTheme() {
                       <div className="min-w-0">
                         {p.categoria && (
                           <span className="text-[10px] text-rose-500 font-bold uppercase tracking-wider block truncate">
-                            {p.categoria}
+                            {etiquetaCategoria(p.categoria)}
                           </span>
                         )}
                         <h4 className="font-semibold text-xs sm:text-sm text-foreground truncate">

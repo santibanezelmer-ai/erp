@@ -22,6 +22,7 @@ import {
   Heart,
 } from "lucide-react";
 import { BannerImagen } from "@/components/catalog/shared/BannerImagen";
+import { etiquetaCategoria } from "@/lib/categorias";
 
 export function FashionChicTheme() {
   const {
@@ -193,7 +194,7 @@ export function FashionChicTheme() {
                     : "text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100 dark:hover:bg-neutral-800"
                 }`}
               >
-                {cat}
+                {etiquetaCategoria(cat)}
               </button>
             ))}
           </div>

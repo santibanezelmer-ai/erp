@@ -27,6 +27,8 @@ import {
   ArrowRight,
 } from "lucide-react";
 import { BannerImagen } from "@/components/catalog/shared/BannerImagen";
+import { enlaceWhatsApp } from "@/lib/whatsapp";
+import { etiquetaCategoria } from "@/lib/categorias";
 
 export function FerreMaxTheme() {
   const {
@@ -83,10 +85,15 @@ export function FerreMaxTheme() {
             </span>
           </div>
           {(negocio as any)?.telefono && (
-            <div className="flex items-center gap-1 font-semibold text-white">
+            <a
+              href={enlaceWhatsApp((negocio as { telefono?: string | null }).telefono)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1 font-semibold text-white hover:text-orange-200 transition-colors"
+            >
               <Phone className="h-3 w-3 text-orange-400" />
               <span>Venta Asistida: {(negocio as any).telefono}</span>
-            </div>
+            </a>
           )}
         </div>
       </div>
@@ -217,7 +224,7 @@ export function FerreMaxTheme() {
                       : "text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
                   }`}
                 >
-                  {cat === "todas" ? "Todos los Departamentos" : cat}
+                  {cat === "todas" ? "Todos los Departamentos" : etiquetaCategoria(cat)}
                 </button>
               );
             })}
@@ -353,7 +360,7 @@ export function FerreMaxTheme() {
                       <div>
                         {p.categoria && (
                           <span className="text-[10px] font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wider block truncate">
-                            {p.categoria}
+                            {etiquetaCategoria(p.categoria)}
                           </span>
                         )}
                         <h4 className="font-bold text-xs sm:text-sm text-slate-900 dark:text-slate-100 line-clamp-2 leading-snug group-hover:text-blue-600 transition-colors">
@@ -420,7 +427,7 @@ export function FerreMaxTheme() {
                       <div className="min-w-0">
                         {p.categoria && (
                           <span className="text-[10px] text-blue-600 font-bold uppercase tracking-wider block truncate">
-                            {p.categoria}
+                            {etiquetaCategoria(p.categoria)}
                           </span>
                         )}
                         <h4 className="font-bold text-xs sm:text-sm text-slate-900 dark:text-slate-100 truncate">

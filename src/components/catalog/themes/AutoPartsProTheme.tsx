@@ -24,6 +24,8 @@ import {
   Building2,
 } from "lucide-react";
 import { BannerImagen } from "@/components/catalog/shared/BannerImagen";
+import { enlaceWhatsApp } from "@/lib/whatsapp";
+import { etiquetaCategoria } from "@/lib/categorias";
 
 export function AutoPartsProTheme() {
   const {
@@ -83,10 +85,15 @@ export function AutoPartsProTheme() {
             <span className="hidden md:inline">Atención técnica directa por WhatsApp</span>
           </div>
           {(negocio as any)?.telefono && (
-            <div className="flex items-center gap-1.5 text-neutral-300">
+            <a
+              href={enlaceWhatsApp((negocio as { telefono?: string | null }).telefono)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1.5 text-neutral-300 hover:text-white transition-colors"
+            >
               <Phone className="h-3 w-3 text-amber-400" />
               <span>Consultas mecánicas: {(negocio as any).telefono}</span>
-            </div>
+            </a>
           )}
         </div>
       </div>
@@ -244,7 +251,7 @@ export function AutoPartsProTheme() {
                       : "bg-neutral-900 text-neutral-400 border-neutral-800 hover:border-neutral-700 hover:text-white"
                   }`}
                 >
-                  {cat === "todas" ? "Todos los Repuestos" : cat}
+                  {cat === "todas" ? "Todos los Repuestos" : etiquetaCategoria(cat)}
                 </button>
               );
             })}
@@ -382,7 +389,7 @@ export function AutoPartsProTheme() {
                             </span>
                           ) : (
                             <span className="text-neutral-500 uppercase truncate">
-                              {p.categoria || "Repuesto"}
+                              {etiquetaCategoria(p.categoria) || "Repuesto"}
                             </span>
                           )}
                           {p.codigo && (

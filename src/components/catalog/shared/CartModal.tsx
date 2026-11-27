@@ -31,6 +31,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { enlaceWhatsApp } from "@/lib/whatsapp";
 
 export function CartModal() {
   const {
@@ -155,9 +156,7 @@ export function CartModal() {
       msg += `_Pedido realizado desde la tienda online oficial (operixerp.cloud/c/${negocio.slug})_`;
 
       const telNegocio = (negocio as any).telefono || "";
-      const waUrl = telNegocio
-        ? `https://wa.me/${telNegocio.replace(/[^0-9]/g, "")}?text=${encodeURIComponent(msg)}`
-        : `https://api.whatsapp.com/send?text=${encodeURIComponent(msg)}`;
+      const waUrl = enlaceWhatsApp(telNegocio, msg);
 
       window.open(waUrl, "_blank");
 

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useTenant } from "@/contexts/tenant-context";
 import { createClient } from "@/lib/supabase/client";
 import { formatMoney } from "@/lib/format";
+import { numeroWhatsApp } from "@/lib/whatsapp";
 import { imprimirTicketTermico } from "@/lib/ticket";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -250,7 +251,7 @@ export default function FiadosPage() {
       toast.error("El cliente no tiene un teléfono o WhatsApp registrado");
       return;
     }
-    const telLimpio = c.telefono.replace(/[^0-9]/g, "");
+    const telLimpio = numeroWhatsApp(c.telefono) || "";
     if (!telLimpio) {
       toast.error("El teléfono no contiene números válidos");
       return;

@@ -25,6 +25,8 @@ import {
   Layers,
 } from "lucide-react";
 import { BannerImagen } from "@/components/catalog/shared/BannerImagen";
+import { enlaceWhatsApp } from "@/lib/whatsapp";
+import { etiquetaCategoria } from "@/lib/categorias";
 
 export function MarketFreshTheme() {
   const {
@@ -89,7 +91,7 @@ export function MarketFreshTheme() {
 
           {(negocio as any)?.telefono && (
             <a
-              href={`https://wa.me/${((negocio as any).telefono || "").replace(/[^0-9]/g, "")}`}
+              href={enlaceWhatsApp((negocio as { telefono?: string | null }).telefono)}
               target="_blank"
               rel="noopener noreferrer"
               className="flex items-center gap-1 text-emerald-200 hover:text-white transition-colors font-semibold"
@@ -232,7 +234,7 @@ export function MarketFreshTheme() {
                     : "bg-emerald-50 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 hover:bg-emerald-100/60"
                 }`}
               >
-                {cat}
+                {etiquetaCategoria(cat)}
               </button>
             ))}
           </div>

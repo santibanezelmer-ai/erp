@@ -27,6 +27,8 @@ import {
   Coffee,
 } from "lucide-react";
 import { BannerImagen } from "@/components/catalog/shared/BannerImagen";
+import { enlaceWhatsApp } from "@/lib/whatsapp";
+import { etiquetaCategoria } from "@/lib/categorias";
 
 export function FoodBistroTheme() {
   const {
@@ -95,7 +97,7 @@ export function FoodBistroTheme() {
             </span>
             {(negocio as any)?.telefono && (
               <a
-                href={`https://wa.me/${((negocio as any).telefono || "").replace(/[^0-9]/g, "")}`}
+                href={enlaceWhatsApp((negocio as { telefono?: string | null }).telefono)}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="hidden sm:inline-flex items-center gap-1 text-amber-300 hover:text-white transition-colors"
@@ -281,7 +283,7 @@ export function FoodBistroTheme() {
                     : "bg-orange-100/60 dark:bg-stone-800 text-stone-700 dark:text-stone-300 hover:bg-orange-200/60"
                 }`}
               >
-                {cat}
+                {etiquetaCategoria(cat)}
               </button>
             ))}
           </div>

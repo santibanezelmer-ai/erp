@@ -72,12 +72,12 @@ export function AutoPartsProTheme() {
   const bannerBadge = config.bannerBadgeText || "⚡ Despacho Rápido y Stock Real";
 
   return (
-    <div className="min-h-screen flex flex-col bg-neutral-950 text-neutral-100 font-sans selection:bg-amber-500 selection:text-neutral-950">
+    <div className="min-h-screen flex flex-col bg-neutral-950 text-neutral-100 font-sans selection:bg-(color:--tp-500) selection:text-neutral-950">
       {/* Top Banner de Garantía Técnica */}
       <div className="bg-neutral-900 border-b border-neutral-800 text-xs py-2 px-4">
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2 text-[11px] text-neutral-400">
           <div className="flex items-center gap-4">
-            <span className="flex items-center gap-1 text-amber-400 font-semibold">
+            <span className="flex items-center gap-1 text-(color:--tp-400) font-semibold">
               <ShieldCheck className="h-3.5 w-3.5" />
               Garantía en todos los repuestos
             </span>
@@ -91,7 +91,7 @@ export function AutoPartsProTheme() {
               rel="noopener noreferrer"
               className="flex items-center gap-1.5 text-neutral-300 hover:text-white transition-colors"
             >
-              <Phone className="h-3 w-3 text-amber-400" />
+              <Phone className="h-3 w-3 text-(color:--tp-400)" />
               <span>Consultas mecánicas: {(negocio as any).telefono}</span>
             </a>
           )}
@@ -110,7 +110,7 @@ export function AutoPartsProTheme() {
                 className="h-10 w-10 sm:h-12 sm:w-12 rounded-xl object-contain bg-neutral-950 p-1 border border-neutral-800 shrink-0"
               />
             ) : (
-              <div className="h-10 w-10 sm:h-12 sm:w-12 rounded-xl bg-amber-500/10 text-amber-500 border border-amber-500/20 flex items-center justify-center shrink-0">
+              <div className="h-10 w-10 sm:h-12 sm:w-12 rounded-xl bg-(color:--tp-500)/10 text-(color:--tp-500) border border-(color:--tp-500)/20 flex items-center justify-center shrink-0">
                 <Wrench className="h-5 w-5" />
               </div>
             )}
@@ -120,7 +120,7 @@ export function AutoPartsProTheme() {
               </h1>
               {negocio.direccion && (
                 <div className="text-[11px] text-neutral-400 truncate flex items-center gap-1">
-                  <MapPin className="h-3 w-3 text-amber-400 shrink-0" />
+                  <MapPin className="h-3 w-3 text-(color:--tp-400) shrink-0" />
                   <span>{negocio.direccion}</span>
                 </div>
               )}
@@ -130,13 +130,13 @@ export function AutoPartsProTheme() {
           {/* Buscador Técnico Central Prominente (SKU / Pieza / Modelo) */}
           <div className="hidden md:flex flex-1 max-w-lg mx-4">
             <div className="relative w-full">
-              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-amber-400" />
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-(color:--tp-400)" />
               <Input
                 type="text"
                 placeholder="Buscar por código de pieza, SKU, marca o repuesto..."
                 value={busqueda}
                 onChange={(e) => setBusqueda(e.target.value)}
-                className="pl-10 h-11 rounded-xl border-neutral-700 bg-neutral-950 text-xs text-neutral-100 placeholder:text-neutral-500 focus-visible:ring-amber-400 focus-visible:border-amber-400 font-mono"
+                className="pl-10 h-11 rounded-xl border-neutral-700 bg-neutral-950 text-xs text-neutral-100 placeholder:text-neutral-500 focus-visible:ring-(color:--tp-400) focus-visible:border-(color:--tp-400) font-mono"
               />
               {busqueda && (
                 <button
@@ -152,11 +152,11 @@ export function AutoPartsProTheme() {
           {/* Carrito de Pedido Técnico */}
           <Button
             onClick={openCart}
-            className="rounded-xl h-11 px-4 bg-amber-500 hover:bg-amber-400 text-neutral-950 font-black shadow-lg flex items-center gap-2.5 text-xs shrink-0 tracking-wide"
+            className="rounded-xl h-11 px-4 bg-(color:--tp-500) hover:bg-(color:--tp-400) text-(color:--tp-on) font-black shadow-lg flex items-center gap-2.5 text-xs shrink-0 tracking-wide"
           >
             <ShoppingCart className="h-4 w-4 stroke-[2.5]" />
             <span className="hidden sm:inline">COTIZACIÓN / PEDIDO</span>
-            <span className="bg-neutral-950 text-amber-400 rounded-md text-[11px] font-mono font-bold px-2 py-0.5">
+            <span className="bg-neutral-950 text-(color:--tp-400) rounded-md text-[11px] font-mono font-bold px-2 py-0.5">
               {cartCount}
             </span>
           </Button>
@@ -165,7 +165,7 @@ export function AutoPartsProTheme() {
         {/* Buscador Móvil */}
         <div className="md:hidden px-4 pb-3 pt-1 border-t border-neutral-800">
           <div className="relative w-full">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-amber-400" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-(color:--tp-400)" />
             <Input
               type="text"
               placeholder="Buscar pieza, código o marca..."
@@ -183,7 +183,7 @@ export function AutoPartsProTheme() {
       ) : (
         <section className="relative bg-gradient-to-b from-neutral-900 to-neutral-950 py-10 sm:py-16 px-4 sm:px-6 border-b border-neutral-800">
           <div className="max-w-5xl mx-auto text-center space-y-4">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-md text-xs font-mono font-bold bg-amber-500/10 text-amber-400 border border-amber-500/30">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-md text-xs font-mono font-bold bg-(color:--tp-500)/10 text-(color:--tp-400) border border-(color:--tp-500)/30">
               <Zap className="h-3.5 w-3.5" />
               <span>{bannerBadge}</span>
             </div>
@@ -205,7 +205,7 @@ export function AutoPartsProTheme() {
         {marcas.length > 0 && (
           <div className="space-y-2">
             <div className="text-[11px] font-bold text-neutral-400 uppercase tracking-wider flex items-center gap-1.5">
-              <Building2 className="h-3.5 w-3.5 text-amber-400" />
+              <Building2 className="h-3.5 w-3.5 text-(color:--tp-400)" />
               Filtrar por Fabricante / Marca:
             </div>
             <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
@@ -213,7 +213,7 @@ export function AutoPartsProTheme() {
                 onClick={() => setMarcaSel("todas")}
                 className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all border ${
                   marcaSel === "todas"
-                    ? "bg-amber-500 text-neutral-950 border-amber-500 font-black"
+                    ? "bg-(color:--tp-500) text-(color:--tp-on) border-(color:--tp-500) font-black"
                     : "bg-neutral-900 text-neutral-300 border-neutral-800 hover:border-neutral-700"
                 }`}
               >
@@ -225,7 +225,7 @@ export function AutoPartsProTheme() {
                   onClick={() => setMarcaSel(m.id)}
                   className={`px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-all border flex items-center gap-1.5 ${
                     marcaSel === m.id
-                      ? "bg-amber-500 text-neutral-950 border-amber-500 font-bold"
+                      ? "bg-(color:--tp-500) text-(color:--tp-on) border-(color:--tp-500) font-bold"
                       : "bg-neutral-900 text-neutral-300 border-neutral-800 hover:border-neutral-700"
                   }`}
                 >
@@ -265,7 +265,7 @@ export function AutoPartsProTheme() {
               onClick={() => setFiltroRapido("todos")}
               className={`px-3 py-1.5 rounded-lg font-medium transition-all ${
                 filtroRapido === "todos"
-                  ? "bg-neutral-800 text-amber-400 font-bold"
+                  ? "bg-neutral-800 text-(color:--tp-400) font-bold"
                   : "text-neutral-400 hover:text-white"
               }`}
             >
@@ -275,7 +275,7 @@ export function AutoPartsProTheme() {
               onClick={() => setFiltroRapido("ofertas")}
               className={`px-3 py-1.5 rounded-lg font-medium transition-all ${
                 filtroRapido === "ofertas"
-                  ? "bg-neutral-800 text-amber-400 font-bold"
+                  ? "bg-neutral-800 text-(color:--tp-400) font-bold"
                   : "text-neutral-400 hover:text-white"
               }`}
             >
@@ -285,7 +285,7 @@ export function AutoPartsProTheme() {
               onClick={() => setFiltroRapido("disponibles")}
               className={`px-3 py-1.5 rounded-lg font-medium transition-all ${
                 filtroRapido === "disponibles"
-                  ? "bg-neutral-800 text-amber-400 font-bold"
+                  ? "bg-neutral-800 text-(color:--tp-400) font-bold"
                   : "text-neutral-400 hover:text-white"
               }`}
             >
@@ -312,7 +312,7 @@ export function AutoPartsProTheme() {
                 variant="ghost"
                 size="sm"
                 onClick={limpiarFiltros}
-                className="h-7 text-xs text-amber-400 hover:text-amber-300"
+                className="h-7 text-xs text-(color:--tp-400) hover:text-(color:--tp-300)"
               >
                 Limpiar filtros
               </Button>
@@ -344,7 +344,7 @@ export function AutoPartsProTheme() {
                   <div
                     key={p.id}
                     onClick={() => openProductDetail(p)}
-                    className="group bg-neutral-900 rounded-xl border border-neutral-800 hover:border-amber-500/60 transition-all flex flex-col justify-between overflow-hidden shadow-xs cursor-pointer"
+                    className="group bg-neutral-900 rounded-xl border border-neutral-800 hover:border-(color:--tp-500)/60 transition-all flex flex-col justify-between overflow-hidden shadow-xs cursor-pointer"
                   >
                     {/* Imagen del Repuesto */}
                     <div className="relative aspect-square w-full bg-neutral-950 p-3 flex items-center justify-center border-b border-neutral-800 overflow-hidden">
@@ -360,7 +360,7 @@ export function AutoPartsProTheme() {
                       )}
 
                       {hasPromo && maxDisc > 0 && (
-                        <Badge className="absolute top-2 left-2 bg-amber-500 text-neutral-950 font-black text-[10px] rounded-md">
+                        <Badge className="absolute top-2 left-2 bg-(color:--tp-500) text-(color:--tp-on) font-black text-[10px] rounded-md">
                           -{maxDisc}%
                         </Badge>
                       )}
@@ -384,7 +384,7 @@ export function AutoPartsProTheme() {
                       <div>
                         <div className="flex items-center justify-between gap-1 text-[11px] mb-1">
                           {brand ? (
-                            <span className="font-bold text-amber-400 uppercase truncate">
+                            <span className="font-bold text-(color:--tp-400) uppercase truncate">
                               {brand}
                             </span>
                           ) : (
@@ -399,7 +399,7 @@ export function AutoPartsProTheme() {
                           )}
                         </div>
 
-                        <h4 className="font-bold text-xs sm:text-sm text-neutral-100 line-clamp-2 leading-snug group-hover:text-amber-400 transition-colors">
+                        <h4 className="font-bold text-xs sm:text-sm text-neutral-100 line-clamp-2 leading-snug group-hover:text-(color:--tp-400) transition-colors">
                           {p.nombre}
                         </h4>
                       </div>
@@ -415,7 +415,7 @@ export function AutoPartsProTheme() {
                           <Button
                             size="sm"
                             onClick={(e) => handleQuickAddClick(e, p)}
-                            className="h-8 px-2.5 bg-neutral-800 hover:bg-amber-500 hover:text-neutral-950 text-neutral-200 text-xs font-bold rounded-lg transition-colors shrink-0"
+                            className="h-8 px-2.5 bg-neutral-800 hover:bg-(color:--tp-500) hover:text-(color:--tp-on) text-neutral-200 text-xs font-bold rounded-lg transition-colors shrink-0"
                             title="Añadir a cotización"
                           >
                             <ShoppingCart className="h-3.5 w-3.5" />
@@ -441,7 +441,7 @@ export function AutoPartsProTheme() {
                   <div
                     key={p.id}
                     onClick={() => openProductDetail(p)}
-                    className="p-3 rounded-xl bg-neutral-900 border border-neutral-800 hover:border-amber-500/50 flex items-center justify-between gap-4 transition-all cursor-pointer shadow-2xs"
+                    className="p-3 rounded-xl bg-neutral-900 border border-neutral-800 hover:border-(color:--tp-500)/50 flex items-center justify-between gap-4 transition-all cursor-pointer shadow-2xs"
                   >
                     <div className="flex items-center gap-3.5 min-w-0">
                       <div className="h-14 w-14 sm:h-16 sm:w-16 rounded-lg bg-neutral-950 p-1.5 border border-neutral-800 overflow-hidden shrink-0 flex items-center justify-center">
@@ -458,7 +458,7 @@ export function AutoPartsProTheme() {
                       <div className="min-w-0">
                         <div className="flex items-center gap-2">
                           {brand && (
-                            <span className="text-[10px] text-amber-400 font-bold uppercase truncate">
+                            <span className="text-[10px] text-(color:--tp-400) font-bold uppercase truncate">
                               {brand}
                             </span>
                           )}
@@ -493,7 +493,7 @@ export function AutoPartsProTheme() {
                         <Button
                           size="sm"
                           onClick={(e) => handleQuickAddClick(e, p)}
-                          className="h-9 px-3 rounded-lg bg-amber-500 hover:bg-amber-400 text-neutral-950 font-black text-xs gap-1.5"
+                          className="h-9 px-3 rounded-lg bg-(color:--tp-500) hover:bg-(color:--tp-400) text-(color:--tp-on) font-black text-xs gap-1.5"
                         >
                           <ShoppingCart className="h-3.5 w-3.5" />
                           <span className="hidden sm:inline">Cotizar</span>
@@ -523,7 +523,7 @@ export function AutoPartsProTheme() {
               href="https://operixerp.cloud"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-amber-400 hover:underline font-semibold"
+              className="text-(color:--tp-400) hover:underline font-semibold"
             >
               Operix ERP
             </a>{" "}

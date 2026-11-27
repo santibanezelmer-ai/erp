@@ -42,7 +42,7 @@ export const THEMES_LIST: ThemeMetadata[] = [
     previewImage: "/themes/autoparts-preview.jpg",
     version: "1.0.0",
     defaultConfig: {
-      primaryColor: "#eab308", // amber-500
+      primaryColor: "#f59e0b", // amber-500 (tono ancla de la plantilla)
       accentColor: "#f59e0b",
       backgroundColor: "#09090b",
       fontFamily: "sans",
@@ -148,8 +148,8 @@ export const THEMES_LIST: ThemeMetadata[] = [
     previewImage: "/themes/market-preview.jpg",
     version: "1.0.0",
     defaultConfig: {
-      primaryColor: "#16a34a", // emerald-600
-      accentColor: "#059669", // teal-600
+      primaryColor: "#059669", // emerald-600 (tono ancla de la plantilla)
+      accentColor: "#0d9488", // teal-600
       backgroundColor: "#f8faf8",
       fontFamily: "sans",
       bannerTitle: "Tu Almacén & Minimarket de Confianza",

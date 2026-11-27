@@ -53,7 +53,6 @@ export function FashionChicTheme() {
     variantsOf,
   } = useCatalog();
 
-  const primaryCol = config.primaryColor || "#18181b"; // zinc-900 minimalista
   const bannerVisible = config.sectionsVisibility?.bannerHero !== false;
   const categoriesVisible = config.sectionsVisibility?.categoriasPills !== false;
 
@@ -85,7 +84,7 @@ export function FashionChicTheme() {
                 className="h-11 w-11 sm:h-12 sm:w-12 rounded-full object-cover border border-neutral-300 shadow-2xs shrink-0"
               />
             ) : (
-              <div className="h-11 w-11 sm:h-12 sm:w-12 rounded-full bg-neutral-900 text-white flex items-center justify-center shrink-0">
+              <div className="h-11 w-11 sm:h-12 sm:w-12 rounded-full bg-(color:--tp-900) text-(color:--tp-on) flex items-center justify-center shrink-0">
                 <Store className="h-5 w-5" />
               </div>
             )}
@@ -127,7 +126,7 @@ export function FashionChicTheme() {
           {/* Bolsa de Compras */}
           <Button
             onClick={openCart}
-            className="rounded-full h-10 px-5 bg-neutral-900 hover:bg-neutral-800 text-white flex items-center gap-2 text-xs font-semibold shrink-0"
+            className="rounded-full h-10 px-5 bg-(color:--tp-900) hover:bg-(color:--tp-800) text-(color:--tp-on) flex items-center gap-2 text-xs font-semibold shrink-0"
           >
             <ShoppingCart className="h-4 w-4" />
             <span className="hidden sm:inline">Bolsa</span>
@@ -178,7 +177,7 @@ export function FashionChicTheme() {
               onClick={() => setCategoriaSel("todas")}
               className={`px-4 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all shrink-0 cursor-pointer ${
                 categoriaSel === "todas"
-                  ? "bg-neutral-900 text-white dark:bg-white dark:text-neutral-900 shadow-xs"
+                  ? "bg-(color:--tp-900) text-(color:--tp-on) dark:bg-white dark:text-neutral-900 shadow-xs"
                   : "text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100 dark:hover:bg-neutral-800"
               }`}
             >
@@ -190,7 +189,7 @@ export function FashionChicTheme() {
                 onClick={() => setCategoriaSel(cat)}
                 className={`px-4 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all shrink-0 cursor-pointer ${
                   categoriaSel === cat
-                    ? "bg-neutral-900 text-white dark:bg-white dark:text-neutral-900 shadow-xs"
+                    ? "bg-(color:--tp-900) text-(color:--tp-on) dark:bg-white dark:text-neutral-900 shadow-xs"
                     : "text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100 dark:hover:bg-neutral-800"
                 }`}
               >
@@ -272,7 +271,7 @@ export function FashionChicTheme() {
                     )}
 
                     {hasPromo && maxDiscount > 0 && (
-                      <span className="absolute top-2.5 left-2.5 bg-neutral-900 text-white text-[10px] font-black px-2 py-0.5 rounded uppercase tracking-wider">
+                      <span className="absolute top-2.5 left-2.5 bg-(color:--tp-900) text-(color:--tp-on) text-[10px] font-black px-2 py-0.5 rounded uppercase tracking-wider">
                         Sale {maxDiscount}%
                       </span>
                     )}
@@ -309,7 +308,7 @@ export function FashionChicTheme() {
                         onClick={(e) => handleQuickAddClick(e, prod)}
                         disabled={!disponible}
                         size="sm"
-                        className="rounded-full h-8 px-3 text-[11px] bg-neutral-900 hover:bg-neutral-800 text-white font-semibold"
+                        className="rounded-full h-8 px-3 text-[11px] bg-(color:--tp-900) hover:bg-(color:--tp-800) text-(color:--tp-on) font-semibold"
                       >
                         {hasVars ? "Tallas" : "Agregar"}
                       </Button>

@@ -9,7 +9,7 @@ import { irAlCatalogo } from "./orden";
 
 const MAX = 12;
 
-function Carrusel({
+export function Carrusel({
   titulo,
   icono,
   productos,
@@ -18,7 +18,7 @@ function Carrusel({
   titulo: string;
   icono: React.ReactNode;
   productos: Producto[];
-  verTodo: () => void;
+  verTodo?: () => void;
 }) {
   const { openProductDetail, getUnitPrice, productMaxDiscount } = useCatalog();
   const pista = useRef<HTMLDivElement>(null);
@@ -35,13 +35,15 @@ function Carrusel({
           {titulo}
         </h2>
         <div className="flex items-center gap-1.5">
-          <button
-            type="button"
-            onClick={verTodo}
-            className="text-xs font-semibold text-(color:--tp-700) hover:underline mr-1"
-          >
-            Ver todo
-          </button>
+          {verTodo && (
+            <button
+              type="button"
+              onClick={verTodo}
+              className="text-xs font-semibold text-(color:--tp-700) hover:underline mr-1"
+            >
+              Ver todo
+            </button>
+          )}
           <button
             type="button"
             aria-label="Anterior"

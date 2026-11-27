@@ -85,11 +85,13 @@ export async function generateMetadata({
           `¡Disponible en ${storeName} por ${precioStr}! Revisa los detalles de ${prod.nombre} y haz tu pedido directamente por WhatsApp.`;
 
         const prodImg = ensureAbsoluteUrl(prod.imagen_url, storeLogo);
-        const productUrl = `${baseUrl}?p=${prod.id}`;
+        // Los enlaces antiguos ?p= apuntan a la página propia del producto
+        const productUrl = `${baseUrl}/p/${prod.id}`;
 
         return {
           title: pageTitle,
           description: prodDesc,
+          alternates: { canonical: productUrl },
           openGraph: {
             title: pageTitle,
             description: prodDesc,
@@ -122,6 +124,7 @@ export async function generateMetadata({
     return {
       title: `${storeName} | Catálogo y Pedidos Online`,
       description: storeDescription,
+      alternates: { canonical: baseUrl },
       openGraph: {
         title: `${storeName} · Catálogo y Pedidos Online`,
         description: storeDescription,

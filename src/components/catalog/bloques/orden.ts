@@ -4,6 +4,7 @@ import type { ThemeCustomConfig } from "@/types/theme.types";
 export const BLOQUES = [
   { id: "hero", etiqueta: "Banner principal", descripcion: "Imagen o texto de bienvenida de la plantilla" },
   { id: "ofertas", etiqueta: "Ofertas destacadas", descripcion: "Carrusel con los productos en promoción" },
+  { id: "masVendidos", etiqueta: "Más vendidos", descripcion: "Los productos más vendidos de los últimos 90 días" },
   { id: "novedades", etiqueta: "Novedades", descripcion: "Carrusel con los productos marcados como nuevos" },
   { id: "catalogo", etiqueta: "Catálogo de productos", descripcion: "Categorías, filtros y todos los productos" },
   { id: "marcas", etiqueta: "Nuestras marcas", descripcion: "Logos de las marcas; al tocar una filtra el catálogo" },
@@ -13,7 +14,7 @@ export const BLOQUES = [
 export type BloqueId = (typeof BLOQUES)[number]["id"];
 
 /** Orden por defecto = el aspecto de siempre (banner y luego catálogo). */
-export const ORDEN_POR_DEFECTO: BloqueId[] = ["hero", "ofertas", "novedades", "catalogo", "marcas", "info"];
+export const ORDEN_POR_DEFECTO: BloqueId[] = ["hero", "ofertas", "masVendidos", "novedades", "catalogo", "marcas", "info"];
 
 const IDS = new Set<string>(BLOQUES.map((b) => b.id));
 

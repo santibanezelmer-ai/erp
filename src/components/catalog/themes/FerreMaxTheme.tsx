@@ -26,7 +26,7 @@ import {
   Flame,
   ArrowRight,
 } from "lucide-react";
-import { BannerImagen } from "@/components/catalog/shared/BannerImagen";
+import { BannerImagen, tieneBannerImagen } from "@/components/catalog/shared/BannerImagen";
 import { enlaceWhatsApp } from "@/lib/whatsapp";
 import { etiquetaCategoria } from "@/lib/categorias";
 import { ComposicionTienda } from "@/components/catalog/bloques/ComposicionTienda";
@@ -106,6 +106,8 @@ export function FerreMaxTheme() {
           <div className="flex items-center gap-3 min-w-0">
             {rawLogo ? (
               <img
+                  loading="lazy"
+                  decoding="async"
                 src={rawLogo}
                 alt={negocio.nombre}
                 className="h-10 w-10 sm:h-12 sm:w-12 rounded-lg object-contain bg-white p-0.5 border border-slate-200 shadow-2xs shrink-0"
@@ -183,7 +185,7 @@ export function FerreMaxTheme() {
   const hero = (
     <>
       {/* Hero Ferretero */}
-      {config.bannerImageUrl ? (
+      {tieneBannerImagen(config) ? (
         <BannerImagen />
       ) : (
         <section className="bg-(color:--tp-800) text-(color:--tp-on) py-8 sm:py-12 px-4 sm:px-6">
@@ -425,6 +427,8 @@ export function FerreMaxTheme() {
                       <div className="h-14 w-14 sm:h-16 sm:w-16 rounded bg-slate-50 dark:bg-slate-950 p-1 border border-slate-200 overflow-hidden shrink-0 flex items-center justify-center">
                         {p.imagen_url ? (
                           <img
+                  loading="lazy"
+                  decoding="async"
                             src={p.imagen_url}
                             alt={p.nombre}
                             className="h-full w-full object-contain"

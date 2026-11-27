@@ -214,8 +214,12 @@ export default async function CatalogoPublicoPage({
   const inicial: CatalogInicial =
     res.status === "ok" ? { estado: "ok", data: res.data } : { estado: res.status };
 
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+
   return (
     <>
+      {/* Las imágenes de productos y banners vienen del storage de Supabase */}
+      {supabaseUrl && <link rel="preconnect" href={supabaseUrl} crossOrigin="anonymous" />}
       {res.status === "ok" && !isPreview && (
         <script
           type="application/ld+json"

@@ -24,7 +24,7 @@ import {
   Clock,
   Layers,
 } from "lucide-react";
-import { BannerImagen } from "@/components/catalog/shared/BannerImagen";
+import { BannerImagen, tieneBannerImagen } from "@/components/catalog/shared/BannerImagen";
 import { enlaceWhatsApp } from "@/lib/whatsapp";
 import { etiquetaCategoria } from "@/lib/categorias";
 import { ComposicionTienda } from "@/components/catalog/bloques/ComposicionTienda";
@@ -109,6 +109,8 @@ export function MarketFreshTheme() {
           <div className="flex items-center gap-3 min-w-0">
             {rawLogo ? (
               <img
+                  loading="lazy"
+                  decoding="async"
                 src={rawLogo}
                 alt={negocio.nombre}
                 className="h-10 w-10 sm:h-12 sm:w-12 rounded-xl object-contain bg-white p-0.5 border border-(color:--tp-200) shadow-2xs shrink-0"
@@ -194,8 +196,8 @@ export function MarketFreshTheme() {
   const hero = (
     <>
       {/* Hero Fresco */}
-      {bannerVisible && config.bannerImageUrl && <BannerImagen />}
-      {bannerVisible && !config.bannerImageUrl && (
+      {bannerVisible && tieneBannerImagen(config) && <BannerImagen />}
+      {bannerVisible && !tieneBannerImagen(config) && (
         <section className="bg-gradient-to-r from-(color:--tp-800) via-(color:--tp-700) to-(color:--ta-800) text-white py-8 sm:py-12 px-4 sm:px-6">
           <div className="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center justify-between gap-6">
             <div className="max-w-2xl space-y-2.5">

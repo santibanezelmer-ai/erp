@@ -37,6 +37,7 @@ interface CatalogProviderProps {
   themeId: ThemeId;
   config: ThemeCustomConfig;
   initialProductId?: string | null;
+  masVendidos?: string[];
 }
 
 export function CatalogProvider({
@@ -48,6 +49,7 @@ export function CatalogProvider({
   themeId,
   config,
   initialProductId,
+  masVendidos = [],
 }: CatalogProviderProps) {
   // Filtros y Búsqueda
   const [busqueda, setBusqueda] = useState("");
@@ -340,6 +342,7 @@ export function CatalogProvider({
     productosFiltrados,
     variantes,
     marcas,
+    masVendidos,
     categorias,
     busqueda,
     setBusqueda,

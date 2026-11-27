@@ -16,6 +16,8 @@ interface CatalogoPublicoClientProps {
   initialProductId?: string;
   previewTheme?: ThemeId | null;
   isPreview?: boolean;
+  /** Página propia de un producto */
+  productoPaginaId?: string;
 }
 
 export default function CatalogoPublicoClient({
@@ -23,6 +25,7 @@ export default function CatalogoPublicoClient({
   initialProductId,
   previewTheme,
   isPreview,
+  productoPaginaId,
 }: CatalogoPublicoClientProps) {
   const vista = useMemo(
     () =>
@@ -89,6 +92,7 @@ export default function CatalogoPublicoClient({
       config={themeConfig!}
       initialProductId={initialProductId}
       masVendidos={vista.masVendidos}
+      productoPaginaId={productoPaginaId ?? null}
     >
       <ThemeRenderer />
     </CatalogProvider>

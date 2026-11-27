@@ -87,6 +87,8 @@ export interface CatalogContextValue {
   marcas: Marca[];
   /** Ids de productos más vendidos (últimos 90 días), de mayor a menor */
   masVendidos: string[];
+  /** Si se está viendo la página propia de un producto (/c/[slug]/p/[id]) */
+  productoPaginaId: string | null;
   categorias: string[];
   // Filtros
   busqueda: string;

@@ -7,6 +7,7 @@ import { BloqueOfertas, BloqueNovedades, BloqueMasVendidos } from "./BloqueCarru
 import { BloqueMarcas } from "./BloqueMarcas";
 import { BloqueInfo } from "./BloqueInfo";
 import { WhatsAppFlotante } from "./WhatsAppFlotante";
+import { PaginaProducto } from "./PaginaProducto";
 
 interface Props {
   /** Clases del contenedor raíz de la plantilla (fondo, color de texto, fuente) */
@@ -28,7 +29,20 @@ interface Props {
  * novedades, marcas, información) disponibles en todas las plantillas.
  */
 export function ComposicionTienda({ className, cabecera, hero, catalogo, pie }: Props) {
-  const { config } = useCatalog();
+  const { config, productoPaginaId, hayFiltrosActivos } = useCatalog();
+
+  // Página propia de un producto: cabecera y pie de la plantilla + el detalle.
+  // Si el cliente busca o filtra desde la cabecera, se muestra el catálogo.
+  if (productoPaginaId && !hayFiltrosActivos) {
+    return (
+      <div className={className}>
+        {cabecera}
+        <PaginaProducto />
+        {pie}
+        {whatsappFlotanteVisible(config) && <WhatsAppFlotante />}
+      </div>
+    );
+  }
 
   const render = (id: BloqueId): ReactNode => {
     if (!bloqueVisible(config, id)) return null;

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useTenant } from "@/contexts/tenant-context";
 import { createClient } from "@/lib/supabase/client";
 import { formatMoney } from "@/lib/format";
+import { numeroWhatsApp } from "@/lib/whatsapp";
 import type { Database } from "@/types/database.types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -236,7 +237,7 @@ export default function ClientesPage() {
     }
 
     // Limpiar caracteres no numéricos
-    const telefonoLimpio = c.telefono.replace(/[^0-9]/g, "");
+    const telefonoLimpio = numeroWhatsApp(c.telefono) || "";
     if (!telefonoLimpio) {
       toast.error("El número de teléfono registrado no contiene dígitos válidos.");
       return;
@@ -331,7 +332,7 @@ export default function ClientesPage() {
       toast.error("El cliente no tiene un teléfono o WhatsApp registrado");
       return;
     }
-    const telLimpio = clienteProductos.telefono.replace(/[^0-9]/g, "");
+    const telLimpio = numeroWhatsApp(clienteProductos.telefono) || "";
     if (!telLimpio) {
       toast.error("El teléfono registrado no contiene dígitos válidos");
       return;

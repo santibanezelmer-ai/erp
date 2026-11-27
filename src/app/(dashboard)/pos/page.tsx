@@ -470,8 +470,21 @@ export default function POSPage() {
 
       let ventaId = rpcData?.venta_id;
 
+      // El fallback directo sólo es válido si la función NO existe en la BD.
+      // Cualquier otro error (stock insuficiente, validación, permisos) es un
+      // rechazo legítimo: se informa y NO se registra la venta por otra vía
+      // (sería sin validar, no atómica y con descuento de stock con carreras).
+      const rpcNoInstalado =
+        !!rpcError &&
+        (rpcError.code === "PGRST202" || rpcError.code === "42883" ||
+          /could not find the function|function .* does not exist/i.test(rpcError.message || ""));
+
+      if (rpcError && !rpcNoInstalado) {
+        throw new Error(rpcError.message || "No se pudo registrar la venta");
+      }
+
       if (rpcError) {
-        // Fallback robusto directo en caso de que el RPC aún no esté expuesto
+        // Fallback directo en caso de que el RPC aún no esté expuesto
         const { data: vData, error: vErr } = await supabase
           .from("ventas")
           .insert({

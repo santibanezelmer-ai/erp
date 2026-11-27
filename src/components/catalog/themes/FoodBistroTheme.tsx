@@ -29,6 +29,7 @@ import {
 import { BannerImagen } from "@/components/catalog/shared/BannerImagen";
 import { enlaceWhatsApp } from "@/lib/whatsapp";
 import { etiquetaCategoria } from "@/lib/categorias";
+import { ComposicionTienda } from "@/components/catalog/bloques/ComposicionTienda";
 
 export function FoodBistroTheme() {
   const {
@@ -73,8 +74,8 @@ export function FoodBistroTheme() {
     "Platos frescos elaborados al momento con los mejores ingredientes. Haz tu pedido a la mesa o a domicilio por WhatsApp.";
   const bannerBadge = config.bannerBadgeText || "🔥 Cocina Abierta & Delivery Activo";
 
-  return (
-    <div className="min-h-screen flex flex-col bg-[#fffaf5] dark:bg-stone-950 text-stone-900 dark:text-stone-100 font-sans">
+  const cabecera = (
+    <>
       {/* Top Banner de Horarios y Pedidos */}
       <div className="bg-(color:--ta-950) text-(color:--ta-100) text-xs py-2 px-4 border-b border-(color:--ta-900)/40">
         <div className="max-w-7xl mx-auto flex items-center justify-between text-[11px] sm:text-xs">
@@ -201,7 +202,11 @@ export function FoodBistroTheme() {
           </div>
         </div>
       </header>
+    </>
+  );
 
+  const hero = (
+    <>
       {/* Hero Gastronómico */}
       {bannerVisible && config.bannerImageUrl && <BannerImagen />}
       {bannerVisible && !config.bannerImageUrl && (
@@ -257,7 +262,11 @@ export function FoodBistroTheme() {
           </div>
         </section>
       )}
+    </>
+  );
 
+  const catalogo = (
+    <>
       {/* Navegación por Secciones de la Carta (Categorías) */}
       {categoriesVisible && categorias.length > 0 && (
         <nav id="menu-carta" className="sticky top-20 z-20 bg-[#fffaf5]/95 dark:bg-stone-900/95 backdrop-blur-md border-b border-(color:--tp-100) dark:border-stone-800 py-3 px-4">
@@ -537,7 +546,11 @@ export function FoodBistroTheme() {
         {/* Paginación */}
         <CatalogPagination />
       </main>
+    </>
+  );
 
+  const pie = (
+    <>
       {/* Footer Gastronómico */}
       <footer className="mt-auto bg-stone-900 text-stone-400 text-xs py-8 px-4 border-t border-stone-800">
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4 text-center sm:text-left">
@@ -563,6 +576,16 @@ export function FoodBistroTheme() {
           </div>
         </div>
       </footer>
-    </div>
+    </>
+  );
+
+  return (
+    <ComposicionTienda
+      className="min-h-screen flex flex-col bg-[#fffaf5] dark:bg-stone-950 text-stone-900 dark:text-stone-100 font-sans"
+      cabecera={cabecera}
+      hero={hero}
+      catalogo={catalogo}
+      pie={pie}
+    />
   );
 }

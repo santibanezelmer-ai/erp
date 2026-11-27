@@ -27,6 +27,7 @@ import {
 import { BannerImagen } from "@/components/catalog/shared/BannerImagen";
 import { enlaceWhatsApp } from "@/lib/whatsapp";
 import { etiquetaCategoria } from "@/lib/categorias";
+import { ComposicionTienda } from "@/components/catalog/bloques/ComposicionTienda";
 
 export function MarketFreshTheme() {
   const {
@@ -73,8 +74,8 @@ export function MarketFreshTheme() {
     "Abarrotes, bebidas, lácteos, snacks y productos frescos para tu día a día. Pide directo y recibe en minutos.";
   const bannerBadge = config.bannerBadgeText || "🥬 Precios Bajos y Calidad Siempre";
 
-  return (
-    <div className="min-h-screen flex flex-col bg-[#f8faf8] dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 font-sans">
+  const cabecera = (
+    <>
       {/* Top Bar de Servicio */}
       <div className="bg-(color:--tp-900) text-(color:--tp-100) text-xs py-1.5 px-4">
         <div className="max-w-7xl mx-auto flex items-center justify-between text-[11px] sm:text-xs">
@@ -187,7 +188,11 @@ export function MarketFreshTheme() {
           </div>
         </div>
       </header>
+    </>
+  );
 
+  const hero = (
+    <>
       {/* Hero Fresco */}
       {bannerVisible && config.bannerImageUrl && <BannerImagen />}
       {bannerVisible && !config.bannerImageUrl && (
@@ -208,7 +213,11 @@ export function MarketFreshTheme() {
           </div>
         </section>
       )}
+    </>
+  );
 
+  const catalogo = (
+    <>
       {/* Categorías Pills */}
       {categoriesVisible && categorias.length > 0 && (
         <div className="sticky top-18 z-20 bg-white/95 dark:bg-zinc-900/95 backdrop-blur-md border-b border-(color:--tp-100) dark:border-zinc-800 py-2.5 px-4">
@@ -414,7 +423,11 @@ export function MarketFreshTheme() {
 
         <CatalogPagination />
       </main>
+    </>
+  );
 
+  const pie = (
+    <>
       {/* Footer */}
       <footer className="mt-auto bg-zinc-900 text-zinc-400 text-xs py-6 px-4 border-t border-zinc-800">
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3 text-center sm:text-left text-[11px]">
@@ -435,6 +448,16 @@ export function MarketFreshTheme() {
           </div>
         </div>
       </footer>
-    </div>
+    </>
+  );
+
+  return (
+    <ComposicionTienda
+      className="min-h-screen flex flex-col bg-[#f8faf8] dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 font-sans"
+      cabecera={cabecera}
+      hero={hero}
+      catalogo={catalogo}
+      pie={pie}
+    />
   );
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCatalog } from "@/components/catalog/CatalogContext";
+import { irAlCatalogo } from "@/components/catalog/bloques/orden";
 
 /**
  * Banner promocional con imagen propia de la tienda (config.bannerImageUrl).
@@ -13,7 +14,7 @@ export function BannerImagen() {
 
   const irAOfertas = () => {
     setFiltroRapido("ofertas");
-    document.querySelector("main")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    irAlCatalogo();
   };
 
   return (

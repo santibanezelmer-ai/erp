@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { BannerImagen } from "@/components/catalog/shared/BannerImagen";
 import { etiquetaCategoria } from "@/lib/categorias";
+import { ComposicionTienda } from "@/components/catalog/bloques/ComposicionTienda";
 
 export function FashionChicTheme() {
   const {
@@ -66,8 +67,8 @@ export function FashionChicTheme() {
     "Prendas de diseño, calzado y accesorios exclusivos seleccionados para destacar tu estilo propio.";
   const bannerBadge = config.bannerBadgeText || "✨ New Arrivals • Edición Limitada";
 
-  return (
-    <div className="min-h-screen flex flex-col bg-[#fafaf9] dark:bg-neutral-950 text-neutral-900 dark:text-neutral-100 font-sans">
+  const cabecera = (
+    <>
       {/* Top Bar Minimal */}
       <div className="bg-neutral-900 text-neutral-200 text-[11px] py-1.5 px-4 text-center font-medium tracking-widest uppercase">
         Envíos a todo el país • Atención y consultas por WhatsApp
@@ -150,7 +151,11 @@ export function FashionChicTheme() {
           </div>
         </div>
       </header>
+    </>
+  );
 
+  const hero = (
+    <>
       {/* Hero Editorial */}
       {bannerVisible && config.bannerImageUrl && <BannerImagen />}
       {bannerVisible && !config.bannerImageUrl && (
@@ -168,7 +173,11 @@ export function FashionChicTheme() {
           </div>
         </section>
       )}
+    </>
+  );
 
+  const catalogo = (
+    <>
       {/* Categorías */}
       {categoriesVisible && categorias.length > 0 && (
         <div className="sticky top-20 z-20 bg-white/95 dark:bg-neutral-900/95 backdrop-blur-md border-b border-neutral-200 dark:border-neutral-800 py-3 px-4">
@@ -322,7 +331,11 @@ export function FashionChicTheme() {
 
         <CatalogPagination />
       </main>
+    </>
+  );
 
+  const pie = (
+    <>
       {/* Footer */}
       <footer className="mt-auto bg-neutral-900 text-neutral-400 text-xs py-8 px-4 border-t border-neutral-800">
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4 text-center sm:text-left text-xs">
@@ -343,6 +356,16 @@ export function FashionChicTheme() {
           </div>
         </div>
       </footer>
-    </div>
+    </>
+  );
+
+  return (
+    <ComposicionTienda
+      className="min-h-screen flex flex-col bg-[#fafaf9] dark:bg-neutral-950 text-neutral-900 dark:text-neutral-100 font-sans"
+      cabecera={cabecera}
+      hero={hero}
+      catalogo={catalogo}
+      pie={pie}
+    />
   );
 }

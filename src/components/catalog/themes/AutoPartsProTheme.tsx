@@ -26,6 +26,7 @@ import {
 import { BannerImagen } from "@/components/catalog/shared/BannerImagen";
 import { enlaceWhatsApp } from "@/lib/whatsapp";
 import { etiquetaCategoria } from "@/lib/categorias";
+import { ComposicionTienda } from "@/components/catalog/bloques/ComposicionTienda";
 
 export function AutoPartsProTheme() {
   const {
@@ -71,8 +72,8 @@ export function AutoPartsProTheme() {
     "Encuentra repuestos originales y alternativos con garantía y despacho inmediato.";
   const bannerBadge = config.bannerBadgeText || "⚡ Despacho Rápido y Stock Real";
 
-  return (
-    <div className="min-h-screen flex flex-col bg-neutral-950 text-neutral-100 font-sans selection:bg-(color:--tp-500) selection:text-neutral-950">
+  const cabecera = (
+    <>
       {/* Top Banner de Garantía Técnica */}
       <div className="bg-neutral-900 border-b border-neutral-800 text-xs py-2 px-4">
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2 text-[11px] text-neutral-400">
@@ -176,7 +177,11 @@ export function AutoPartsProTheme() {
           </div>
         </div>
       </header>
+    </>
+  );
 
+  const hero = (
+    <>
       {/* Hero Técnico de Alta Potencia */}
       {config.bannerImageUrl ? (
         <BannerImagen />
@@ -198,7 +203,11 @@ export function AutoPartsProTheme() {
           </div>
         </section>
       )}
+    </>
+  );
 
+  const catalogo = (
+    <>
       {/* Layout Principal */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-8 space-y-6">
         {/* Marcas Comerciales (si existen) */}
@@ -510,7 +519,11 @@ export function AutoPartsProTheme() {
           <CatalogPagination />
         </div>
       </main>
+    </>
+  );
 
+  const pie = (
+    <>
       {/* Footer Técnico */}
       <footer className="mt-16 border-t border-neutral-800 bg-neutral-900 py-8 px-4 text-center text-xs text-neutral-500">
         <div className="max-w-7xl mx-auto space-y-2">
@@ -531,6 +544,16 @@ export function AutoPartsProTheme() {
           </p>
         </div>
       </footer>
-    </div>
+    </>
+  );
+
+  return (
+    <ComposicionTienda
+      className="min-h-screen flex flex-col bg-neutral-950 text-neutral-100 font-sans selection:bg-(color:--tp-500) selection:text-neutral-950"
+      cabecera={cabecera}
+      hero={hero}
+      catalogo={catalogo}
+      pie={pie}
+    />
   );
 }

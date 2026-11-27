@@ -41,7 +41,18 @@ export interface ThemeCustomConfig {
   bannerButtonText?: string;
   bannerButtonLink?: string;
   sectionsVisibility?: ThemeSectionsVisibility;
+  /** Orden de los bloques centrales de la tienda (ids de BLOQUES en catalog/bloques/orden.ts) */
   sectionsOrder?: string[];
+  /** Bloques adicionales compartidos por todas las plantillas */
+  bloques?: {
+    ofertas?: boolean;
+    novedades?: boolean;
+    marcas?: boolean;
+    info?: boolean;
+    whatsappFlotante?: boolean;
+  };
+  /** Texto libre de horario para el bloque de información (ej. "Lun a Sáb 10:00–20:00") */
+  infoHorario?: string;
 }
 
 export interface ThemeMetadata {

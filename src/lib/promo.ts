@@ -25,3 +25,27 @@ export const promoDiscountPct = (p: PromoFields | null | undefined): number => {
   if (base <= 0) return 0;
   return Math.round(((base - promo) / base) * 100);
 };
+
+type ConPrecio = PromoFields & { precio_venta: number | null | undefined };
+
+/**
+ * Precio unitario real de un producto o de una de sus variantes, con la misma
+ * regla en catálogo, caja (POS), comandas y crear_pedido_catalogo:
+ * - la promoción sólo vale si es > 0, menor al precio base y no ha vencido;
+ * - la variante usa su promoción o su precio propio; si no tiene, hereda el
+ *   precio (y la promoción) del producto.
+ */
+export const precioUnitario = (p: ConPrecio, v?: ConPrecio | null): number => {
+  if (v) {
+    const base = v.precio_venta ?? p.precio_venta;
+    if (v.precio_promocional != null) {
+      return effectivePrice({
+        precio_venta: base,
+        precio_promocional: v.precio_promocional,
+        promo_vence_at: v.promo_vence_at,
+      });
+    }
+    if (v.precio_venta != null) return Number(v.precio_venta);
+  }
+  return effectivePrice(p);
+};

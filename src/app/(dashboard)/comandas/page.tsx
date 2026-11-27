@@ -4,6 +4,7 @@ import { useEffect, useState, useRef } from "react";
 import { useTenant } from "@/contexts/tenant-context";
 import { createClient } from "@/lib/supabase/client";
 import { formatMoney } from "@/lib/format";
+import { precioUnitario } from "@/lib/promo";
 import type { Database } from "@/types/database.types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -311,8 +312,7 @@ export default function ComandasPage() {
   const variantesDe = (prodId: string) => variantes.filter((v) => v.producto_id === prodId);
 
   // Precio de la variante; si no tiene uno propio, se usa el del producto
-  const precioDe = (prod: Producto, variante: Variante | null) =>
-    Number(variante?.precio_venta ?? prod.precio_venta ?? 0);
+  const precioDe = (prod: Producto, variante: Variante | null) => precioUnitario(prod, variante);
 
   const nombreItem = (prod: Producto, variante: Variante | null) =>
     variante ? `${prod.nombre} (${variante.nombre})` : prod.nombre;
@@ -794,7 +794,7 @@ export default function ComandasPage() {
                   </span>
                   <div className="flex justify-between items-end pt-1">
                     <span className="text-xs font-black text-primary">
-                      {formatMoney(prod.precio_venta)}
+                      {formatMoney(precioUnitario(prod))}
                       {variantesDe(prod.id).length > 0 && (
                         <span className="block text-[10px] font-semibold text-muted-foreground">
                           {variantesDe(prod.id).length} opciones

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useTenant } from "@/contexts/tenant-context";
 import { createClient } from "@/lib/supabase/client";
 import { formatMoney } from "@/lib/format";
+import { isPromoActive } from "@/lib/promo";
 import type { Database } from "@/types/database.types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -58,6 +59,7 @@ import {
 } from "@/lib/inventory-csv";
 import { imprimirHojaEtiquetas } from "@/lib/barcode-labels";
 import { VariantesManager } from "@/components/productos/VariantesManager";
+import { DescuentoMasivo } from "@/components/productos/DescuentoMasivo";
 
 type Producto = Database["public"]["Tables"]["productos"]["Row"];
 type Variante = Database["public"]["Tables"]["producto_variantes"]["Row"];
@@ -93,6 +95,9 @@ export default function ProductosPage() {
   const [modalEtiquetasOpen, setModalEtiquetasOpen] = useState(false);
   const [productoParaEtiqueta, setProductoParaEtiqueta] = useState<Producto | null>(null);
   const [cantidadEtiquetas, setCantidadEtiquetas] = useState<number>(12);
+
+  // Modal Descuento Masivo
+  const [descuentoOpen, setDescuentoOpen] = useState(false);
 
   // Modal Importar Excel
   const [modalImportOpen, setModalImportOpen] = useState(false);
@@ -667,6 +672,17 @@ export default function ProductosPage() {
           <Button
             variant="outline"
             size="sm"
+            onClick={() => setDescuentoOpen(true)}
+            className="gap-1.5 text-xs font-semibold flex-1 sm:flex-initial justify-center"
+          >
+            <Tag className="h-4 w-4 text-rose-600" />
+            <span className="hidden sm:inline">Descuento masivo</span>
+            <span className="sm:hidden">Descuento</span>
+          </Button>
+
+          <Button
+            variant="outline"
+            size="sm"
             onClick={() => setModalImportOpen(true)}
             className="gap-1.5 text-xs font-semibold flex-1 sm:flex-initial justify-center"
           >
@@ -968,7 +984,16 @@ export default function ProductosPage() {
                           )}
                         </td>
                         <td className="py-2.5 px-3 text-right font-bold text-foreground text-xs sm:text-sm">
-                          {formatMoney(prod.precio_venta)}
+                          {isPromoActive(prod) ? (
+                            <div className="flex flex-col items-end leading-tight">
+                              <span className="text-rose-600">{formatMoney(prod.precio_promocional)}</span>
+                              <span className="text-[10px] font-normal text-muted-foreground line-through">
+                                {formatMoney(prod.precio_venta)}
+                              </span>
+                            </div>
+                          ) : (
+                            formatMoney(prod.precio_venta)
+                          )}
                         </td>
                         <td className="py-2.5 px-3 text-right text-xs text-muted-foreground hidden sm:table-cell">
                           {formatMoney(prod.precio_costo)}
@@ -1636,6 +1661,17 @@ export default function ProductosPage() {
           </form>
         </DialogContent>
       </Dialog>
+
+      {/* Descuento masivo (tienda completa o por categoría) */}
+      <DescuentoMasivo
+        open={descuentoOpen}
+        onClose={() => setDescuentoOpen(false)}
+        negocioId={negocio?.id}
+        productos={productos}
+        variantes={variantes}
+        categorias={categoriasDisponibles}
+        onDone={fetchProductos}
+      />
 
       {/* Modal Importar Productos desde Excel */}
       <Dialog open={modalImportOpen} onOpenChange={setModalImportOpen}>

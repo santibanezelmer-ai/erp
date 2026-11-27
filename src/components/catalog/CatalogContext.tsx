@@ -11,7 +11,7 @@ import type {
   ThemeId,
   ThemeCustomConfig,
 } from "@/types/theme.types";
-import { isPromoActive, effectivePrice, promoDiscountPct } from "@/lib/promo";
+import { isPromoActive, promoDiscountPct, precioUnitario } from "@/lib/promo";
 import { formatMoney } from "@/lib/format";
 import { toast } from "sonner";
 import { CartModal } from "@/components/catalog/shared/CartModal";
@@ -151,23 +151,7 @@ export function CatalogProvider({
     return Math.max(0, ...pcts);
   };
 
-  const getUnitPrice = (p: Producto, v?: Variante | null): number => {
-    if (v) {
-      // La variante hereda el precio del producto cuando no tiene uno propio
-      // (mismo criterio que crear_pedido_catalogo: COALESCE(variante, producto)).
-      const base = v.precio_venta ?? p.precio_venta;
-      if (v.precio_promocional != null) {
-        return effectivePrice({
-          precio_venta: base,
-          precio_promocional: v.precio_promocional,
-          promo_vence_at: v.promo_vence_at,
-        });
-      }
-      if (v.precio_venta != null) return Number(v.precio_venta);
-      return effectivePrice(p);
-    }
-    return effectivePrice(p);
-  };
+  const getUnitPrice = (p: Producto, v?: Variante | null): number => precioUnitario(p, v);
 
   const getStock = (p: Producto, v?: Variante | null): number => {
     if (p.sin_control_stock) return Infinity;

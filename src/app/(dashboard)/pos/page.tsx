@@ -4,6 +4,7 @@ import { useEffect, useState, useRef } from "react";
 import { useTenant } from "@/contexts/tenant-context";
 import { createClient } from "@/lib/supabase/client";
 import { formatMoney } from "@/lib/format";
+import { precioUnitario as precioUnitarioDe } from "@/lib/promo";
 import type { Database } from "@/types/database.types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -191,9 +192,8 @@ export default function POSPage() {
   // Add to cart with variant support
   const addToCart = (prod: Producto, variante?: Variante | null) => {
     const itemId = variante ? `${prod.id}:${variante.id}` : prod.id;
-    const precioUnitario = variante
-      ? Number(variante.precio_promocional ?? variante.precio_venta ?? prod.precio_promocional ?? prod.precio_venta ?? 0)
-      : Number(prod.precio_promocional ?? prod.precio_venta ?? 0);
+    // Respeta vencimiento de la promoción y la herencia de precio de la variante
+    const precioUnitario = precioUnitarioDe(prod, variante);
     const stockActual = variante
       ? Number(variante.stock || 0)
       : Number(prod.stock || 0);
@@ -881,7 +881,12 @@ export default function POSPage() {
 
                       <div className="mt-2 flex items-center justify-between">
                         <span className="font-bold text-xs text-primary">
-                          {formatMoney(prod.precio_venta)}
+                          {formatMoney(precioUnitarioDe(prod))}
+                          {precioUnitarioDe(prod) < Number(prod.precio_venta || 0) && (
+                            <span className="ml-1 font-normal text-[10px] text-muted-foreground line-through">
+                              {formatMoney(prod.precio_venta)}
+                            </span>
+                          )}
                         </span>
                         {!prod.sin_control_stock && (
                           <span
@@ -1652,9 +1657,7 @@ export default function POSPage() {
               variantsOf(pickVariant.id).map((v) => {
                 const vStock = Number(v.stock || 0);
                 const vAgotado = !pickVariant.sin_control_stock && vStock <= 0;
-                const vPrecio = Number(
-                  v.precio_promocional ?? v.precio_venta ?? pickVariant.precio_promocional ?? pickVariant.precio_venta ?? 0
-                );
+                const vPrecio = precioUnitarioDe(pickVariant, v);
                 const vImg = v.imagen_url || pickVariant.imagen_url;
 
                 return (

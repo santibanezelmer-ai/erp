@@ -103,3 +103,13 @@ body {
   color: var(--foreground);
   min-height: 100vh;
 }
+
+/* ── Tipografía elegida por la tienda (catálogo público) ─────────────── */
+.tienda-fuente,
+.tienda-fuente .font-sans {
+  font-family: var(--tf-texto);
+}
+.tienda-fuente :is(h1, h2, h3, h4),
+.tienda-fuente .font-serif {
+  font-family: var(--tf-titulos);
+}

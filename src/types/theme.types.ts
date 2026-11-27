@@ -32,7 +32,8 @@ export interface ThemeCustomConfig {
   primaryColor?: string;
   accentColor?: string;
   backgroundColor?: string;
-  fontFamily?: "sans" | "serif" | "mono";
+  /** "plantilla" | "moderna" | "elegante" | "amigable" (sans/serif/mono: valores antiguos = plantilla) */
+  fontFamily?: "plantilla" | "moderna" | "elegante" | "amigable" | "sans" | "serif" | "mono";
   bannerImageUrl?: string;
   bannerTitle?: string;
   bannerSubtitle?: string;

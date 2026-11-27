@@ -54,7 +54,6 @@ export function BeautyGlowTheme() {
     variantsOf,
   } = useCatalog();
 
-  const primaryCol = config.primaryColor || "#e11d48";
   const bannerVisible = config.sectionsVisibility?.bannerHero !== false;
   const categoriesVisible = config.sectionsVisibility?.categoriasPills !== false;
   const ofertasVisible = config.sectionsVisibility?.ofertasDestacadas !== false;
@@ -72,13 +71,13 @@ export function BeautyGlowTheme() {
   return (
     <div className="min-h-screen flex flex-col bg-[#fffbfb] dark:bg-neutral-950 text-foreground font-sans">
       {/* Top Banner Elegante */}
-      <div className="bg-rose-950 text-rose-100 text-[11px] py-1.5 px-4 text-center font-medium tracking-wider flex items-center justify-center gap-2">
-        <Sparkles className="h-3 w-3 text-rose-300" />
+      <div className="bg-(color:--tp-950) text-(color:--tp-100) text-[11px] py-1.5 px-4 text-center font-medium tracking-wider flex items-center justify-center gap-2">
+        <Sparkles className="h-3 w-3 text-(color:--tp-300)" />
         <span>Envíos rápidos y pedidos directos a WhatsApp • Atención personalizada</span>
       </div>
 
       {/* Header Editorial */}
-      <header className="sticky top-0 z-30 bg-white/90 dark:bg-neutral-900/90 backdrop-blur-md border-b border-rose-100 dark:border-neutral-800">
+      <header className="sticky top-0 z-30 bg-white/90 dark:bg-neutral-900/90 backdrop-blur-md border-b border-(color:--tp-100) dark:border-neutral-800">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 h-18 flex items-center justify-between gap-4">
           {/* Logo & Brand */}
           <div className="flex items-center gap-3 min-w-0">
@@ -86,10 +85,10 @@ export function BeautyGlowTheme() {
               <img
                 src={rawLogo}
                 alt={negocio.nombre}
-                className="h-10 w-10 sm:h-12 sm:w-12 rounded-full object-cover border border-rose-200 shadow-xs shrink-0"
+                className="h-10 w-10 sm:h-12 sm:w-12 rounded-full object-cover border border-(color:--tp-200) shadow-xs shrink-0"
               />
             ) : (
-              <div className="h-10 w-10 sm:h-12 sm:w-12 rounded-full bg-rose-50 text-rose-600 border border-rose-200 flex items-center justify-center shrink-0">
+              <div className="h-10 w-10 sm:h-12 sm:w-12 rounded-full bg-(color:--tp-50) text-(color:--tp-600) border border-(color:--tp-200) flex items-center justify-center shrink-0">
                 <Store className="h-5 w-5" />
               </div>
             )}
@@ -100,7 +99,7 @@ export function BeautyGlowTheme() {
               <div className="flex items-center gap-3 text-[11px] text-neutral-500 truncate">
                 {negocio.direccion && (
                   <span className="hidden sm:inline-flex items-center gap-1">
-                    <MapPin className="h-3 w-3 text-rose-400" />
+                    <MapPin className="h-3 w-3 text-(color:--tp-400)" />
                     {negocio.direccion}
                   </span>
                 )}
@@ -109,10 +108,10 @@ export function BeautyGlowTheme() {
                     href={enlaceWhatsApp((negocio as { telefono?: string | null }).telefono)}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 hover:text-rose-600 transition-colors"
+                    className="inline-flex items-center gap-1 hover:text-(color:--tp-600) transition-colors"
                     title="Escríbenos por WhatsApp"
                   >
-                    <Phone className="h-3 w-3 text-rose-400" />
+                    <Phone className="h-3 w-3 text-(color:--tp-400)" />
                     {(negocio as any).telefono}
                   </a>
                 )}
@@ -123,13 +122,13 @@ export function BeautyGlowTheme() {
           {/* Search bar Desktop */}
           <div className="hidden md:flex flex-1 max-w-md mx-4">
             <div className="relative w-full">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-rose-400" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-(color:--tp-400)" />
               <Input
                 type="text"
                 placeholder="Buscar sombras, labiales, cremas..."
                 value={busqueda}
                 onChange={(e) => setBusqueda(e.target.value)}
-                className="pl-9 h-10 rounded-full border-rose-200 bg-rose-50/40 text-xs focus-visible:ring-rose-400"
+                className="pl-9 h-10 rounded-full border-(color:--tp-200) bg-(color:--tp-50)/40 text-xs focus-visible:ring-(color:--tp-400)"
               />
               {busqueda && (
                 <button
@@ -145,26 +144,26 @@ export function BeautyGlowTheme() {
           {/* Cart Button */}
           <Button
             onClick={openCart}
-            className="rounded-full h-10 px-4 bg-rose-600 hover:bg-rose-700 text-white shadow-sm flex items-center gap-2 text-xs font-semibold shrink-0"
+            className="rounded-full h-10 px-4 bg-(color:--tp-600) hover:bg-(color:--tp-700) text-(color:--tp-on) shadow-sm flex items-center gap-2 text-xs font-semibold shrink-0"
           >
             <ShoppingCart className="h-4 w-4" />
             <span className="hidden sm:inline">Bolsa</span>
-            <span className="bg-white text-rose-700 rounded-full text-[10px] font-black px-1.5 py-0.2">
+            <span className="bg-white text-(color:--tp-700) rounded-full text-[10px] font-black px-1.5 py-0.2">
               {cartCount}
             </span>
           </Button>
         </div>
 
         {/* Mobile search bar */}
-        <div className="md:hidden px-4 pb-3 pt-1 border-t border-rose-50 dark:border-neutral-800">
+        <div className="md:hidden px-4 pb-3 pt-1 border-t border-(color:--tp-50) dark:border-neutral-800">
           <div className="relative w-full">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-rose-400" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-(color:--tp-400)" />
             <Input
               type="text"
               placeholder="Buscar productos..."
               value={busqueda}
               onChange={(e) => setBusqueda(e.target.value)}
-              className="pl-8 h-9 rounded-full border-rose-200 bg-rose-50/40 text-xs"
+              className="pl-8 h-9 rounded-full border-(color:--tp-200) bg-(color:--tp-50)/40 text-xs"
             />
           </div>
         </div>
@@ -173,9 +172,9 @@ export function BeautyGlowTheme() {
       {/* Hero Banner Editorial */}
       {bannerVisible && config.bannerImageUrl && <BannerImagen />}
       {bannerVisible && !config.bannerImageUrl && (
-        <section className="relative overflow-hidden bg-gradient-to-r from-rose-100 via-rose-50 to-amber-50 dark:from-neutral-900 dark:via-neutral-900 dark:to-neutral-800 py-12 sm:py-20 px-4 sm:px-6 border-b border-rose-100 dark:border-neutral-800">
+        <section className="relative overflow-hidden bg-gradient-to-r from-(color:--tp-100) via-(color:--tp-50) to-(color:--ta-50) dark:from-neutral-900 dark:via-neutral-900 dark:to-neutral-800 py-12 sm:py-20 px-4 sm:px-6 border-b border-(color:--tp-100) dark:border-neutral-800">
           <div className="max-w-4xl mx-auto text-center space-y-4">
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-white/80 dark:bg-neutral-800 text-rose-600 border border-rose-200 shadow-xs">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-white/80 dark:bg-neutral-800 text-(color:--tp-600) border border-(color:--tp-200) shadow-xs">
               {bannerBadge}
             </span>
             <h2 className="font-serif text-3xl sm:text-5xl lg:text-6xl font-black tracking-tight text-neutral-900 dark:text-white leading-tight">
@@ -211,8 +210,8 @@ export function BeautyGlowTheme() {
                   onClick={() => setCategoriaSel(cat)}
                   className={`px-4 py-2 rounded-full text-xs font-semibold whitespace-nowrap transition-all border ${
                     isSelected
-                      ? "bg-rose-600 text-white border-rose-600 shadow-sm"
-                      : "bg-white dark:bg-neutral-900 text-neutral-700 dark:text-neutral-300 border-rose-100 dark:border-neutral-800 hover:border-rose-300"
+                      ? "bg-(color:--tp-600) text-(color:--tp-on) border-(color:--tp-600) shadow-sm"
+                      : "bg-white dark:bg-neutral-900 text-neutral-700 dark:text-neutral-300 border-(color:--tp-100) dark:border-neutral-800 hover:border-(color:--tp-300)"
                   }`}
                 >
                   {cat === "todas" ? "Todas las Colecciones" : etiquetaCategoria(cat)}
@@ -223,14 +222,14 @@ export function BeautyGlowTheme() {
         )}
 
         {/* Filter Toolbar */}
-        <div className="flex flex-wrap items-center justify-between gap-3 bg-white dark:bg-neutral-900 p-3 rounded-2xl border border-rose-100 dark:border-neutral-800 text-xs">
+        <div className="flex flex-wrap items-center justify-between gap-3 bg-white dark:bg-neutral-900 p-3 rounded-2xl border border-(color:--tp-100) dark:border-neutral-800 text-xs">
           {/* Quick Filters */}
           <div className="flex items-center gap-1.5 overflow-x-auto">
             <button
               onClick={() => setFiltroRapido("todos")}
               className={`px-3 py-1.5 rounded-lg font-medium transition-all ${
                 filtroRapido === "todos"
-                  ? "bg-rose-50 text-rose-700 dark:bg-rose-950 dark:text-rose-300 font-bold"
+                  ? "bg-(color:--tp-50) text-(color:--tp-700) dark:bg-(color:--tp-950) dark:text-(color:--tp-300) font-bold"
                   : "text-muted-foreground hover:text-foreground"
               }`}
             >
@@ -240,7 +239,7 @@ export function BeautyGlowTheme() {
               onClick={() => setFiltroRapido("ofertas")}
               className={`px-3 py-1.5 rounded-lg font-medium transition-all ${
                 filtroRapido === "ofertas"
-                  ? "bg-rose-50 text-rose-700 dark:bg-rose-950 dark:text-rose-300 font-bold"
+                  ? "bg-(color:--tp-50) text-(color:--tp-700) dark:bg-(color:--tp-950) dark:text-(color:--tp-300) font-bold"
                   : "text-muted-foreground hover:text-foreground"
               }`}
             >
@@ -250,7 +249,7 @@ export function BeautyGlowTheme() {
               onClick={() => setFiltroRapido("nuevos")}
               className={`px-3 py-1.5 rounded-lg font-medium transition-all ${
                 filtroRapido === "nuevos"
-                  ? "bg-rose-50 text-rose-700 dark:bg-rose-950 dark:text-rose-300 font-bold"
+                  ? "bg-(color:--tp-50) text-(color:--tp-700) dark:bg-(color:--tp-950) dark:text-(color:--tp-300) font-bold"
                   : "text-muted-foreground hover:text-foreground"
               }`}
             >
@@ -260,7 +259,7 @@ export function BeautyGlowTheme() {
               onClick={() => setFiltroRapido("disponibles")}
               className={`px-3 py-1.5 rounded-lg font-medium transition-all ${
                 filtroRapido === "disponibles"
-                  ? "bg-rose-50 text-rose-700 dark:bg-rose-950 dark:text-rose-300 font-bold"
+                  ? "bg-(color:--tp-50) text-(color:--tp-700) dark:bg-(color:--tp-950) dark:text-(color:--tp-300) font-bold"
                   : "text-muted-foreground hover:text-foreground"
               }`}
             >
@@ -275,7 +274,7 @@ export function BeautyGlowTheme() {
             <select
               value={ordenarPor}
               onChange={(e: any) => setOrdenarPor(e.target.value)}
-              className="bg-transparent border border-rose-200 dark:border-neutral-700 rounded-lg px-2.5 py-1 text-xs text-foreground focus:outline-hidden"
+              className="bg-transparent border border-(color:--tp-200) dark:border-neutral-700 rounded-lg px-2.5 py-1 text-xs text-foreground focus:outline-hidden"
             >
               <option value="destacados">Destacados</option>
               <option value="precio_asc">Precio: Menor a Mayor</option>
@@ -289,7 +288,7 @@ export function BeautyGlowTheme() {
                 variant="ghost"
                 size="sm"
                 onClick={limpiarFiltros}
-                className="h-7 text-xs text-rose-600 hover:text-rose-700 p-1"
+                className="h-7 text-xs text-(color:--tp-600) hover:text-(color:--tp-700) p-1"
               >
                 Limpiar
               </Button>
@@ -300,8 +299,8 @@ export function BeautyGlowTheme() {
         {/* Product Cards Grid & List */}
         <div id="catalogo-productos-grid" className="scroll-mt-24 space-y-6">
           {productosFiltrados.length === 0 ? (
-            <div className="text-center py-20 bg-white dark:bg-neutral-900 rounded-3xl border border-rose-100 dark:border-neutral-800 p-8">
-              <Package className="h-12 w-12 text-rose-300 mx-auto mb-3" />
+            <div className="text-center py-20 bg-white dark:bg-neutral-900 rounded-3xl border border-(color:--tp-100) dark:border-neutral-800 p-8">
+              <Package className="h-12 w-12 text-(color:--tp-300) mx-auto mb-3" />
               <h3 className="font-serif text-lg font-bold text-neutral-800 dark:text-neutral-100">
                 No se encontraron productos
               </h3>
@@ -332,10 +331,10 @@ export function BeautyGlowTheme() {
                   <div
                     key={p.id}
                     onClick={() => openProductDetail(p)}
-                    className="group relative bg-white dark:bg-neutral-900 rounded-2xl border border-rose-100 dark:border-neutral-800 overflow-hidden shadow-2xs hover:shadow-md transition-all duration-300 flex flex-col justify-between cursor-pointer"
+                    className="group relative bg-white dark:bg-neutral-900 rounded-2xl border border-(color:--tp-100) dark:border-neutral-800 overflow-hidden shadow-2xs hover:shadow-md transition-all duration-300 flex flex-col justify-between cursor-pointer"
                   >
                     {/* Photo Container */}
-                    <div className="relative aspect-4/5 w-full bg-rose-50/50 dark:bg-neutral-800 overflow-hidden flex items-center justify-center">
+                    <div className="relative aspect-4/5 w-full bg-(color:--tp-50)/50 dark:bg-neutral-800 overflow-hidden flex items-center justify-center">
                       {p.imagen_url ? (
                         <img
                           src={p.imagen_url}
@@ -344,13 +343,13 @@ export function BeautyGlowTheme() {
                           loading="lazy"
                         />
                       ) : (
-                        <Package className="h-12 w-12 text-rose-200" />
+                        <Package className="h-12 w-12 text-(color:--tp-200)" />
                       )}
 
                       {/* Badges */}
                       <div className="absolute top-2.5 left-2.5 flex flex-col gap-1 z-10">
                         {hasPromo && maxDisc > 0 && (
-                          <span className="bg-rose-600 text-white font-bold text-[10px] px-2 py-0.5 rounded-full shadow-xs">
+                          <span className="bg-(color:--tp-600) text-(color:--tp-on) font-bold text-[10px] px-2 py-0.5 rounded-full shadow-xs">
                             -{maxDisc}%
                           </span>
                         )}
@@ -374,16 +373,16 @@ export function BeautyGlowTheme() {
                     <div className="p-3.5 sm:p-4 flex flex-col flex-1 justify-between gap-2">
                       <div>
                         {p.categoria && (
-                          <span className="text-[10px] font-medium text-rose-500 uppercase tracking-wider block truncate">
+                          <span className="text-[10px] font-medium text-(color:--tp-500) uppercase tracking-wider block truncate">
                             {etiquetaCategoria(p.categoria)}
                           </span>
                         )}
-                        <h4 className="font-medium text-xs sm:text-sm text-neutral-900 dark:text-neutral-100 line-clamp-2 leading-snug group-hover:text-rose-600 transition-colors">
+                        <h4 className="font-medium text-xs sm:text-sm text-neutral-900 dark:text-neutral-100 line-clamp-2 leading-snug group-hover:text-(color:--tp-600) transition-colors">
                           {p.nombre}
                         </h4>
                       </div>
 
-                      <div className="pt-2 border-t border-rose-50 dark:border-neutral-800 flex items-center justify-between gap-2">
+                      <div className="pt-2 border-t border-(color:--tp-50) dark:border-neutral-800 flex items-center justify-between gap-2">
                         <div>
                           <div className="font-bold text-sm sm:text-base text-neutral-900 dark:text-white">
                             {formatMoney(price)}
@@ -399,7 +398,7 @@ export function BeautyGlowTheme() {
                           <Button
                             size="icon"
                             onClick={(e) => handleQuickAddClick(e, p)}
-                            className="h-8 w-8 rounded-full bg-rose-50 text-rose-700 hover:bg-rose-600 hover:text-white dark:bg-neutral-800 dark:text-rose-300 dark:hover:bg-rose-600 dark:hover:text-white transition-colors shrink-0"
+                            className="h-8 w-8 rounded-full bg-(color:--tp-50) text-(color:--tp-700) hover:bg-(color:--tp-600) hover:text-(color:--tp-on) dark:bg-neutral-800 dark:text-(color:--tp-300) dark:hover:bg-(color:--tp-600) dark:hover:text-(color:--tp-on) transition-colors shrink-0"
                             title="Añadir a la bolsa"
                           >
                             <ShoppingCart className="h-3.5 w-3.5" />
@@ -424,10 +423,10 @@ export function BeautyGlowTheme() {
                   <div
                     key={p.id}
                     onClick={() => openProductDetail(p)}
-                    className="p-3 sm:p-4 rounded-2xl bg-white dark:bg-neutral-900 border border-rose-100 dark:border-neutral-800 hover:border-rose-300 flex items-center justify-between gap-4 transition-all cursor-pointer shadow-2xs"
+                    className="p-3 sm:p-4 rounded-2xl bg-white dark:bg-neutral-900 border border-(color:--tp-100) dark:border-neutral-800 hover:border-(color:--tp-300) flex items-center justify-between gap-4 transition-all cursor-pointer shadow-2xs"
                   >
                     <div className="flex items-center gap-3.5 min-w-0">
-                      <div className="h-16 w-16 sm:h-20 sm:w-20 rounded-xl bg-rose-50/50 dark:bg-neutral-800 overflow-hidden shrink-0 flex items-center justify-center">
+                      <div className="h-16 w-16 sm:h-20 sm:w-20 rounded-xl bg-(color:--tp-50)/50 dark:bg-neutral-800 overflow-hidden shrink-0 flex items-center justify-center">
                         {p.imagen_url ? (
                           <img
                             src={p.imagen_url}
@@ -435,12 +434,12 @@ export function BeautyGlowTheme() {
                             className="h-full w-full object-cover"
                           />
                         ) : (
-                          <Package className="h-6 w-6 text-rose-300" />
+                          <Package className="h-6 w-6 text-(color:--tp-300)" />
                         )}
                       </div>
                       <div className="min-w-0">
                         {p.categoria && (
-                          <span className="text-[10px] text-rose-500 font-bold uppercase tracking-wider block truncate">
+                          <span className="text-[10px] text-(color:--tp-500) font-bold uppercase tracking-wider block truncate">
                             {etiquetaCategoria(p.categoria)}
                           </span>
                         )}
@@ -457,7 +456,7 @@ export function BeautyGlowTheme() {
                             </span>
                           )}
                           {hasPromo && maxDisc > 0 && (
-                            <Badge className="bg-rose-600 text-white text-[10px] font-bold px-1.5 py-0.2">
+                            <Badge className="bg-(color:--tp-600) text-(color:--tp-on) text-[10px] font-bold px-1.5 py-0.2">
                               -{maxDisc}%
                             </Badge>
                           )}
@@ -470,13 +469,13 @@ export function BeautyGlowTheme() {
                         <Button
                           size="sm"
                           onClick={(e) => handleQuickAddClick(e, p)}
-                          className="h-9 px-3 rounded-full bg-rose-600 hover:bg-rose-700 text-white font-semibold text-xs gap-1.5 shadow-2xs"
+                          className="h-9 px-3 rounded-full bg-(color:--tp-600) hover:bg-(color:--tp-700) text-(color:--tp-on) font-semibold text-xs gap-1.5 shadow-2xs"
                         >
                           <ShoppingCart className="h-3.5 w-3.5" />
                           <span className="hidden sm:inline">Añadir</span>
                         </Button>
                       ) : (
-                        <span className="text-xs text-rose-500 font-semibold">Agotado</span>
+                        <span className="text-xs text-(color:--tp-500) font-semibold">Agotado</span>
                       )}
                     </div>
                   </div>
@@ -491,7 +490,7 @@ export function BeautyGlowTheme() {
       </main>
 
       {/* Footer Editorial */}
-      <footer className="mt-16 border-t border-rose-100 dark:border-neutral-800 bg-white dark:bg-neutral-900 py-8 px-4 text-center text-xs text-neutral-500">
+      <footer className="mt-16 border-t border-(color:--tp-100) dark:border-neutral-800 bg-white dark:bg-neutral-900 py-8 px-4 text-center text-xs text-neutral-500">
         <div className="max-w-7xl mx-auto space-y-2">
           <p className="font-serif font-bold text-sm text-neutral-800 dark:text-neutral-200">
             {negocio.nombre}
@@ -502,7 +501,7 @@ export function BeautyGlowTheme() {
               href="https://operixerp.cloud"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-rose-600 hover:underline font-semibold"
+              className="text-(color:--tp-600) hover:underline font-semibold"
             >
               Operix ERP
             </a>{" "}

@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTenant } from "@/contexts/tenant-context";
 import { createClient } from "@/lib/supabase/client";
 import { THEMES_LIST, getThemeMetadata } from "@/components/catalog/themes/registry";
+import { FUENTES, colorSobre, colorValido } from "@/lib/tienda-estilo";
 import type { ThemeId, ThemeCustomConfig } from "@/types/theme.types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -56,6 +57,20 @@ export default function TiendaOnlinePage() {
   const [filtroRubro, setFiltroRubro] = useState<string>("todos");
   const [copiado, setCopiado] = useState(false);
   const [subiendoBanner, setSubiendoBanner] = useState(false);
+  const previewRef = useRef<HTMLIFrameElement>(null);
+
+  // Vista previa en vivo: envía el borrador al iframe del catálogo (mismo
+  // origen) en cada cambio, sin necesidad de guardar.
+  const enviarPreview = () => {
+    previewRef.current?.contentWindow?.postMessage(
+      { type: "operix:preview-config", themeId: activeThemeId, config: draftConfig },
+      window.location.origin
+    );
+  };
+  useEffect(() => {
+    enviarPreview();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draftConfig, activeThemeId]);
 
   // Cargar configuración de la tienda desde Supabase
   useEffect(() => {
@@ -514,7 +529,8 @@ export default function TiendaOnlinePage() {
                     Colores y Estilo Visual
                   </CardTitle>
                   <CardDescription className="text-xs">
-                    Define los acentos de color que representarán a tu marca.
+                    Define los acentos de color que representarán a tu marca. Los cambios se ven al
+                    instante en la vista previa.
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
@@ -567,6 +583,74 @@ export default function TiendaOnlinePage() {
                       />
                     </div>
                   </div>
+
+                  {colorValido(draftConfig.primaryColor) && (
+                    <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+                      <span
+                        className="inline-flex h-7 items-center rounded-md px-3 font-semibold"
+                        style={{
+                          background: draftConfig.primaryColor,
+                          color: colorSobre(draftConfig.primaryColor!),
+                        }}
+                      >
+                        Botón de ejemplo
+                      </span>
+                      <span>El texto se ajusta solo para que se lea bien.</span>
+                    </div>
+                  )}
+
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 px-2 text-xs"
+                    onClick={() => {
+                      const meta = getThemeMetadata(activeThemeId);
+                      setDraftConfig((prev) => ({
+                        ...prev,
+                        primaryColor: meta.defaultConfig.primaryColor,
+                        accentColor: meta.defaultConfig.accentColor,
+                      }));
+                      setHasDraft(true);
+                    }}
+                  >
+                    Restaurar colores de la plantilla
+                  </Button>
+                </CardContent>
+              </Card>
+
+              {/* Tipografía */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base font-bold">Tipografía</CardTitle>
+                  <CardDescription className="text-xs">
+                    Estilo de letra de títulos y textos de tu tienda.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="grid grid-cols-2 gap-2">
+                  {Object.entries(FUENTES).map(([id, f]) => {
+                    const actual =
+                      draftConfig.fontFamily && FUENTES[draftConfig.fontFamily] ? draftConfig.fontFamily : "plantilla";
+                    const sel = actual === id;
+                    return (
+                      <button
+                        key={id}
+                        type="button"
+                        onClick={() => {
+                          setDraftConfig((prev) => ({
+                            ...prev,
+                            fontFamily: id as NonNullable<ThemeCustomConfig["fontFamily"]>,
+                          }));
+                          setHasDraft(true);
+                        }}
+                        className={`rounded-lg border px-3 py-2 text-left text-xs transition-colors ${
+                          sel ? "border-primary bg-primary/5 font-semibold" : "hover:bg-muted"
+                        }`}
+                      >
+                        {f.etiqueta}
+                      </button>
+                    );
+                  })}
                 </CardContent>
               </Card>
 
@@ -803,6 +887,8 @@ export default function TiendaOnlinePage() {
                 <div className="absolute top-2 left-1/2 -translate-x-1/2 w-32 h-4 bg-neutral-800 rounded-full z-20" />
               )}
               <iframe
+                ref={previewRef}
+                onLoad={enviarPreview}
                 src={previewUrl}
                 title="Vista previa del catálogo"
                 className="w-full h-full border-none pt-1"

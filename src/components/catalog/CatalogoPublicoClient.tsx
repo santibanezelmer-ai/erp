@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo } from "react";
-import type { ThemeId } from "@/types/theme.types";
+import { useEffect, useMemo, useState } from "react";
+import type { ThemeId, ThemeCustomConfig } from "@/types/theme.types";
+import { getThemeMetadata } from "@/components/catalog/themes/registry";
 import { CatalogProvider } from "@/components/catalog/CatalogContext";
 import { ThemeRenderer } from "@/components/catalog/ThemeRenderer";
 import { armarCatalogo, type CatalogInicial } from "@/lib/catalog-view";
@@ -30,6 +31,26 @@ export default function CatalogoPublicoClient({
         : null,
     [inicial, isPreview, previewTheme]
   );
+
+  // Vista previa en vivo desde el editor de Tienda Online (mismo origen):
+  // aplica el borrador sin guardarlo.
+  const [enVivo, setEnVivo] = useState<{ themeId: ThemeId; config: ThemeCustomConfig } | null>(null);
+  useEffect(() => {
+    if (!isPreview) return;
+    const onMsg = (e: MessageEvent) => {
+      if (e.origin !== window.location.origin) return;
+      const d = e.data as { type?: string; themeId?: ThemeId; config?: ThemeCustomConfig };
+      if (d?.type !== "operix:preview-config" || !d.themeId || !d.config) return;
+      setEnVivo({ themeId: d.themeId, config: d.config });
+    };
+    window.addEventListener("message", onMsg);
+    return () => window.removeEventListener("message", onMsg);
+  }, [isPreview]);
+
+  const themeId = enVivo?.themeId ?? vista?.themeId;
+  const themeConfig = enVivo
+    ? { ...getThemeMetadata(enVivo.themeId).defaultConfig, ...enVivo.config }
+    : vista?.themeConfig;
 
   const inactive = inicial.estado === "inactive";
   const negocio = vista?.negocio ?? null;
@@ -64,8 +85,8 @@ export default function CatalogoPublicoClient({
       productos={vista.productos}
       variantes={vista.variantes}
       marcas={vista.marcas}
-      themeId={vista.themeId}
-      config={vista.themeConfig}
+      themeId={themeId!}
+      config={themeConfig!}
       initialProductId={initialProductId}
     >
       <ThemeRenderer />

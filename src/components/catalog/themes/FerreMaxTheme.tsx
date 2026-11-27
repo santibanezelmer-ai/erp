@@ -73,11 +73,11 @@ export function FerreMaxTheme() {
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-sans">
       {/* Top Bar de Servicio Ferretero */}
-      <div className="bg-blue-900 text-blue-100 text-xs py-1.5 px-4 font-medium">
+      <div className="bg-(color:--tp-900) text-(color:--tp-100) text-xs py-1.5 px-4 font-medium">
         <div className="max-w-7xl mx-auto flex items-center justify-between text-[11px]">
           <div className="flex items-center gap-4">
             <span className="font-bold flex items-center gap-1">
-              <Hammer className="h-3.5 w-3.5 text-orange-400" />
+              <Hammer className="h-3.5 w-3.5 text-(color:--ta-400)" />
               Cotizaciones y Pedidos Directos a WhatsApp
             </span>
             <span className="hidden sm:inline opacity-70">
@@ -89,9 +89,9 @@ export function FerreMaxTheme() {
               href={enlaceWhatsApp((negocio as { telefono?: string | null }).telefono)}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center gap-1 font-semibold text-white hover:text-orange-200 transition-colors"
+              className="flex items-center gap-1 font-semibold text-white hover:text-(color:--ta-200) transition-colors"
             >
-              <Phone className="h-3 w-3 text-orange-400" />
+              <Phone className="h-3 w-3 text-(color:--ta-400)" />
               <span>Venta Asistida: {(negocio as any).telefono}</span>
             </a>
           )}
@@ -110,17 +110,17 @@ export function FerreMaxTheme() {
                 className="h-10 w-10 sm:h-12 sm:w-12 rounded-lg object-contain bg-white p-0.5 border border-slate-200 shadow-2xs shrink-0"
               />
             ) : (
-              <div className="h-10 w-10 sm:h-12 sm:w-12 rounded-lg bg-blue-700 text-white flex items-center justify-center shrink-0 shadow-2xs">
+              <div className="h-10 w-10 sm:h-12 sm:w-12 rounded-lg bg-(color:--tp-700) text-(color:--tp-on) flex items-center justify-center shrink-0 shadow-2xs">
                 <Hammer className="h-5 w-5" />
               </div>
             )}
             <div className="min-w-0">
-              <h1 className="font-black text-lg sm:text-xl text-blue-900 dark:text-blue-100 uppercase tracking-tight truncate">
+              <h1 className="font-black text-lg sm:text-xl text-(color:--tp-900) dark:text-(color:--tp-100) uppercase tracking-tight truncate">
                 {negocio.nombre}
               </h1>
               {negocio.direccion && (
                 <div className="text-[11px] text-slate-500 truncate flex items-center gap-1">
-                  <MapPin className="h-3 w-3 text-orange-500 shrink-0" />
+                  <MapPin className="h-3 w-3 text-(color:--ta-500) shrink-0" />
                   <span>{negocio.direccion}</span>
                 </div>
               )}
@@ -130,13 +130,13 @@ export function FerreMaxTheme() {
           {/* Buscador Rápido de Herramientas y Materiales */}
           <div className="hidden md:flex flex-1 max-w-lg mx-4">
             <div className="relative w-full">
-              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-blue-600" />
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-(color:--tp-600)" />
               <Input
                 type="text"
                 placeholder="Buscar clavos, taladros, tuberías, pintura, cemento..."
                 value={busqueda}
                 onChange={(e) => setBusqueda(e.target.value)}
-                className="pl-10 h-11 rounded-lg border-slate-300 bg-slate-50 dark:bg-slate-950 text-xs focus-visible:ring-blue-600 focus-visible:border-blue-600"
+                className="pl-10 h-11 rounded-lg border-slate-300 bg-slate-50 dark:bg-slate-950 text-xs focus-visible:ring-(color:--tp-600) focus-visible:border-(color:--tp-600)"
               />
               {busqueda && (
                 <button
@@ -152,11 +152,11 @@ export function FerreMaxTheme() {
           {/* Carrito de Compra Ferretera */}
           <Button
             onClick={openCart}
-            className="rounded-lg h-11 px-4 bg-orange-600 hover:bg-orange-700 text-white font-black shadow-sm flex items-center gap-2.5 text-xs shrink-0"
+            className="rounded-lg h-11 px-4 bg-(color:--ta-600) hover:bg-(color:--ta-700) text-(color:--ta-on) font-black shadow-sm flex items-center gap-2.5 text-xs shrink-0"
           >
             <ShoppingCart className="h-4 w-4" />
             <span className="hidden sm:inline">VER PEDIDO</span>
-            <span className="bg-white text-orange-700 rounded-md text-[11px] font-bold px-2 py-0.5">
+            <span className="bg-white text-(color:--ta-700) rounded-md text-[11px] font-bold px-2 py-0.5">
               {cartCount}
             </span>
           </Button>
@@ -165,7 +165,7 @@ export function FerreMaxTheme() {
         {/* Buscador móvil */}
         <div className="md:hidden px-4 pb-3 pt-1 border-t border-slate-100 dark:border-slate-800">
           <div className="relative w-full">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-blue-600" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-(color:--tp-600)" />
             <Input
               type="text"
               placeholder="Buscar materiales o herramientas..."
@@ -181,16 +181,16 @@ export function FerreMaxTheme() {
       {config.bannerImageUrl ? (
         <BannerImagen />
       ) : (
-        <section className="bg-blue-800 text-white py-8 sm:py-12 px-4 sm:px-6">
+        <section className="bg-(color:--tp-800) text-(color:--tp-on) py-8 sm:py-12 px-4 sm:px-6">
           <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-6">
             <div className="space-y-3 text-center md:text-left">
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded bg-orange-500 text-white text-[11px] font-black uppercase tracking-wider shadow-2xs">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded bg-(color:--ta-500) text-(color:--ta-on) text-[11px] font-black uppercase tracking-wider shadow-2xs">
                 {bannerBadge}
               </span>
               <h2 className="text-2xl sm:text-4xl font-black uppercase tracking-tight leading-tight">
                 {bannerTitle}
               </h2>
-              <p className="text-xs sm:text-sm text-blue-100 max-w-xl">
+              <p className="text-xs sm:text-sm text-(color:--tp-100) max-w-xl">
                 {bannerSubtitle}
               </p>
             </div>
@@ -198,7 +198,7 @@ export function FerreMaxTheme() {
             <div className="flex items-center gap-3">
               <Button
                 onClick={() => setFiltroRapido("ofertas")}
-                className="bg-orange-500 hover:bg-orange-600 text-white font-bold text-xs h-10 px-5 gap-1.5 shadow-sm"
+                className="bg-(color:--ta-500) hover:bg-(color:--ta-600) text-(color:--ta-on) font-bold text-xs h-10 px-5 gap-1.5 shadow-sm"
               >
                 <Flame className="h-4 w-4" />
                 Ver Ofertas
@@ -220,7 +220,7 @@ export function FerreMaxTheme() {
                   onClick={() => setCategoriaSel(cat)}
                   className={`px-3.5 py-1.5 rounded-md text-xs font-bold uppercase tracking-wider whitespace-nowrap transition-all ${
                     isSelected
-                      ? "bg-blue-700 text-white shadow-xs"
+                      ? "bg-(color:--tp-700) text-(color:--tp-on) shadow-xs"
                       : "text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
                   }`}
                 >
@@ -241,7 +241,7 @@ export function FerreMaxTheme() {
               onClick={() => setFiltroRapido("todos")}
               className={`px-3 py-1.5 rounded font-bold transition-all ${
                 filtroRapido === "todos"
-                  ? "bg-blue-100 text-blue-900 dark:bg-blue-950 dark:text-blue-300"
+                  ? "bg-(color:--tp-100) text-(color:--tp-900) dark:bg-(color:--tp-950) dark:text-(color:--tp-300)"
                   : "text-slate-600 hover:text-slate-900"
               }`}
             >
@@ -251,7 +251,7 @@ export function FerreMaxTheme() {
               onClick={() => setFiltroRapido("ofertas")}
               className={`px-3 py-1.5 rounded font-bold transition-all ${
                 filtroRapido === "ofertas"
-                  ? "bg-orange-100 text-orange-900 dark:bg-orange-950 dark:text-orange-300"
+                  ? "bg-(color:--ta-100) text-(color:--ta-900) dark:bg-(color:--ta-950) dark:text-(color:--ta-300)"
                   : "text-slate-600 hover:text-slate-900"
               }`}
             >
@@ -288,7 +288,7 @@ export function FerreMaxTheme() {
                 variant="ghost"
                 size="sm"
                 onClick={limpiarFiltros}
-                className="h-7 text-xs text-blue-600 hover:text-blue-700"
+                className="h-7 text-xs text-(color:--tp-600) hover:text-(color:--tp-700)"
               >
                 Limpiar
               </Button>
@@ -321,7 +321,7 @@ export function FerreMaxTheme() {
                   <div
                     key={p.id}
                     onClick={() => openProductDetail(p)}
-                    className="group bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 hover:border-blue-500 transition-all flex flex-col justify-between overflow-hidden shadow-2xs cursor-pointer"
+                    className="group bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 hover:border-(color:--tp-500) transition-all flex flex-col justify-between overflow-hidden shadow-2xs cursor-pointer"
                   >
                     {/* Foto */}
                     <div className="relative aspect-square w-full bg-slate-50 dark:bg-slate-950 p-2 flex items-center justify-center border-b border-slate-100 dark:border-slate-800">
@@ -337,7 +337,7 @@ export function FerreMaxTheme() {
                       )}
 
                       {hasPromo && maxDisc > 0 && (
-                        <span className="absolute top-2 left-2 bg-orange-600 text-white font-black text-[10px] px-2 py-0.5 rounded shadow-2xs">
+                        <span className="absolute top-2 left-2 bg-(color:--ta-600) text-(color:--ta-on) font-black text-[10px] px-2 py-0.5 rounded shadow-2xs">
                           -{maxDisc}%
                         </span>
                       )}
@@ -359,18 +359,18 @@ export function FerreMaxTheme() {
                     <div className="p-3 flex flex-col flex-1 justify-between gap-2 text-left">
                       <div>
                         {p.categoria && (
-                          <span className="text-[10px] font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wider block truncate">
+                          <span className="text-[10px] font-bold text-(color:--tp-600) dark:text-(color:--tp-400) uppercase tracking-wider block truncate">
                             {etiquetaCategoria(p.categoria)}
                           </span>
                         )}
-                        <h4 className="font-bold text-xs sm:text-sm text-slate-900 dark:text-slate-100 line-clamp-2 leading-snug group-hover:text-blue-600 transition-colors">
+                        <h4 className="font-bold text-xs sm:text-sm text-slate-900 dark:text-slate-100 line-clamp-2 leading-snug group-hover:text-(color:--tp-600) transition-colors">
                           {p.nombre}
                         </h4>
                       </div>
 
                       <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
                         <div>
-                          <div className="font-black text-sm sm:text-base text-blue-900 dark:text-white">
+                          <div className="font-black text-sm sm:text-base text-(color:--tp-900) dark:text-white">
                             {formatMoney(price)}
                           </div>
                           {hasPromo && p.precio_promocional && (
@@ -384,7 +384,7 @@ export function FerreMaxTheme() {
                           <Button
                             size="sm"
                             onClick={(e) => handleQuickAddClick(e, p)}
-                            className="h-8 px-2.5 bg-orange-500 hover:bg-orange-600 text-white font-bold text-xs rounded transition-colors shrink-0"
+                            className="h-8 px-2.5 bg-(color:--ta-500) hover:bg-(color:--ta-600) text-(color:--ta-on) font-bold text-xs rounded transition-colors shrink-0"
                             title="Añadir a la lista"
                           >
                             <ShoppingCart className="h-3.5 w-3.5 mr-1" />
@@ -410,7 +410,7 @@ export function FerreMaxTheme() {
                   <div
                     key={p.id}
                     onClick={() => openProductDetail(p)}
-                    className="p-3 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-blue-400 flex items-center justify-between gap-4 transition-all cursor-pointer shadow-2xs"
+                    className="p-3 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-(color:--tp-400) flex items-center justify-between gap-4 transition-all cursor-pointer shadow-2xs"
                   >
                     <div className="flex items-center gap-3 min-w-0">
                       <div className="h-14 w-14 sm:h-16 sm:w-16 rounded bg-slate-50 dark:bg-slate-950 p-1 border border-slate-200 overflow-hidden shrink-0 flex items-center justify-center">
@@ -426,7 +426,7 @@ export function FerreMaxTheme() {
                       </div>
                       <div className="min-w-0">
                         {p.categoria && (
-                          <span className="text-[10px] text-blue-600 font-bold uppercase tracking-wider block truncate">
+                          <span className="text-[10px] text-(color:--tp-600) font-bold uppercase tracking-wider block truncate">
                             {etiquetaCategoria(p.categoria)}
                           </span>
                         )}
@@ -434,7 +434,7 @@ export function FerreMaxTheme() {
                           {p.nombre}
                         </h4>
                         <div className="flex items-center gap-2 mt-1">
-                          <span className="font-black text-sm text-blue-900 dark:text-white">
+                          <span className="font-black text-sm text-(color:--tp-900) dark:text-white">
                             {formatMoney(price)}
                           </span>
                           {inStock ? (
@@ -455,7 +455,7 @@ export function FerreMaxTheme() {
                         <Button
                           size="sm"
                           onClick={(e) => handleQuickAddClick(e, p)}
-                          className="h-8 px-3 rounded bg-orange-500 hover:bg-orange-600 text-white font-bold text-xs gap-1"
+                          className="h-8 px-3 rounded bg-(color:--ta-500) hover:bg-(color:--ta-600) text-(color:--ta-on) font-bold text-xs gap-1"
                         >
                           <ShoppingCart className="h-3 w-3" />
                           <span>Pedir</span>
@@ -485,7 +485,7 @@ export function FerreMaxTheme() {
               href="https://operixerp.cloud"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-blue-600 hover:underline font-semibold"
+              className="text-(color:--tp-600) hover:underline font-semibold"
             >
               Operix ERP
             </a>{" "}

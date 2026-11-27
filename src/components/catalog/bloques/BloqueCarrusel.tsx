@@ -4,7 +4,7 @@ import { useMemo, useRef } from "react";
 import { useCatalog } from "@/components/catalog/CatalogContext";
 import { formatMoney } from "@/lib/format";
 import type { Producto } from "@/types/theme.types";
-import { ChevronLeft, ChevronRight, Package, Sparkles, Tag } from "lucide-react";
+import { ChevronLeft, ChevronRight, Flame, Package, Sparkles, Tag } from "lucide-react";
 import { irAlCatalogo } from "./orden";
 
 const MAX = 12;
@@ -146,6 +146,29 @@ export function BloqueNovedades() {
       productos={lista}
       verTodo={() => {
         setFiltroRapido("nuevos");
+        irAlCatalogo();
+      }}
+    />
+  );
+}
+
+export function BloqueMasVendidos() {
+  const { productos, masVendidos, isDisponible, limpiarFiltros } = useCatalog();
+  const lista = useMemo(() => {
+    const porId = new Map(productos.map((p) => [p.id, p]));
+    return masVendidos
+      .map((id) => porId.get(id))
+      .filter((p): p is Producto => !!p && isDisponible(p))
+      .slice(0, MAX);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [productos, masVendidos]);
+  return (
+    <Carrusel
+      titulo="Más vendidos"
+      icono={<Flame className="h-5 w-5" />}
+      productos={lista}
+      verTodo={() => {
+        limpiarFiltros();
         irAlCatalogo();
       }}
     />

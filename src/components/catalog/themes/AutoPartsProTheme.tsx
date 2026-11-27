@@ -23,7 +23,7 @@ import {
   ShieldCheck,
   Building2,
 } from "lucide-react";
-import { BannerImagen } from "@/components/catalog/shared/BannerImagen";
+import { BannerImagen, tieneBannerImagen } from "@/components/catalog/shared/BannerImagen";
 import { enlaceWhatsApp } from "@/lib/whatsapp";
 import { etiquetaCategoria } from "@/lib/categorias";
 import { ComposicionTienda } from "@/components/catalog/bloques/ComposicionTienda";
@@ -106,6 +106,8 @@ export function AutoPartsProTheme() {
           <div className="flex items-center gap-3 min-w-0">
             {rawLogo ? (
               <img
+                  loading="lazy"
+                  decoding="async"
                 src={rawLogo}
                 alt={negocio.nombre}
                 className="h-10 w-10 sm:h-12 sm:w-12 rounded-xl object-contain bg-neutral-950 p-1 border border-neutral-800 shrink-0"
@@ -183,7 +185,7 @@ export function AutoPartsProTheme() {
   const hero = (
     <>
       {/* Hero Técnico de Alta Potencia */}
-      {config.bannerImageUrl ? (
+      {tieneBannerImagen(config) ? (
         <BannerImagen />
       ) : (
         <section className="relative bg-gradient-to-b from-neutral-900 to-neutral-950 py-10 sm:py-16 px-4 sm:px-6 border-b border-neutral-800">
@@ -456,6 +458,8 @@ export function AutoPartsProTheme() {
                       <div className="h-14 w-14 sm:h-16 sm:w-16 rounded-lg bg-neutral-950 p-1.5 border border-neutral-800 overflow-hidden shrink-0 flex items-center justify-center">
                         {p.imagen_url ? (
                           <img
+                  loading="lazy"
+                  decoding="async"
                             src={p.imagen_url}
                             alt={p.nombre}
                             className="h-full w-full object-contain"

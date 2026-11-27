@@ -12,6 +12,7 @@ export type CatalogView = {
   productos: Producto[];
   variantes: Variante[];
   marcas: Marca[];
+  masVendidos: string[];
   themeId: ThemeId;
   themeConfig: ThemeCustomConfig;
 };
@@ -66,6 +67,7 @@ export function armarCatalogo(
     productos: data.productos as unknown as Producto[],
     variantes: data.variantes as unknown as Variante[],
     marcas: data.marcas as unknown as Marca[],
+    masVendidos: data.masVendidos ?? [],
     themeId,
     themeConfig: { ...getThemeMetadata(themeId).defaultConfig, ...config },
   };

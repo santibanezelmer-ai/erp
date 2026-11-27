@@ -3,7 +3,7 @@
 import type { ReactNode } from "react";
 import { useCatalog } from "@/components/catalog/CatalogContext";
 import { bloqueVisible, ordenBloques, whatsappFlotanteVisible, type BloqueId } from "./orden";
-import { BloqueOfertas, BloqueNovedades } from "./BloqueCarrusel";
+import { BloqueOfertas, BloqueNovedades, BloqueMasVendidos } from "./BloqueCarrusel";
 import { BloqueMarcas } from "./BloqueMarcas";
 import { BloqueInfo } from "./BloqueInfo";
 import { WhatsAppFlotante } from "./WhatsAppFlotante";
@@ -45,6 +45,8 @@ export function ComposicionTienda({ className, cabecera, hero, catalogo, pie }: 
         return <BloqueOfertas />;
       case "novedades":
         return <BloqueNovedades />;
+      case "masVendidos":
+        return <BloqueMasVendidos />;
       case "marcas":
         return <BloqueMarcas />;
       case "info":

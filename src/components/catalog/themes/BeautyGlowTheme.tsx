@@ -21,7 +21,7 @@ import {
   X,
   Package,
 } from "lucide-react";
-import { BannerImagen } from "@/components/catalog/shared/BannerImagen";
+import { BannerImagen, tieneBannerImagen } from "@/components/catalog/shared/BannerImagen";
 import { enlaceWhatsApp } from "@/lib/whatsapp";
 import { etiquetaCategoria } from "@/lib/categorias";
 import { ComposicionTienda } from "@/components/catalog/bloques/ComposicionTienda";
@@ -84,6 +84,8 @@ export function BeautyGlowTheme() {
           <div className="flex items-center gap-3 min-w-0">
             {rawLogo ? (
               <img
+                  loading="lazy"
+                  decoding="async"
                 src={rawLogo}
                 alt={negocio.nombre}
                 className="h-10 w-10 sm:h-12 sm:w-12 rounded-full object-cover border border-(color:--tp-200) shadow-xs shrink-0"
@@ -175,8 +177,8 @@ export function BeautyGlowTheme() {
   const hero = (
     <>
       {/* Hero Banner Editorial */}
-      {bannerVisible && config.bannerImageUrl && <BannerImagen />}
-      {bannerVisible && !config.bannerImageUrl && (
+      {bannerVisible && tieneBannerImagen(config) && <BannerImagen />}
+      {bannerVisible && !tieneBannerImagen(config) && (
         <section className="relative overflow-hidden bg-gradient-to-r from-(color:--tp-100) via-(color:--tp-50) to-(color:--ta-50) dark:from-neutral-900 dark:via-neutral-900 dark:to-neutral-800 py-12 sm:py-20 px-4 sm:px-6 border-b border-(color:--tp-100) dark:border-neutral-800">
           <div className="max-w-4xl mx-auto text-center space-y-4">
             <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-white/80 dark:bg-neutral-800 text-(color:--tp-600) border border-(color:--tp-200) shadow-xs">
@@ -438,6 +440,8 @@ export function BeautyGlowTheme() {
                       <div className="h-16 w-16 sm:h-20 sm:w-20 rounded-xl bg-(color:--tp-50)/50 dark:bg-neutral-800 overflow-hidden shrink-0 flex items-center justify-center">
                         {p.imagen_url ? (
                           <img
+                  loading="lazy"
+                  decoding="async"
                             src={p.imagen_url}
                             alt={p.nombre}
                             className="h-full w-full object-cover"

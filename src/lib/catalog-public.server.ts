@@ -37,7 +37,26 @@ export type PublicCatalog = {
   productos: Record<string, unknown>[];
   variantes: Record<string, unknown>[];
   marcas: Record<string, unknown>[];
+  /** Ids de los productos más vendidos (últimos 90 días). Solo ids: no expone cantidades. */
+  masVendidos: string[];
 };
+
+/** Top 12 productos activos por unidades vendidas. */
+function topVendidos(
+  lineas: { producto_id: string | null; qty: number | null }[],
+  activos: Set<string>
+): string[] {
+  const suma = new Map<string, number>();
+  for (const l of lineas) {
+    if (!l.producto_id || !activos.has(l.producto_id)) continue;
+    suma.set(l.producto_id, (suma.get(l.producto_id) || 0) + Number(l.qty || 0));
+  }
+  return [...suma.entries()]
+    .filter(([, q]) => q > 0)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 12)
+    .map(([id]) => id);
+}
 
 export type PublicCatalogResult =
   | { status: "ok"; data: PublicCatalog }
@@ -89,7 +108,8 @@ export async function loadPublicCatalog(
   }
   if (!hasPro) return { status: "inactive" };
 
-  const [configRes, prodsRes, varsRes, marcasRes] = await Promise.all([
+  const desde = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
+  const [configRes, prodsRes, varsRes, marcasRes, ventasRes] = await Promise.all([
     supabase.from("configuracion").select(CONFIG_COLS).eq("negocio_id", negocioId).maybeSingle(),
     supabase
       .from("productos")
@@ -109,6 +129,14 @@ export async function loadPublicCatalog(
       .eq("negocio_id", negocioId)
       .eq("activa", true)
       .order("nombre", { ascending: true }),
+    supabase
+      .from("detalle_ventas")
+      .select("producto_id, qty")
+      .eq("negocio_id", negocioId)
+      .gte("created_at", desde)
+      .not("producto_id", "is", null)
+      .order("created_at", { ascending: false })
+      .limit(5000),
   ]);
 
   for (const [name, res] of [
@@ -116,6 +144,7 @@ export async function loadPublicCatalog(
     ["productos", prodsRes],
     ["variantes", varsRes],
     ["marcas", marcasRes],
+    ["ventas", ventasRes],
   ] as const) {
     if (res.error) console.error(`[catalogo-publico] Error leyendo ${name} de '${slug}':`, res.error);
   }
@@ -131,6 +160,10 @@ export async function loadPublicCatalog(
       productos: (prodsRes.data ?? []) as unknown as Record<string, unknown>[],
       variantes: (varsRes.data ?? []) as unknown as Record<string, unknown>[],
       marcas: (marcasRes.data ?? []) as unknown as Record<string, unknown>[],
+      masVendidos: topVendidos(
+        (ventasRes.data ?? []) as { producto_id: string | null; qty: number | null }[],
+        new Set(((prodsRes.data ?? []) as unknown as { id: string }[]).map((p) => p.id))
+      ),
     },
   };
 }

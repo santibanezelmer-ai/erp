@@ -88,6 +88,7 @@ export default function CatalogoPublicoClient({
       themeId={themeId!}
       config={themeConfig!}
       initialProductId={initialProductId}
+      masVendidos={vista.masVendidos}
     >
       <ThemeRenderer />
     </CatalogProvider>

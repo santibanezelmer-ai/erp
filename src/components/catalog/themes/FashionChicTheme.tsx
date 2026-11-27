@@ -21,7 +21,7 @@ import {
   ArrowRight,
   Heart,
 } from "lucide-react";
-import { BannerImagen } from "@/components/catalog/shared/BannerImagen";
+import { BannerImagen, tieneBannerImagen } from "@/components/catalog/shared/BannerImagen";
 import { etiquetaCategoria } from "@/lib/categorias";
 import { ComposicionTienda } from "@/components/catalog/bloques/ComposicionTienda";
 
@@ -80,6 +80,8 @@ export function FashionChicTheme() {
           <div className="flex items-center gap-3 min-w-0">
             {rawLogo ? (
               <img
+                  loading="lazy"
+                  decoding="async"
                 src={rawLogo}
                 alt={negocio.nombre}
                 className="h-11 w-11 sm:h-12 sm:w-12 rounded-full object-cover border border-neutral-300 shadow-2xs shrink-0"
@@ -157,8 +159,8 @@ export function FashionChicTheme() {
   const hero = (
     <>
       {/* Hero Editorial */}
-      {bannerVisible && config.bannerImageUrl && <BannerImagen />}
-      {bannerVisible && !config.bannerImageUrl && (
+      {bannerVisible && tieneBannerImagen(config) && <BannerImagen />}
+      {bannerVisible && !tieneBannerImagen(config) && (
         <section className="bg-neutral-100 dark:bg-neutral-900 py-12 sm:py-16 px-4 sm:px-6 border-b border-neutral-200 dark:border-neutral-800">
           <div className="max-w-4xl mx-auto text-center space-y-3">
             <span className="text-[11px] font-bold tracking-widest uppercase text-neutral-500">

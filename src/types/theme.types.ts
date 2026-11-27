@@ -35,6 +35,8 @@ export interface ThemeCustomConfig {
   /** "plantilla" | "moderna" | "elegante" | "amigable" (sans/serif/mono: valores antiguos = plantilla) */
   fontFamily?: "plantilla" | "moderna" | "elegante" | "amigable" | "sans" | "serif" | "mono";
   bannerImageUrl?: string;
+  /** Banners rotativos (si hay más de uno se muestran en carrusel). Reemplaza a bannerImageUrl. */
+  banners?: { imagen: string; imagenMovil?: string }[];
   bannerTitle?: string;
   bannerSubtitle?: string;
   bannerBadgeText?: string;
@@ -48,6 +50,7 @@ export interface ThemeCustomConfig {
     ofertas?: boolean;
     novedades?: boolean;
     marcas?: boolean;
+    masVendidos?: boolean;
     info?: boolean;
     whatsappFlotante?: boolean;
   };
@@ -82,6 +85,8 @@ export interface CatalogContextValue {
   productosFiltrados: Producto[];
   variantes: Variante[];
   marcas: Marca[];
+  /** Ids de productos más vendidos (últimos 90 días), de mayor a menor */
+  masVendidos: string[];
   categorias: string[];
   // Filtros
   busqueda: string;

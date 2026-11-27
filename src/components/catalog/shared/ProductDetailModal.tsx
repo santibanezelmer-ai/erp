@@ -166,6 +166,8 @@ export function ProductDetailModal() {
             <div className="relative aspect-square rounded-2xl bg-muted/40 border border-border overflow-hidden flex items-center justify-center">
               {images.length > 0 ? (
                 <img
+                  loading="lazy"
+                  decoding="async"
                   src={images[activeIdx]}
                   alt={detailProduct.nombre}
                   className="w-full h-full object-cover transition-all"
@@ -218,7 +220,9 @@ export function ProductDetailModal() {
                         : "border-border/60 opacity-60 hover:opacity-100"
                     }`}
                   >
-                    <img src={img} alt="" className="h-full w-full object-cover" />
+                    <img
+                  loading="lazy"
+                  decoding="async" src={img} alt="" className="h-full w-full object-cover" />
                   </button>
                 ))}
               </div>

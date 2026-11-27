@@ -207,6 +207,8 @@ export function CartModal() {
                     <div className="h-14 w-14 rounded-lg bg-muted border border-border overflow-hidden shrink-0 flex items-center justify-center">
                       {img ? (
                         <img
+                  loading="lazy"
+                  decoding="async"
                           src={img}
                           alt={item.producto.nombre}
                           className="h-full w-full object-cover"

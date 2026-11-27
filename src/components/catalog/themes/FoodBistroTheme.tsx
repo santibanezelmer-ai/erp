@@ -26,7 +26,7 @@ import {
   ArrowRight,
   Coffee,
 } from "lucide-react";
-import { BannerImagen } from "@/components/catalog/shared/BannerImagen";
+import { BannerImagen, tieneBannerImagen } from "@/components/catalog/shared/BannerImagen";
 import { enlaceWhatsApp } from "@/lib/whatsapp";
 import { etiquetaCategoria } from "@/lib/categorias";
 import { ComposicionTienda } from "@/components/catalog/bloques/ComposicionTienda";
@@ -117,6 +117,8 @@ export function FoodBistroTheme() {
           <div className="flex items-center gap-3 min-w-0">
             {rawLogo ? (
               <img
+                  loading="lazy"
+                  decoding="async"
                 src={rawLogo}
                 alt={negocio.nombre}
                 className="h-11 w-11 sm:h-13 sm:w-13 rounded-2xl object-cover border-2 border-(color:--tp-200) dark:border-stone-700 shadow-sm shrink-0"
@@ -208,8 +210,8 @@ export function FoodBistroTheme() {
   const hero = (
     <>
       {/* Hero Gastronómico */}
-      {bannerVisible && config.bannerImageUrl && <BannerImagen />}
-      {bannerVisible && !config.bannerImageUrl && (
+      {bannerVisible && tieneBannerImagen(config) && <BannerImagen />}
+      {bannerVisible && !tieneBannerImagen(config) && (
         <section className="relative overflow-hidden bg-gradient-to-br from-(color:--ta-900) via-(color:--tp-950) to-stone-950 text-white py-10 sm:py-16 px-4 sm:px-6">
           <div className="absolute inset-0 opacity-15 bg-[radial-gradient(var(--tp)_1px,transparent_1px)] [background-size:16px_16px]" />
           
@@ -497,7 +499,9 @@ export function FoodBistroTheme() {
                     className="h-16 w-16 sm:h-20 sm:w-20 rounded-xl bg-stone-100 dark:bg-stone-800 overflow-hidden shrink-0 cursor-pointer"
                   >
                     {prod.imagen_url ? (
-                      <img src={prod.imagen_url} alt={prod.nombre} className="h-full w-full object-cover" />
+                      <img
+                  loading="lazy"
+                  decoding="async" src={prod.imagen_url} alt={prod.nombre} className="h-full w-full object-cover" />
                     ) : (
                       <div className="h-full w-full flex items-center justify-center text-stone-300">
                         <UtensilsCrossed className="h-6 w-6" />

@@ -2,6 +2,9 @@ import type { Metadata } from "next";
 import { createClient } from "@supabase/supabase-js";
 import CatalogoPublicoClient from "@/components/catalog/CatalogoPublicoClient";
 import type { ThemeId } from "@/types/theme.types";
+import { loadPublicCatalog, type PublicCatalog } from "@/lib/catalog-public.server";
+import type { CatalogInicial } from "@/lib/catalog-view";
+import { effectivePrice } from "@/lib/promo";
 
 interface PageProps {
   params: Promise<{ slug: string }>;
@@ -151,19 +154,83 @@ export async function generateMetadata({
   }
 }
 
+/** Datos estructurados (schema.org) para que Google entienda la tienda y sus productos. */
+function jsonLdTienda(slug: string, data: PublicCatalog) {
+  const neg = data.negocio as { nombre?: string; logo_url?: string | null };
+  const url = `https://operixerp.cloud/c/${slug}`;
+  const productos = (data.productos as Array<{
+    id: string;
+    nombre: string;
+    descripcion?: string | null;
+    imagen_url?: string | null;
+    precio_venta: number | null;
+    precio_promocional?: number | null;
+    promo_vence_at?: string | null;
+    stock?: number | null;
+    sin_control_stock?: boolean | null;
+  }>).slice(0, 50);
+
+  return {
+    "@context": "https://schema.org",
+    "@type": "Store",
+    name: neg.nombre,
+    url,
+    ...(data.config?.logo_url || neg.logo_url ? { image: data.config?.logo_url || neg.logo_url } : {}),
+    ...(data.config?.telefono ? { telephone: data.config.telefono } : {}),
+    hasOfferCatalog: {
+      "@type": "OfferCatalog",
+      name: `Catálogo de ${neg.nombre}`,
+      itemListElement: productos.map((p) => ({
+        "@type": "Offer",
+        url: `${url}?p=${p.id}`,
+        price: effectivePrice(p),
+        priceCurrency: "CLP",
+        availability:
+          p.sin_control_stock || Number(p.stock || 0) > 0
+            ? "https://schema.org/InStock"
+            : "https://schema.org/OutOfStock",
+        itemOffered: {
+          "@type": "Product",
+          name: p.nombre,
+          ...(p.descripcion ? { description: p.descripcion } : {}),
+          ...(p.imagen_url ? { image: p.imagen_url } : {}),
+        },
+      })),
+    },
+  };
+}
+
 export default async function CatalogoPublicoPage({
   params,
   searchParams,
 }: PageProps) {
   const { slug } = await params;
   const { p: productId, theme, preview } = await searchParams;
+  const isPreview = preview === "true";
+
+  // El catálogo se arma en el servidor: el HTML llega con los productos
+  // (carga más rápida y visible para buscadores).
+  const res = await loadPublicCatalog(slug, { includeDraft: isPreview });
+  const inicial: CatalogInicial =
+    res.status === "ok" ? { estado: "ok", data: res.data } : { estado: res.status };
 
   return (
-    <CatalogoPublicoClient
-      slug={slug}
-      initialProductId={productId}
-      previewTheme={(theme as ThemeId) || null}
-      isPreview={preview === "true"}
-    />
+    <>
+      {res.status === "ok" && !isPreview && (
+        <script
+          type="application/ld+json"
+          // JSON generado en el servidor; se escapa "<" para no cerrar el <script>
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify(jsonLdTienda(slug, res.data)).replace(/</g, "\\u003c"),
+          }}
+        />
+      )}
+      <CatalogoPublicoClient
+        inicial={inicial}
+        initialProductId={productId}
+        previewTheme={(theme as ThemeId) || null}
+        isPreview={isPreview}
+      />
+    </>
   );
 }

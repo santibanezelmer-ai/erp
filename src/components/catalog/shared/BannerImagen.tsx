@@ -78,15 +78,28 @@ export function BannerImagen() {
             key={`${b.imagen}-${i}`}
             type="button"
             onClick={irAOfertas}
-            className="snap-start shrink-0 w-full flex justify-center focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            className="relative overflow-hidden snap-start shrink-0 w-full flex justify-center focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
             aria-label={`${alt} (${i + 1} de ${banners.length})`}
           >
-            <picture className="block w-full max-w-3xl">
+            {/* Relleno de los costados: la misma imagen difuminada (en vez de franjas
+                negras) cuando la imagen es más angosta que la pantalla */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={b.imagen}
+              alt=""
+              aria-hidden="true"
+              loading={i === 0 ? "eager" : "lazy"}
+              decoding="async"
+              className="hidden sm:block absolute inset-0 h-full w-full object-cover scale-110 blur-2xl opacity-70"
+            />
+            <picture className="relative z-10 block w-full sm:w-auto">
               {b.imagenMovil && <source media="(max-width: 640px)" srcSet={b.imagenMovil} />}
+              {/* Celular: todo el ancho. Computador: altura limitada para que se vean
+                  los productos debajo, centrada sobre el fondo difuminado */}
               <img
                 src={b.imagen}
                 alt={alt}
-                className="w-full h-auto max-h-[80vh] object-contain"
+                className="block w-full h-auto max-h-[85vh] object-contain sm:w-auto sm:max-w-full sm:max-h-[60vh] lg:max-h-[520px] sm:shadow-2xl"
                 loading={i === 0 ? "eager" : "lazy"}
                 fetchPriority={i === 0 ? "high" : "low"}
                 decoding="async"

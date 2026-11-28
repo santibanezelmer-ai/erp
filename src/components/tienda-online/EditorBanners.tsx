@@ -133,7 +133,10 @@ export function EditorBanners({ config, negocioId, onChange }: Props) {
           <span className="font-semibold text-foreground">
             {banners.length === 0 ? "Subir imagen promocional" : "Agregar otro banner"}
           </span>
-          <span>JPG, PNG o WebP, máx. 5 MB. Reemplaza el banner de texto y lleva a las ofertas al tocarla.</span>
+          <span>
+            JPG, PNG o WebP, máx. 5 MB. Ideal: horizontal para computador (1920×600) y, en cada banner, una
+            versión vertical para celular (1080×1350). Al tocarla lleva a las ofertas.
+          </span>
           <input
             type="file"
             accept="image/*"
